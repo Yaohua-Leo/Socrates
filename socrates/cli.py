@@ -67,6 +67,7 @@ from .state import (
     MistakeRecord,
     build_review_schedule,
     repair_review_schedule,
+    resolve_active_misconceptions_for_concept,
     update_eval_report,
     update_learning_state,
 )
@@ -346,6 +347,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="ISO date used to repair missing or invalid dates; defaults to today.",
     )
     review_repair_parser.set_defaults(func=_handle_review_repair_schedule)
+    review_resolve_parser = review_subparsers.add_parser(
+        "resolve",
+        help="Mark active misconceptions for a concept as resolved.",
+    )
+    review_resolve_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    review_resolve_parser.add_argument(
+        "--concept",
+        required=True,
+        help="Concept whose misconceptions were repaired.",
+    )
+    review_resolve_parser.set_defaults(func=_handle_review_resolve)
 
     exercise_parser = subparsers.add_parser(
         "exercise",
@@ -868,6 +884,14 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
     repaired_count, schedule_path = repair_review_schedule(context, as_of=as_of)
     noun = "item" if repaired_count == 1 else "items"
     print(f"Repaired {repaired_count} review schedule {noun}: {schedule_path}")
+    return 0
+
+
+def _handle_review_resolve(args: argparse.Namespace) -> int:
+    context = load_project(args.project)
+    resolved_count = resolve_active_misconceptions_for_concept(context, args.concept)
+    noun = "misconception" if resolved_count == 1 else "misconceptions"
+    print(f"Resolved {resolved_count} active {noun} for {args.concept}")
     return 0
 
 

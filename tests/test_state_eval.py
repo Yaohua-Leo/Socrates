@@ -128,6 +128,80 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("- Misconception: normal_equals_central", mistake_bank)
             self.assertIn("- Status: resolved", mistake_bank)
 
+    def test_review_resolve_cli_marks_concept_misconceptions_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether a coset contains the identity.",
+                        ),
+                    ],
+                ),
+            )
+
+            resolve = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(resolve.returncode, 0, resolve.stderr)
+            self.assertIn(
+                "Resolved 1 active misconception for normal_subgroup",
+                resolve.stdout,
+            )
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["status"],
+                "resolved",
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["cosets_are_subgroups"]["status"],
+                "active",
+            )
+            mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            self.assertIn("## resolved - normal_subgroup", mistake_bank)
+            self.assertIn("- Misconception: normal_equals_central", mistake_bank)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Active misconceptions: 1", status.stdout)
+            self.assertIn("Resolved misconceptions: 1", status.stdout)
+
     def test_build_review_schedule_uses_weak_concepts_and_active_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
