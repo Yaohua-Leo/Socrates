@@ -209,6 +209,35 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('review_status: "approved"', text)
             self.assertIn("reviewed_by_user: true", text)
 
+    def test_generate_targeted_review_exercise_ids_are_stable_per_concept(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.43,
+                        "quotient_group": 0.44,
+                    },
+                ),
+            )
+            build_review_schedule(context)
+
+            exercises = artifacts.generate_targeted_review_exercise_drafts(project)
+
+            self.assertEqual(
+                [exercise.id for exercise in exercises],
+                ["review_normal_subgroup_01", "review_quotient_group_01"],
+            )
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_02.md").exists()
+            )
+
     def _load_artifacts_module(self):
         spec = importlib.util.find_spec("socrates.artifacts")
         self.assertIsNotNone(spec, "socrates.artifacts module should exist")

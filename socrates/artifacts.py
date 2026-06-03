@@ -116,11 +116,14 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
         return []
 
     drafts: list[ExerciseDraft] = []
-    for index, item in enumerate(schedule, start=1):
+    concept_counts: dict[str, int] = {}
+    for item in schedule:
         if not isinstance(item, dict):
             continue
         concept = str(item.get("concept", "review"))
-        exercise_id = f"review_{slugify_topic(concept)}_{index:02d}"
+        concept_id = slugify_topic(concept)
+        concept_counts[concept_id] = concept_counts.get(concept_id, 0) + 1
+        exercise_id = f"review_{concept_id}_{concept_counts[concept_id]:02d}"
         relative_path = Path("05_exercises") / "generated" / f"{exercise_id}.md"
         exercise_path = context.root / relative_path
         if not exercise_path.exists():
