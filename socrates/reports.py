@@ -69,6 +69,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
+            benchmark_snapshot=_read_benchmark_snapshot(context.root),
             state=state,
         ),
     )
@@ -220,6 +221,7 @@ def _project_summary_text(
     approved_exercises: int,
     attempted_exercises: int,
     graded_exercises: int,
+    benchmark_snapshot: dict[str, object],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -242,6 +244,10 @@ def _project_summary_text(
         f"- Approved exercises: {approved_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
+        "",
+        "## Benchmark Snapshot",
+        "",
+        *_benchmark_snapshot_lines(benchmark_snapshot),
         "",
         "## Reference KB Snapshot",
         "",
@@ -371,6 +377,31 @@ def _read_kb_snapshot(project_root: Path, *, limit: int = 10) -> list[dict[str, 
     return snapshot
 
 
+def _read_benchmark_snapshot(project_root: Path) -> dict[str, object]:
+    manifest_path = project_root / "08_evals" / "benchmark_manifest.json"
+    if not manifest_path.exists():
+        return {"status": "not_run"}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict):
+        return {"status": "invalid"}
+    score = manifest.get("score")
+    passed_gates = manifest.get("passed_gates")
+    total_gates = manifest.get("total_gates")
+    gates = manifest.get("gates", [])
+    if not all(isinstance(value, int) for value in (score, passed_gates, total_gates)):
+        return {"status": "invalid"}
+    return {
+        "status": "ready",
+        "score": score,
+        "passed_gates": passed_gates,
+        "total_gates": total_gates,
+        "failed_gates": _failed_benchmark_gates(gates),
+    }
+
+
 def _count_approved_exercises(project_root: Path) -> int:
     generated_root = project_root / "05_exercises" / "generated"
     if not generated_root.exists():
@@ -418,6 +449,39 @@ def _kb_snapshot_lines(snapshot: list[dict[str, str]]) -> list[str]:
         if location:
             lines.append(f"  Source: {location}")
     return lines
+
+
+def _benchmark_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
+    status = snapshot.get("status")
+    if status == "not_run":
+        return ["- not run"]
+    if status != "ready":
+        return ["- invalid benchmark manifest"]
+    failed_gates = snapshot.get("failed_gates", [])
+    failed_text = (
+        ", ".join(str(name) for name in failed_gates)
+        if isinstance(failed_gates, list) and failed_gates
+        else "none"
+    )
+    return [
+        f"- Score: {snapshot['score']}/100",
+        f"- Gates passed: {snapshot['passed_gates']}/{snapshot['total_gates']}",
+        f"- Failed gates: {failed_text}",
+        "- Manifest: 08_evals/benchmark_manifest.json",
+    ]
+
+
+def _failed_benchmark_gates(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    failed: list[str] = []
+    for gate in value:
+        if not isinstance(gate, dict) or gate.get("passed") is not False:
+            continue
+        name = str(gate.get("name", "")).strip()
+        if name:
+            failed.append(name)
+    return failed
 
 
 def _kb_object_label(item: dict[str, object]) -> str:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -182,6 +183,8 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Approved exercises: 1", report_text)
             self.assertIn("- Attempted exercises: 1", report_text)
             self.assertIn("- Graded exercises: 1", report_text)
+            self.assertIn("## Benchmark Snapshot", report_text)
+            self.assertIn("- not run", report_text)
             self.assertIn("## Reference KB Snapshot", report_text)
             self.assertIn(
                 "- Definition 3.1: Normal Subgroup - Normality Notes (lecture_notes) [normality_notes]",
@@ -206,6 +209,54 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Current phase: report_ready", status.stdout)
             self.assertIn("Learning reports: 1", status.stdout)
+
+    def test_project_summary_includes_benchmark_snapshot_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            manifest = {
+                "schema_version": 1,
+                "score": 75,
+                "passed_gates": 3,
+                "total_gates": 4,
+                "gates": [
+                    {"name": "Ingestion", "passed": True},
+                    {"name": "Note quality", "passed": True},
+                    {"name": "Exercise quality", "passed": True},
+                    {"name": "Tutoring quality", "passed": False},
+                ],
+            }
+            (project / "08_evals" / "benchmark_manifest.json").write_text(
+                json.dumps(manifest, indent=2),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Benchmark Snapshot", report_text)
+            self.assertIn("- Score: 75/100", report_text)
+            self.assertIn("- Gates passed: 3/4", report_text)
+            self.assertIn("- Failed gates: Tutoring quality", report_text)
+            self.assertIn("- Manifest: 08_evals/benchmark_manifest.json", report_text)
 
     def test_monthly_report_cli_highlights_weaknesses_and_next_steps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
