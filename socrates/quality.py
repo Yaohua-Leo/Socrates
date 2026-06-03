@@ -627,6 +627,11 @@ def _exercise_tool_verification_quality(
         manifest_path,
         source_manifest_path,
     )
+    if not staleness_reason:
+        staleness_reason = _tool_verification_record_staleness_reason(
+            project_root,
+            linked_quality_records,
+        )
     if staleness_reason:
         return {
             "status": "stale",
@@ -652,6 +657,50 @@ def _exercise_tool_verification_quality(
     else:
         status = "unknown"
     return {"status": status, "reason": "", "records": linked_quality_records}
+
+
+def _tool_verification_record_staleness_reason(
+    project_root: Path,
+    records: list[object],
+) -> str:
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        if _record_fingerprint_changed(
+            project_root,
+            record.get("artifact_path"),
+            record.get("artifact_fingerprint"),
+        ):
+            return "tool-verification artifact fingerprint changed"
+        if _record_fingerprint_changed(
+            project_root,
+            record.get("report_path"),
+            record.get("report_fingerprint"),
+        ):
+            return "tool-verification report fingerprint changed"
+    return ""
+
+
+def _record_fingerprint_changed(
+    project_root: Path,
+    relative_path: object,
+    fingerprint: object,
+) -> bool:
+    if not isinstance(relative_path, str) or not relative_path.strip():
+        return False
+    if not isinstance(fingerprint, dict):
+        return False
+    algorithm = str(fingerprint.get("algorithm", "")).strip()
+    value = str(fingerprint.get("value", "")).strip()
+    if algorithm != "sha256" or not value:
+        return False
+    path = Path(relative_path)
+    if path.is_absolute() or ".." in path.parts:
+        return False
+    resolved = project_root / path
+    if not resolved.exists():
+        return True
+    return hashlib.sha256(resolved.read_bytes()).hexdigest() != value
 
 
 def _tool_verification_quality_staleness_reason(
@@ -864,7 +913,18 @@ def _tool_verification_quality_manifest_record(record: object) -> dict[str, obje
         "quality_status": str(record.get("quality_status", "")),
         "artifact_path": str(record.get("artifact_path", "")),
         "report_path": str(record.get("report_path", "")),
+        "artifact_fingerprint": _quality_record_fingerprint(record.get("artifact_fingerprint")),
+        "report_fingerprint": _quality_record_fingerprint(record.get("report_fingerprint")),
         "issues": [str(issue) for issue in issues],
+    }
+
+
+def _quality_record_fingerprint(value: object) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {"algorithm": "sha256", "value": ""}
+    return {
+        "algorithm": str(value.get("algorithm", "")),
+        "value": str(value.get("value", "")),
     }
 
 

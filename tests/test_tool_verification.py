@@ -872,6 +872,22 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(record["object_id"], "kernel_normality")
             self.assertEqual(record["record_status"], "unchecked_skeleton")
             self.assertEqual(record["quality_status"], "pass")
+            artifact_path = project / record["artifact_path"]
+            report_path = project / record["report_path"]
+            self.assertEqual(
+                record["artifact_fingerprint"],
+                {
+                    "algorithm": "sha256",
+                    "value": hashlib.sha256(artifact_path.read_bytes()).hexdigest(),
+                },
+            )
+            self.assertEqual(
+                record["report_fingerprint"],
+                {
+                    "algorithm": "sha256",
+                    "value": hashlib.sha256(report_path.read_bytes()).hexdigest(),
+                },
+            )
             self.assertEqual(
                 manifest["verification_boundary"]["external_verifier_invoked"],
                 False,

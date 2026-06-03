@@ -1999,6 +1999,8 @@ def _checked_tool_record(
             "quality_status": "fail",
             "artifact_path": "",
             "report_path": "",
+            "artifact_fingerprint": _empty_fingerprint(),
+            "report_fingerprint": _empty_fingerprint(),
             "issues": ["tool-verification record must be an object"],
         }
 
@@ -2020,6 +2022,8 @@ def _checked_tool_record(
         "quality_status": "fail" if issues else "pass",
         "artifact_path": artifact_path if isinstance(artifact_path, str) else "",
         "report_path": str(record.get("report_path") or ""),
+        "artifact_fingerprint": _artifact_fingerprint(project_root, artifact_path),
+        "report_fingerprint": _artifact_fingerprint(project_root, record.get("report_path")),
         "issues": issues,
     }
 
@@ -2041,6 +2045,22 @@ def _artifact_issue(project_root: Path, value: object, *, label: str) -> str | N
     if not (project_root / path).exists():
         return f"missing {label}: {value}"
     return None
+
+
+def _artifact_fingerprint(project_root: Path, value: object) -> dict[str, str]:
+    if not isinstance(value, str) or not value.strip():
+        return _empty_fingerprint()
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        return _empty_fingerprint()
+    resolved = project_root / path
+    if not resolved.exists():
+        return _empty_fingerprint()
+    return _source_manifest_fingerprint(resolved)
+
+
+def _empty_fingerprint() -> dict[str, str]:
+    return {"algorithm": "sha256", "value": ""}
 
 
 def _tool_quality_manifest(
