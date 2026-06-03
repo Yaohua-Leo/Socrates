@@ -121,6 +121,30 @@ def build_review_schedule(context: ProjectContext, *, mastery_threshold: float =
     return schedule_path
 
 
+def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: str) -> int:
+    """Mark active misconception records for one concept as resolved."""
+
+    state = _learning_state_dict(context.learning_state)
+    misconceptions = state.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return 0
+
+    resolved = 0
+    for value in misconceptions.values():
+        if not isinstance(value, dict):
+            continue
+        if str(value.get("concept", "")) != concept:
+            continue
+        if value.get("status", "active") != "active":
+            continue
+        value["status"] = "resolved"
+        resolved += 1
+
+    if resolved:
+        write_json(context.learning_state, state)
+    return resolved
+
+
 def _learning_state_dict(path: Path) -> dict[str, object]:
     loaded = read_json(path) if path.exists() else {}
     state = loaded if isinstance(loaded, dict) else {}

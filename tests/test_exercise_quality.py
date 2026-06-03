@@ -404,6 +404,90 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertIn("## Scheduled Reviews\n\n- none", queue.stdout)
             self.assertNotIn("- normal_subgroup | 02_learning_plan/review_schedule.md", queue.stdout)
 
+    def test_high_score_targeted_review_grade_resolves_active_misconception(self) -> None:
+        from socrates.artifacts import generate_targeted_review_exercise_drafts
+        from socrates.context import load_project
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+        from socrates.state import (
+            LearningStatePatch,
+            MistakeRecord,
+            build_review_schedule,
+            update_learning_state,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={"normal_subgroup": 0.42},
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session_0001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal subgroups are central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Use conjugation rather than commutativity.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context)
+            generate_targeted_review_exercise_drafts(project)
+            approve_exercise_draft(project, "review_normal_subgroup_01")
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "Normality asks for gNg^-1=N, not elementwise commutativity.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text(
+                "The misconception is resolved for this review item.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record_exercise_attempt(project, "review_normal_subgroup_01", answer)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "review_normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.85",
+                    "--feedback",
+                    str(feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["status"],
+                "resolved",
+            )
+            self.assertEqual(learning_state["review_schedule"], [])
+            schedule_text = (project / "02_learning_plan" / "review_schedule.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("No review items scheduled.", schedule_text)
+
     def test_grade_exercise_attempt_rejects_missing_attempt(self) -> None:
         from socrates.exercises import grade_exercise_attempt
 
