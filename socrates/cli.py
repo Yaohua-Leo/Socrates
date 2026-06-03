@@ -875,6 +875,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     kb_object_count = _count_kb_objects(context.root)
     reviewed_count = _count_reviewed_notes(context.root)
     obsidian_export_count = _count_obsidian_exports(context.root)
+    obsidian_backlink_count = _count_obsidian_backlinks(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     report_count = _count_learning_reports(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
@@ -921,6 +922,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Attempted exercises: {attempted_exercise_count}")
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
+    print(f"Obsidian backlinks: {obsidian_backlink_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     print(f"Learning reports: {report_count}")
     print(f"Tool verification records: {tool_verification_count}")
@@ -2124,6 +2126,24 @@ def _count_obsidian_exports(project_root: Path) -> int:
             if path.name != "_socrates_index.md"
         ]
     )
+
+
+def _count_obsidian_backlinks(project_root: Path) -> int:
+    manifest_path = project_root / "07_exports" / "obsidian" / "export_manifest.json"
+    if not manifest_path.exists():
+        return 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
+    if not isinstance(exported_notes, list):
+        return 0
+    backlink_count = 0
+    for note in exported_notes:
+        if not isinstance(note, dict):
+            continue
+        backlinks = note.get("backlinks", [])
+        if isinstance(backlinks, list):
+            backlink_count += len(backlinks)
+    return backlink_count
 
 
 def _count_scheduled_reviews(learning_state: Path) -> int:

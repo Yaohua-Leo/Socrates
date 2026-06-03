@@ -66,6 +66,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             sessions_completed=_count_dirs(context.sessions_dir),
             reviewed_notes=_count_reviewed_notes(context.root),
             obsidian_exports=_count_obsidian_exports(context.root),
+            obsidian_backlinks=_count_obsidian_backlinks(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
@@ -304,6 +305,7 @@ def _project_summary_text(
     sessions_completed: int,
     reviewed_notes: int,
     obsidian_exports: int,
+    obsidian_backlinks: int,
     generated_exercises: int,
     approved_exercises: int,
     attempted_exercises: int,
@@ -329,6 +331,7 @@ def _project_summary_text(
         f"- Sessions completed: {sessions_completed}",
         f"- Reviewed notes: {reviewed_notes}",
         f"- Obsidian exports: {obsidian_exports}",
+        f"- Obsidian backlinks: {obsidian_backlinks}",
         f"- Generated exercises: {generated_exercises}",
         f"- Approved exercises: {approved_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
@@ -412,6 +415,24 @@ def _count_obsidian_exports(project_root: Path) -> int:
             if path.name != "_socrates_index.md"
         ]
     )
+
+
+def _count_obsidian_backlinks(project_root: Path) -> int:
+    manifest_path = project_root / "07_exports" / "obsidian" / "export_manifest.json"
+    if not manifest_path.exists():
+        return 0
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
+    if not isinstance(exported_notes, list):
+        return 0
+    backlink_count = 0
+    for note in exported_notes:
+        if not isinstance(note, dict):
+            continue
+        backlinks = note.get("backlinks", [])
+        if isinstance(backlinks, list):
+            backlink_count += len(backlinks)
+    return backlink_count
 
 
 def _count_reviewed_notes(project_root: Path) -> int:

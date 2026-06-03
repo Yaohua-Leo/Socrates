@@ -239,6 +239,59 @@ class NoteReviewExportTests(unittest.TestCase):
             )
             self.assertEqual(notes_by_id["quotient_group"]["backlinks"], [])
 
+    def test_status_cli_counts_obsidian_manifest_backlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup\n\n"
+                "### Definition: Quotient Group\n"
+                "A quotient group uses cosets of a normal subgroup.\n"
+                "Depends: normal_subgroup\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a normal subgroup.\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            review_atomic_note(project, "quotient_group")
+            export_reviewed_notes_to_obsidian(project)
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Obsidian exports: 2", result.stdout)
+            self.assertIn("Obsidian backlinks: 1", result.stdout)
+
     def test_note_list_cli_shows_pending_reviewed_and_exported_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
