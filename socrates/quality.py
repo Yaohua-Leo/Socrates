@@ -37,6 +37,17 @@ class TutoringQualityResult:
     report_path: Path
 
 
+@dataclass(frozen=True)
+class IngestionQualityResult:
+    """Summary of curated-reference ingestion quality checks."""
+
+    checked: int
+    passed: int
+    failed: int
+    object_count: int
+    report_path: Path
+
+
 REQUIRED_FRONTMATTER = ("status:", "review_status:", "type:", "concept:")
 REQUIRED_SECTIONS = ("## Hints", "## Solution Outline", "## Rubric")
 NOTE_REQUIRED_FRONTMATTER = (
@@ -56,6 +67,19 @@ SESSION_REQUIRED_FILES = (
     "summary.md",
     "next_actions.md",
 )
+INGESTION_OBJECT_TYPES = {
+    "definition",
+    "theorem",
+    "proposition",
+    "lemma",
+    "corollary",
+    "example",
+    "counterexample",
+    "proof",
+    "exercise",
+    "remark",
+    "notation",
+}
 
 
 def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualityResult:
@@ -123,6 +147,26 @@ def check_tutoring_session_quality(
     return TutoringQualityResult(session_id=session_id, status=status, report_path=report_path)
 
 
+def check_reference_ingestion_quality(project_path: Path | str) -> IngestionQualityResult:
+    """Check curated reference files for extractable KB objects."""
+
+    context = load_project(project_path)
+    curated_paths = sorted((context.references_dir / "curated").glob("*.md"))
+    rows = [_check_curated_reference(path) for path in curated_paths]
+    passed = sum(1 for row in rows if row["status"] == "pass")
+    failed = len(rows) - passed
+    object_count = sum(int(row["object_count"]) for row in rows)
+    report_path = context.evals_dir / "ingestion_eval.md"
+    write_text(report_path, _ingestion_quality_report(rows, passed, failed, object_count))
+    return IngestionQualityResult(
+        checked=len(rows),
+        passed=passed,
+        failed=failed,
+        object_count=object_count,
+        report_path=report_path,
+    )
+
+
 def _check_exercise(path: Path) -> dict[str, object]:
     text = path.read_text(encoding="utf-8")
     issues: list[str] = []
@@ -171,6 +215,34 @@ def _check_note(path: Path, project_root: Path) -> dict[str, object]:
         "status": "fail" if issues else "pass",
         "issues": issues,
     }
+
+
+def _check_curated_reference(path: Path) -> dict[str, object]:
+    text = path.read_text(encoding="utf-8")
+    object_count = _extractable_object_count(text)
+    issues: list[str] = []
+    if object_count == 0:
+        issues.append("no extractable mathematical object headings")
+    if "Depends:" not in text:
+        issues.append("no dependency metadata")
+    return {
+        "file": path.name,
+        "status": "fail" if issues else "pass",
+        "object_count": object_count,
+        "issues": issues,
+    }
+
+
+def _extractable_object_count(text: str) -> int:
+    count = 0
+    for line in text.splitlines():
+        stripped = line.strip()
+        if not stripped.startswith("### "):
+            continue
+        label, separator, _ = stripped.removeprefix("### ").partition(":")
+        if separator and label.strip().casefold() in INGESTION_OBJECT_TYPES:
+            count += 1
+    return count
 
 
 def _has_premature_solution(transcript: str) -> bool:
@@ -231,6 +303,37 @@ def _note_quality_report(
         return "\n".join(lines) + "\n"
     for row in rows:
         lines.append(f"- {row['file']}: {row['status']}")
+        issues = row.get("issues", [])
+        if isinstance(issues, list):
+            lines.extend(f"  - {issue}" for issue in issues)
+    return "\n".join(lines) + "\n"
+
+
+def _ingestion_quality_report(
+    rows: list[dict[str, object]],
+    passed: int,
+    failed: int,
+    object_count: int,
+) -> str:
+    lines = [
+        "# Ingestion Eval",
+        "",
+        "## Summary",
+        "",
+        f"- Curated files checked: {len(rows)}",
+        f"- Extractable objects: {object_count}",
+        f"- Passed: {passed}",
+        f"- Failed: {failed}",
+        "",
+        "## Results",
+        "",
+    ]
+    if not rows:
+        lines.append("- No curated reference files found.")
+        return "\n".join(lines) + "\n"
+    for row in rows:
+        lines.append(f"- {row['file']}: {row['status']}")
+        lines.append(f"  - Extractable objects: {row['object_count']}")
         issues = row.get("issues", [])
         if isinstance(issues, list):
             lines.extend(f"  - {issue}" for issue in issues)

@@ -22,6 +22,7 @@ from .project import slugify_topic
 from .quality import (
     check_atomic_note_quality,
     check_generated_exercise_quality,
+    check_reference_ingestion_quality,
     check_tutoring_session_quality,
 )
 from .references import curate_reference, import_reference
@@ -128,6 +129,12 @@ def build_parser() -> argparse.ArgumentParser:
     kb_search_parser.add_argument("--query", required=True, help="Search query.")
     kb_search_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
     kb_search_parser.set_defaults(func=_handle_kb_search)
+    kb_check_parser = kb_subparsers.add_parser(
+        "check",
+        help="Run checklist quality checks on curated references.",
+    )
+    kb_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_check_parser.set_defaults(func=_handle_kb_check)
 
     note_parser = subparsers.add_parser(
         "note",
@@ -335,6 +342,17 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
         source = match.get("source", {})
         path = source.get("path", "unknown") if isinstance(source, dict) else "unknown"
         print(f"{match['type']}: {match['title']} ({path})")
+    return 0
+
+
+def _handle_kb_check(args: argparse.Namespace) -> int:
+    result = check_reference_ingestion_quality(args.project)
+    noun = "reference" if result.checked == 1 else "references"
+    print(
+        f"Checked {result.checked} curated {noun}: "
+        f"{result.passed} passed, {result.failed} failed"
+    )
+    print(f"Ingestion quality report: {result.report_path}")
     return 0
 
 
