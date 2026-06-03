@@ -1115,6 +1115,7 @@ def _handle_session_check(args: argparse.Namespace) -> int:
     result = check_tutoring_session_quality(args.project, session_id=args.session_id)
     print(f"Checked session {result.session_id}: {result.status}")
     print(f"Tutoring quality report: {result.report_path}")
+    print(f"Tutoring quality manifest: {result.manifest_path}")
     return 0
 
 

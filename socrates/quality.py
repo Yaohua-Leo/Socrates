@@ -39,6 +39,7 @@ class TutoringQualityResult:
     session_id: str
     status: str
     report_path: Path
+    manifest_path: Path
 
 
 @dataclass(frozen=True)
@@ -202,6 +203,7 @@ def check_tutoring_session_quality(
 
     status = "fail" if issues else "pass"
     report_path = context.evals_dir / "tutoring_eval.md"
+    manifest_path = context.evals_dir / "tutoring_quality_manifest.json"
     _append_report(
         report_path,
         _tutoring_quality_report(
@@ -213,7 +215,122 @@ def check_tutoring_session_quality(
             rubric,
         ),
     )
-    return TutoringQualityResult(session_id=session_id, status=status, report_path=report_path)
+    write_json(
+        manifest_path,
+        _updated_tutoring_quality_manifest(
+            context.root,
+            manifest_path,
+            session_id=session_id,
+            session_dir=session_dir,
+            status=status,
+            missing=missing,
+            transcript=transcript,
+            premature_solution=premature_solution,
+            issues=issues,
+            rubric=rubric,
+        ),
+    )
+    return TutoringQualityResult(
+        session_id=session_id,
+        status=status,
+        report_path=report_path,
+        manifest_path=manifest_path,
+    )
+
+
+def _updated_tutoring_quality_manifest(
+    project_root: Path,
+    manifest_path: Path,
+    *,
+    session_id: str,
+    session_dir: Path,
+    status: str,
+    missing: list[str],
+    transcript: str,
+    premature_solution: bool,
+    issues: list[str],
+    rubric: dict[str, int],
+) -> dict[str, object]:
+    sessions = _existing_tutoring_manifest_sessions(manifest_path)
+    session_entry = _tutoring_manifest_entry(
+        project_root,
+        session_id=session_id,
+        session_dir=session_dir,
+        status=status,
+        missing=missing,
+        transcript=transcript,
+        premature_solution=premature_solution,
+        issues=issues,
+        rubric=rubric,
+    )
+    by_session_id = {
+        str(item.get("session_id", "")): item
+        for item in sessions
+        if isinstance(item, dict) and item.get("session_id")
+    }
+    by_session_id[session_id] = session_entry
+    checked_sessions = sorted(
+        by_session_id.values(),
+        key=lambda item: str(item.get("session_id", "")),
+    )
+    return {
+        "schema_version": 1,
+        "checked": len(checked_sessions),
+        "passed": sum(1 for item in checked_sessions if item.get("status") == "pass"),
+        "failed": sum(1 for item in checked_sessions if item.get("status") == "fail"),
+        "sessions": checked_sessions,
+    }
+
+
+def _existing_tutoring_manifest_sessions(manifest_path: Path) -> list[dict[str, object]]:
+    if not manifest_path.exists():
+        return []
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    sessions = manifest.get("sessions", []) if isinstance(manifest, dict) else []
+    return [item for item in sessions if isinstance(item, dict)]
+
+
+def _tutoring_manifest_entry(
+    project_root: Path,
+    *,
+    session_id: str,
+    session_dir: Path,
+    status: str,
+    missing: list[str],
+    transcript: str,
+    premature_solution: bool,
+    issues: list[str],
+    rubric: dict[str, int],
+) -> dict[str, object]:
+    return {
+        "session_id": session_id,
+        "path": session_dir.relative_to(project_root).as_posix(),
+        "status": status,
+        "missing_artifacts": missing,
+        "artifacts": _session_artifact_manifest(project_root, session_dir),
+        "transcript_checks": {
+            "has_tutor_question": "Tutor:" in transcript,
+            "hint_count": _line_prefix_count(transcript, "Hint "),
+            "student_attempt_count": _line_prefix_count(transcript, "Student attempt:"),
+            "premature_solution": premature_solution,
+        },
+        "rubric": rubric,
+        "total_score": sum(rubric.values()),
+        "issues": issues,
+    }
+
+
+def _session_artifact_manifest(project_root: Path, session_dir: Path) -> dict[str, object]:
+    return {
+        file_name: {
+            "exists": (session_dir / file_name).exists(),
+            "path": (session_dir / file_name).relative_to(project_root).as_posix(),
+        }
+        for file_name in SESSION_REQUIRED_FILES
+    }
 
 
 def check_reference_ingestion_quality(project_path: Path | str) -> IngestionQualityResult:
@@ -585,6 +702,10 @@ def _numbered_line_count(section: str, marker: str) -> int:
 
 def _bullet_count(section: str) -> int:
     return sum(1 for line in section.splitlines() if line.strip().startswith("- "))
+
+
+def _line_prefix_count(text: str, prefix: str) -> int:
+    return sum(1 for line in text.splitlines() if line.startswith(prefix))
 
 
 def _rubric_total_points(text: str) -> int | None:
