@@ -20,6 +20,7 @@ from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
+from .project_index import list_projects, scan_project_root
 from .quality import (
     check_atomic_note_quality,
     check_generated_exercise_quality,
@@ -118,6 +119,24 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
     status_parser.set_defaults(func=_handle_status)
+
+    projects_parser = subparsers.add_parser(
+        "projects",
+        help="Manage a root containing multiple Socrates projects.",
+    )
+    projects_subparsers = projects_parser.add_subparsers(dest="projects_command", required=True)
+    projects_scan_parser = projects_subparsers.add_parser(
+        "scan",
+        help="Scan a project collection root and write an index.",
+    )
+    projects_scan_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
+    projects_scan_parser.set_defaults(func=_handle_projects_scan)
+    projects_list_parser = projects_subparsers.add_parser(
+        "list",
+        help="List indexed Socrates projects under a root.",
+    )
+    projects_list_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
+    projects_list_parser.set_defaults(func=_handle_projects_list)
 
     kb_parser = subparsers.add_parser(
         "kb",
@@ -392,6 +411,27 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
+    return 0
+
+
+def _handle_projects_scan(args: argparse.Namespace) -> int:
+    index_path = scan_project_root(args.root)
+    projects = list_projects(args.root)
+    noun = "project" if len(projects) == 1 else "projects"
+    print(f"Indexed {len(projects)} {noun}: {index_path}")
+    return 0
+
+
+def _handle_projects_list(args: argparse.Namespace) -> int:
+    projects = list_projects(args.root)
+    if not projects:
+        print("No Socrates projects found")
+        return 0
+    for project in projects:
+        print(
+            f"{project['id']} | {project['title']} | "
+            f"{project['status']} | {project['path']}"
+        )
     return 0
 
 
