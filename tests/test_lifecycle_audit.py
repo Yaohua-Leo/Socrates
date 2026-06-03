@@ -58,6 +58,38 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Learning plans: fail", report_text)
             self.assertIn("- Obsidian export: fail", report_text)
 
+    def test_lifecycle_audit_does_not_count_obsidian_utility_index_as_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            obsidian_dir = project / "07_exports" / "obsidian"
+            (obsidian_dir / "_socrates_index.md").write_text(
+                "# Socrates Obsidian Export\n\nNo reviewed notes exported.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Obsidian export: fail", report_text)
+
     def test_lifecycle_audit_cli_reports_complete_learning_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
