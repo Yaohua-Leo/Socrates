@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import date, timedelta
 from pathlib import Path
 
 from socrates.context import ProjectContext, read_json, write_json, write_text
@@ -51,6 +52,7 @@ class ReviewScheduleItem:
     concept: str
     priority: str
     due: str
+    scheduled_for: str
     reason: str
 
 
@@ -100,16 +102,26 @@ def update_eval_report(context: ProjectContext, update: EvalReportUpdate) -> Pat
     return path
 
 
-def build_review_schedule(context: ProjectContext, *, mastery_threshold: float = 0.7) -> Path:
+def build_review_schedule(
+    context: ProjectContext,
+    *,
+    mastery_threshold: float = 0.7,
+    as_of: date | None = None,
+) -> Path:
     """Build a first review schedule from weak concepts and active misconceptions."""
 
     state = _learning_state_dict(context.learning_state)
-    items = _review_items(state, mastery_threshold=mastery_threshold)
+    items = _review_items(
+        state,
+        mastery_threshold=mastery_threshold,
+        as_of=as_of or date.today(),
+    )
     state["review_schedule"] = [
         {
             "concept": item.concept,
             "priority": item.priority,
             "due": item.due,
+            "scheduled_for": item.scheduled_for,
             "reason": item.reason,
         }
         for item in items
@@ -157,7 +169,12 @@ def _learning_state_dict(path: Path) -> dict[str, object]:
     return state
 
 
-def _review_items(state: dict[str, object], *, mastery_threshold: float) -> list[ReviewScheduleItem]:
+def _review_items(
+    state: dict[str, object],
+    *,
+    mastery_threshold: float,
+    as_of: date,
+) -> list[ReviewScheduleItem]:
     concept_reasons: dict[str, list[str]] = {}
     concept_priorities: dict[str, str] = {}
 
@@ -195,10 +212,17 @@ def _review_items(state: dict[str, object], *, mastery_threshold: float) -> list
                 concept=concept,
                 priority=priority,
                 due=due,
+                scheduled_for=_scheduled_review_date(priority, as_of),
                 reason="; ".join(concept_reasons[concept]),
             )
         )
     return items
+
+
+def _scheduled_review_date(priority: str, as_of: date) -> str:
+    if priority == "high":
+        return as_of.isoformat()
+    return (as_of + timedelta(days=3)).isoformat()
 
 
 def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:
@@ -213,6 +237,7 @@ def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:
                 "",
                 f"- Priority: {item.priority}",
                 f"- Due: {item.due}",
+                f"- Scheduled for: {item.scheduled_for}",
                 f"- Reason: {item.reason}",
                 "",
             ]

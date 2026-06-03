@@ -226,8 +226,10 @@ def _review_adjustments_section(schedule: list[object]) -> str:
         concept = item.get("concept", "review")
         priority = item.get("priority", "medium")
         due = item.get("due", "within_3_days")
+        scheduled_for = item.get("scheduled_for", "")
         reason = item.get("reason", "review scheduled")
-        lines.append(f"- {concept} ({priority}, {due}): {reason}")
+        suffix = f" | scheduled for {scheduled_for}" if scheduled_for else ""
+        lines.append(f"- {concept} ({priority}, {due}): {reason}{suffix}")
     return "\n".join(lines) + "\n"
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import importlib.util
+from datetime import date
 from pathlib import Path
 import tempfile
 import unittest
@@ -220,7 +221,7 @@ class NotesExercisesTests(unittest.TestCase):
                 context,
                 LearningStatePatch(concept_mastery={"normal_subgroup": 0.43}),
             )
-            build_review_schedule(context)
+            build_review_schedule(context, as_of=date(2026, 6, 4))
 
             exercises = artifacts.generate_targeted_review_exercise_drafts(project)
 
@@ -235,6 +236,7 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('concept: "normal_subgroup"', text)
             self.assertIn('priority: "high"', text)
             self.assertIn('due: "next_session"', text)
+            self.assertIn('scheduled_for: "2026-06-04"', text)
             self.assertIn("## Target Weakness\n\nmastery 0.43", text)
             self.assertIn("## Target Training Point", text)
             self.assertIn("## Review Prompt", text)

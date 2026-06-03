@@ -354,8 +354,10 @@ def _review_lines(value: object) -> list[str]:
         concept = str(item.get("concept", "review"))
         priority = str(item.get("priority", "medium"))
         due = str(item.get("due", "within_3_days"))
+        scheduled_for = str(item.get("scheduled_for", "")).strip()
         reason = str(item.get("reason", "review scheduled"))
-        lines.append(f"- {concept}: {priority}, {due} - {reason}")
+        date_label = f", {scheduled_for}" if scheduled_for else ""
+        lines.append(f"- {concept}: {priority}, {due}{date_label} - {reason}")
     return lines or ["- none scheduled"]
 
 

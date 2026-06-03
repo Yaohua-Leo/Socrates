@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import json
 from pathlib import Path
 import subprocess
@@ -305,6 +306,7 @@ class ExerciseQualityTests(unittest.TestCase):
                     "concept": "normal_subgroup",
                     "priority": "high",
                     "due": "next_session",
+                    "scheduled_for": date.today().isoformat(),
                     "reason": "mastery 0.4",
                 },
             )

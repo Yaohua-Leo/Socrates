@@ -137,6 +137,7 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
                     reason=str(item.get("reason", "review scheduled")),
                     priority=str(item.get("priority", "medium")),
                     due=str(item.get("due", "within_3_days")),
+                    scheduled_for=str(item.get("scheduled_for", "")),
                     reference_object=reference_object,
                 ),
             )
@@ -208,6 +209,7 @@ def _targeted_review_exercise_text(
     reason: str,
     priority: str,
     due: str,
+    scheduled_for: str,
     reference_object: dict[str, object] | None,
 ) -> str:
     reference_context = _reference_context_section(reference_object)
@@ -220,6 +222,7 @@ def _targeted_review_exercise_text(
                 "concept": concept,
                 "priority": priority,
                 "due": due,
+                "scheduled_for": scheduled_for,
             }
         )
         + f"# Review Exercise: {concept}\n\n"

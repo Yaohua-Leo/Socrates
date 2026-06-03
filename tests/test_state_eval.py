@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import json
 from pathlib import Path
 import subprocess
@@ -149,7 +150,7 @@ class StateEvalTests(unittest.TestCase):
             )
             update_learning_state(context, LearningStatePatch(mistakes=[mistake]))
 
-            schedule_path = build_review_schedule(context)
+            schedule_path = build_review_schedule(context, as_of=date(2026, 6, 4))
 
             self.assertEqual(schedule_path, project / "02_learning_plan" / "review_schedule.md")
             schedule_text = schedule_path.read_text(encoding="utf-8")
@@ -157,6 +158,7 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("## normal_subgroup", schedule_text)
             self.assertIn("- Priority: high", schedule_text)
             self.assertIn("- Due: next_session", schedule_text)
+            self.assertIn("- Scheduled for: 2026-06-04", schedule_text)
             self.assertIn("- Reason: mastery 0.41; active misconception normal_equals_central x2", schedule_text)
             self.assertNotIn("## subgroup", schedule_text)
 
@@ -167,9 +169,37 @@ class StateEvalTests(unittest.TestCase):
                     "concept": "normal_subgroup",
                     "priority": "high",
                     "due": "next_session",
+                    "scheduled_for": "2026-06-04",
                     "reason": "mastery 0.41; active misconception normal_equals_central x2",
                 },
             )
+
+    def test_review_schedule_dates_medium_priority_items_three_days_out(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"quotient_group": 0.62}),
+            )
+
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["review_schedule"][0],
+                {
+                    "concept": "quotient_group",
+                    "priority": "medium",
+                    "due": "within_3_days",
+                    "scheduled_for": "2026-06-07",
+                    "reason": "mastery 0.62",
+                },
+            )
+            schedule_text = (project / "02_learning_plan" / "review_schedule.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
 
     def test_review_schedule_command_updates_status_count(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
