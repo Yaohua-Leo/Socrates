@@ -1125,6 +1125,7 @@ def _handle_benchmark_run(args: argparse.Namespace) -> int:
     print(f"Benchmark passed {result.passed_gates}/{result.total_gates} gates")
     print(f"Benchmark score: {result.score}/100")
     print(f"Benchmark report: {result.report_path}")
+    print(f"Benchmark manifest: {result.manifest_path}")
     return 0
 
 

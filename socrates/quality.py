@@ -62,6 +62,7 @@ class BenchmarkResult:
     passed_gates: int
     score: int
     report_path: Path
+    manifest_path: Path
 
 
 @dataclass(frozen=True)
@@ -388,12 +389,26 @@ def run_project_benchmark(
     passed_gates = sum(1 for passed in gates.values() if passed)
     score = _benchmark_score(passed_gates, len(gates))
     report_path = context.evals_dir / "benchmark_report.md"
+    manifest_path = context.evals_dir / "benchmark_manifest.json"
     write_text(report_path, _benchmark_report(gates, score=score))
+    write_json(
+        manifest_path,
+        _benchmark_manifest(
+            context.root,
+            gates,
+            score=score,
+            ingestion=ingestion,
+            note=note,
+            exercise=exercise,
+            tutoring=tutoring,
+        ),
+    )
     return BenchmarkResult(
         total_gates=len(gates),
         passed_gates=passed_gates,
         score=score,
         report_path=report_path,
+        manifest_path=manifest_path,
     )
 
 
@@ -1197,6 +1212,91 @@ def _benchmark_report(gates: dict[str, bool], *, score: int) -> str:
         for name, passed in gates.items()
     )
     return "\n".join(lines) + "\n"
+
+
+def _benchmark_manifest(
+    project_root: Path,
+    gates: dict[str, bool],
+    *,
+    score: int,
+    ingestion: IngestionQualityResult,
+    note: NoteQualityResult,
+    exercise: ExerciseQualityResult,
+    tutoring: TutoringQualityResult,
+) -> dict[str, object]:
+    gate_entries = [
+        _benchmark_gate_entry(
+            project_root,
+            "Ingestion",
+            gates["Ingestion"],
+            checked=ingestion.checked,
+            failed=ingestion.failed,
+            report_path=ingestion.report_path,
+            manifest_path=ingestion.manifest_path,
+        ),
+        _benchmark_gate_entry(
+            project_root,
+            "Note quality",
+            gates["Note quality"],
+            checked=note.checked,
+            failed=note.failed,
+            report_path=note.report_path,
+            manifest_path=note.manifest_path,
+        ),
+        _benchmark_gate_entry(
+            project_root,
+            "Exercise quality",
+            gates["Exercise quality"],
+            checked=exercise.checked,
+            failed=exercise.failed,
+            report_path=exercise.report_path,
+            manifest_path=exercise.manifest_path,
+        ),
+        _benchmark_gate_entry(
+            project_root,
+            "Tutoring quality",
+            gates["Tutoring quality"],
+            checked=1,
+            failed=0 if tutoring.status == "pass" else 1,
+            report_path=tutoring.report_path,
+            manifest_path=tutoring.manifest_path,
+            extra={
+                "session_id": tutoring.session_id,
+                "status": tutoring.status,
+            },
+        ),
+    ]
+    return {
+        "schema_version": 1,
+        "score": score,
+        "passed_gates": sum(1 for gate in gate_entries if gate["passed"]),
+        "total_gates": len(gate_entries),
+        "gates": gate_entries,
+    }
+
+
+def _benchmark_gate_entry(
+    project_root: Path,
+    name: str,
+    passed: bool,
+    *,
+    checked: int,
+    failed: int,
+    report_path: Path,
+    manifest_path: Path,
+    extra: dict[str, object] | None = None,
+) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "name": name,
+        "passed": passed,
+        "checked": checked,
+        "failed": failed,
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "manifest_path": manifest_path.relative_to(project_root).as_posix(),
+    }
+    if extra:
+        entry.update(extra)
+    return entry
 
 
 def _read_learning_state(path: Path) -> dict[str, object]:

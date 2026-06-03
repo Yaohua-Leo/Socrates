@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -81,6 +82,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Benchmark passed 4/4 gates", result.stdout)
             self.assertIn("Benchmark score: 100/100", result.stdout)
+            self.assertIn("Benchmark manifest:", result.stdout)
             report = project / "08_evals" / "benchmark_report.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Benchmark Report", report_text)
@@ -91,6 +93,47 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIn("- Note quality: pass", report_text)
             self.assertIn("- Exercise quality: pass", report_text)
             self.assertIn("- Tutoring quality: pass", report_text)
+            manifest = json.loads(
+                (project / "08_evals" / "benchmark_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["score"], 100)
+            self.assertEqual(manifest["passed_gates"], 4)
+            self.assertEqual(manifest["total_gates"], 4)
+            gates = manifest["gates"]
+            self.assertEqual(
+                [gate["name"] for gate in gates],
+                [
+                    "Ingestion",
+                    "Note quality",
+                    "Exercise quality",
+                    "Tutoring quality",
+                ],
+            )
+            self.assertTrue(all(gate["passed"] for gate in gates))
+            self.assertEqual(gates[0]["checked"], 1)
+            self.assertEqual(gates[0]["failed"], 0)
+            self.assertEqual(gates[0]["report_path"], "08_evals/ingestion_eval.md")
+            self.assertEqual(
+                gates[0]["manifest_path"],
+                "08_evals/ingestion_quality_manifest.json",
+            )
+            self.assertEqual(
+                gates[1]["manifest_path"],
+                "08_evals/note_quality_manifest.json",
+            )
+            self.assertEqual(
+                gates[2]["manifest_path"],
+                "08_evals/exercise_quality_manifest.json",
+            )
+            self.assertEqual(
+                gates[3]["manifest_path"],
+                "08_evals/tutoring_quality_manifest.json",
+            )
+            self.assertEqual(gates[3]["session_id"], "session_0001")
+            self.assertEqual(gates[3]["status"], "pass")
 
 
 if __name__ == "__main__":
