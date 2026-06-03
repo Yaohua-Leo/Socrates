@@ -5,6 +5,7 @@ import tempfile
 import unittest
 
 from socrates.contracts import SourceRecord
+from socrates.kb import build_reference_kb
 from socrates.planning import create_learning_plan
 from socrates.project import ProjectSpec, create_project
 
@@ -71,6 +72,40 @@ class LearningPlanTests(unittest.TestCase):
             self.assertIn("Homological Algebra", plan_text)
             self.assertIn("Learn enough to read derived categories.", plan_text)
             self.assertIn("An Introduction to Homological Algebra", plan_text)
+
+    def test_session_plan_includes_source_grounded_reference_context_from_kb(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=Path(temp_dir) / "normal_subgroup",
+                    goal="Understand the definition before quotient groups.",
+                )
+            )
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A subgroup N of G is normal when it is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+
+            create_learning_plan(project)
+
+            session_plan = (
+                project / "02_learning_plan" / "session_0001_plan.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Reference Context", session_plan)
+            self.assertIn("Definition: Normal Subgroup", session_plan)
+            self.assertIn(
+                "Source: 01_references/curated/normal_subgroups.curated.md",
+                session_plan,
+            )
+            self.assertIn("Depends: subgroup, conjugation", session_plan)
 
 
 if __name__ == "__main__":
