@@ -639,8 +639,12 @@ def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
 
 
 def _handle_review_due(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else date.today()
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     context = load_project(args.project)
-    as_of = _parse_iso_date(args.as_of) if args.as_of else date.today()
     print(_due_reviews_text(context.learning_state, as_of), end="")
     return 0
 
@@ -1016,7 +1020,10 @@ def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
 
 
 def _parse_iso_date(value: str) -> date:
-    return date.fromisoformat(value)
+    try:
+        return date.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"invalid ISO date {value!r}; expected YYYY-MM-DD") from exc
 
 
 def _due_reviews_text(learning_state: Path, as_of: date) -> str:

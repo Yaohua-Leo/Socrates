@@ -346,6 +346,36 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("- zeta_urgent_review | 2026-06-04 | high | mastery 0.4", later.stdout)
             self.assertIn("- alpha_medium_review | 2026-06-07 | medium | mastery 0.62", later.stdout)
 
+    def test_review_due_cli_rejects_invalid_as_of_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "not-a-date",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn(
+                "error: invalid ISO date 'not-a-date'; expected YYYY-MM-DD",
+                result.stderr,
+            )
+            self.assertNotIn("Traceback", result.stderr)
+
     def test_status_counts_active_and_resolved_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
