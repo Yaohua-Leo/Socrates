@@ -192,6 +192,22 @@ class NotesExercisesTests(unittest.TestCase):
                 self.assertIn("3 pts", text)
                 self.assertIn("4 pts", text)
 
+    def test_generate_exercise_drafts_fills_prerequisite_fallback(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            exercises = artifacts.generate_exercise_drafts(
+                project,
+                concept="Group Action",
+                source_id="df-1",
+                count=5,
+            )
+
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn("## Prerequisites\n\n- Current definition of Group Action", text)
+            self.assertNotIn("- None recorded.", text)
+
     def test_generate_exercise_drafts_uses_kb_reference_context(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:

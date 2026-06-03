@@ -84,7 +84,11 @@ def generate_exercise_drafts(
     context = load_project(project_path)
     base_id = slugify_topic(concept)
     reference_object = _kb_reference_object(context.root, concept)
-    prerequisite_list = list(prerequisites) or _kb_related_concepts(reference_object)
+    prerequisite_list = (
+        list(prerequisites)
+        or _kb_related_concepts(reference_object)
+        or _exercise_prerequisite_fallback(concept)
+    )
     exercise_count = max(5, count)
     drafts: list[ExerciseDraft] = []
 
@@ -300,6 +304,10 @@ def _review_exercise_prerequisites(
     if dependencies:
         return dependencies
     return [f"current weakness record for {concept}"]
+
+
+def _exercise_prerequisite_fallback(concept: str) -> list[str]:
+    return [f"Current definition of {concept}"]
 
 
 def _frontmatter(values: dict[str, object]) -> str:

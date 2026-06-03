@@ -1069,6 +1069,53 @@ class ExerciseQualityTests(unittest.TestCase):
 
             self.assertIn("missing concept tags", issues)
 
+    def test_exercise_quality_requires_nonempty_prerequisites(self) -> None:
+        from socrates.quality import exercise_quality_issues
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            exercise = project / "05_exercises" / "generated" / "empty_prerequisites.md"
+            exercise.write_text(
+                "---\n"
+                "status: draft\n"
+                "review_status: needs_review\n"
+                "type: generated_exercise\n"
+                "concept: Normal Subgroup\n"
+                "source_id: df\n"
+                "difficulty: 2\n"
+                "---\n\n"
+                "# Empty Prerequisites\n\n"
+                "## Statement\n\n"
+                "Prove a basic fact about normal subgroups.\n\n"
+                "## Target Training Point\n\n"
+                "Practice checking conjugation invariance explicitly.\n\n"
+                "## Concepts\n\n"
+                "- Normal Subgroup\n\n"
+                "## Prerequisites\n\n"
+                "- None recorded.\n\n"
+                "## Hints\n\n"
+                "Hint 1: Recall the definition of normal subgroup.\n"
+                "Hint 2: Pick g in G and n in N.\n"
+                "Hint 3: Show gng^-1 lies in N.\n\n"
+                "## Solution Outline\n\n"
+                "Step 1: State the subgroup condition.\n"
+                "Step 2: Apply conjugation.\n"
+                "Step 3: Conclude normality.\n\n"
+                "## Rubric\n\n"
+                "- Setup: 3 pts\n"
+                "- Conjugation check: 4 pts\n"
+                "- Conclusion: 3 pts\n"
+                "Total: 10 pts\n\n"
+                "## Common Mistakes\n\n"
+                "- Confusing normality with commutativity.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            issues = exercise_quality_issues(exercise)
+
+            self.assertIn("missing prerequisites", issues)
+
     def test_exercise_check_cli_writes_quality_report_for_generated_exercises(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

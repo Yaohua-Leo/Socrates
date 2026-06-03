@@ -500,6 +500,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
             issues.append(f"missing section {section.removeprefix('## ')}")
     if "## Concepts" in text and not _has_concept_tags(text):
         issues.append("missing concept tags")
+    if "## Prerequisites" in text and not _has_prerequisites(text):
+        issues.append("missing prerequisites")
     if not _has_hint_ladder(text):
         issues.append("missing hint ladder")
     elif not _has_progressive_hint_ladder(text):
@@ -1066,8 +1068,15 @@ def _has_valid_exercise_difficulty(text: str) -> bool:
 
 
 def _has_concept_tags(text: str) -> bool:
-    concepts_section = _section_text(text, "## Concepts")
-    for line in concepts_section.splitlines():
+    return _has_real_bullet(_section_text(text, "## Concepts"))
+
+
+def _has_prerequisites(text: str) -> bool:
+    return _has_real_bullet(_section_text(text, "## Prerequisites"))
+
+
+def _has_real_bullet(section: str) -> bool:
+    for line in section.splitlines():
         value = line.strip()
         if not value.startswith("- "):
             continue
