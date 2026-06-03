@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import re
 
 from .context import load_project, write_json, write_text
 from .project import slugify_topic
@@ -32,6 +33,8 @@ OBJECT_TYPES = {
     "remark",
     "notation",
 }
+
+OBJECT_NUMBER_PATTERN = re.compile(r"^[A-Za-z]?\d+(?:\.\d+)*(?:[a-z])?$")
 
 
 def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
@@ -123,7 +126,7 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
                 current = None
                 body = []
                 continue
-            object_type, title = parsed
+            object_type, title, number = parsed
             object_id = slugify_topic(title)
             current = {
                 "id": object_id,
@@ -137,6 +140,8 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
                     "line": line_number,
                 },
             }
+            if number:
+                current["number"] = number
             body = []
             continue
 
@@ -151,14 +156,18 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
     return objects
 
 
-def _parse_object_heading(heading: str) -> tuple[str, str] | None:
+def _parse_object_heading(heading: str) -> tuple[str, str, str | None] | None:
     label, separator, title = heading.partition(":")
     if not separator:
         return None
-    object_type = label.strip().casefold()
+    label_parts = label.strip().split(maxsplit=1)
+    object_type = label_parts[0].casefold() if label_parts else ""
     if object_type not in OBJECT_TYPES:
         return None
-    return object_type, title.strip()
+    number = label_parts[1].strip() if len(label_parts) == 2 else None
+    if number and not OBJECT_NUMBER_PATTERN.match(number):
+        return None
+    return object_type, title.strip(), number
 
 
 def _split_statement_and_dependencies(lines: list[str]) -> tuple[str, list[str]]:

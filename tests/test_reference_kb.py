@@ -97,6 +97,33 @@ class ReferenceKbTests(unittest.TestCase):
                 "normality_notes",
             )
 
+    def test_build_reference_kb_extracts_numbered_math_object_headings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "numbered.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n\n"
+                "### Theorem 3.2: Kernel Normality\n"
+                "The kernel of a group homomorphism is normal.\n"
+                "Depends: kernel, homomorphism\n",
+                encoding="utf-8",
+            )
+
+            result = build_reference_kb(project)
+
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            self.assertEqual(result.object_count, 2)
+            self.assertEqual(index["objects"][0]["type"], "definition")
+            self.assertEqual(index["objects"][0]["number"], "3.1")
+            self.assertEqual(index["objects"][0]["title"], "Normal Subgroup")
+            self.assertEqual(index["objects"][1]["type"], "theorem")
+            self.assertEqual(index["objects"][1]["number"], "3.2")
+            self.assertEqual(index["objects"][1]["title"], "Kernel Normality")
+
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
