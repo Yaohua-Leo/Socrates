@@ -305,15 +305,25 @@ def _chapter_index(objects: list[dict[str, object]]) -> dict[str, object]:
         if isinstance(section_objects, list):
             section_objects.append(_chapter_index_object(item))
 
-    return {"schema_version": 1, "chapters": chapters}
+    return {"schema_version": 2, "chapters": chapters}
 
 
 def _chapter_index_object(item: dict[str, object]) -> dict[str, object]:
+    source = item.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
     indexed_object = {
         "id": str(item.get("id", "")),
         "type": str(item.get("type", "")),
         "title": str(item.get("title", "")),
+        "source_path": str(source.get("path") or "unknown"),
     }
+    if source.get("line"):
+        indexed_object["line"] = source["line"]
+    if source.get("source_id"):
+        indexed_object["source_id"] = str(source["source_id"])
+    if source.get("page"):
+        indexed_object["page"] = str(source["page"])
     if item.get("number"):
         indexed_object["number"] = str(item["number"])
     return indexed_object

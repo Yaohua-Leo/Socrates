@@ -216,6 +216,36 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(by_section[0]["title"], "Normal Subgroup")
             self.assertEqual(by_page[0]["title"], "Normal Subgroup")
 
+    def test_build_reference_kb_preserves_provenance_in_chapter_index_objects(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Curated Reference: Normality Notes\n\n"
+                "## Source Metadata\n\n"
+                "- source_id: normality_notes\n\n"
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+
+            build_reference_kb(project)
+
+            chapter_index = json.loads(
+                (project / "06_kb" / "chapter_index.json").read_text(encoding="utf-8")
+            )
+            indexed_object = chapter_index["chapters"][0]["sections"][0]["objects"][0]
+            self.assertEqual(chapter_index["schema_version"], 2)
+            self.assertEqual(indexed_object["number"], "3.1")
+            self.assertEqual(indexed_object["source_id"], "normality_notes")
+            self.assertEqual(indexed_object["source_path"], "01_references/curated/normality.curated.md")
+            self.assertEqual(indexed_object["line"], 9)
+            self.assertEqual(indexed_object["page"], "82")
+
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -273,7 +303,7 @@ class ReferenceKbTests(unittest.TestCase):
             chapter_index = json.loads(
                 (project / "06_kb" / "chapter_index.json").read_text(encoding="utf-8")
             )
-            self.assertEqual(chapter_index["schema_version"], 1)
+            self.assertEqual(chapter_index["schema_version"], 2)
             self.assertEqual(chapter_index["chapters"][0]["title"], "Chapter 3: Quotient Groups")
             self.assertEqual(
                 chapter_index["chapters"][0]["sections"][0],
@@ -285,11 +315,15 @@ class ReferenceKbTests(unittest.TestCase):
                             "id": "normal_subgroup",
                             "type": "definition",
                             "title": "Normal Subgroup",
+                            "source_path": "01_references/curated/normality.curated.md",
+                            "line": 3,
                         },
                         {
                             "id": "kernel_normality",
                             "type": "theorem",
                             "title": "Kernel Normality",
+                            "source_path": "01_references/curated/normality.curated.md",
+                            "line": 7,
                         },
                     ],
                 },
