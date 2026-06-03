@@ -384,6 +384,100 @@ class ToolVerificationTests(unittest.TestCase):
                 check_result.stdout,
             )
 
+    def test_sage_order_cli_persists_group_order_result_or_unavailable_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "sage-order",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "sage_cyclic_order_three",
+                    "--group",
+                    "PermutationGroup([[(1,2,3)]])",
+                    "--expected-order",
+                    "3",
+                    "--title",
+                    "Sage Cyclic Order Three",
+                    "--timeout-seconds",
+                    "30",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "sage_cyclic_order_three_sage_order.json"
+            report_path = verification_dir / "sage_cyclic_order_three_sage_order_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            expected_returncode = 0 if artifact["status"] == "verified" else 1
+            self.assertEqual(result.returncode, expected_returncode, result.stderr)
+            self.assertIn("Sage group order status:", result.stdout)
+            self.assertEqual(artifact["schema_version"], 1)
+            self.assertEqual(artifact["kind"], "sage_group_order_check")
+            self.assertEqual(artifact["object_id"], "sage_cyclic_order_three")
+            self.assertEqual(artifact["tool"], "sage")
+            self.assertEqual(
+                artifact["input"]["group_expression"],
+                "PermutationGroup([[(1,2,3)]])",
+            )
+            self.assertEqual(artifact["input"]["expected_order"], 3)
+            self.assertIn(artifact["status"], {"verified", "failed", "unavailable"})
+            if artifact["status"] == "verified":
+                self.assertEqual(artifact["passed"], True)
+                self.assertEqual(artifact["output"]["actual_order"], 3)
+                self.assertEqual(artifact["external_executable_invoked"], True)
+            else:
+                self.assertEqual(artifact["passed"], False)
+                self.assertGreaterEqual(len(artifact["issues"]), 1)
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("# Tool Verification: Sage Group Order Check", report_text)
+            self.assertIn("- It is computation evidence for one Sage expression.", report_text)
+            self.assertIn("- It is not a formal proof.", report_text)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = manifest["records"][0]
+            self.assertEqual(record["kind"], "sage_group_order_check")
+            self.assertEqual(record["object_id"], "sage_cyclic_order_three")
+            self.assertEqual(
+                record["artifact_path"],
+                "08_evals/tool_verification/sage_cyclic_order_three_sage_order.json",
+            )
+            self.assertEqual(
+                record["report_path"],
+                "08_evals/tool_verification/sage_cyclic_order_three_sage_order_report.md",
+            )
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 0, check_result.stderr)
+            self.assertIn(
+                "Checked 1 tool-verification record: 1 passed, 0 failed",
+                check_result.stdout,
+            )
+
     def test_lean_skeleton_cli_writes_unchecked_tool_verification_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -81,6 +81,7 @@ from .tool_verification import (
     GapGroupOrderResult,
     LeanDependencyMapResult,
     LeanCheckResult,
+    SageGroupOrderResult,
     map_lean_dependencies,
     search_sympy_counterexample,
     SympyCounterexampleResult,
@@ -91,6 +92,7 @@ from .tool_verification import (
     generate_lean_statement_skeleton,
     list_tool_verification_records,
     verify_gap_group_order,
+    verify_sage_group_order,
     verify_sympy_identity,
     write_tool_inventory,
 )
@@ -677,6 +679,31 @@ def build_parser() -> argparse.ArgumentParser:
     )
     gap_order_parser.add_argument("--title", default=None, help="Optional title for reports.")
     gap_order_parser.set_defaults(func=_handle_tool_gap_order)
+    sage_order_parser = tool_subparsers.add_parser(
+        "sage-order",
+        help="Use optional SageMath to check the order of a finite group expression.",
+    )
+    sage_order_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    sage_order_parser.add_argument("--object-id", required=True, help="Stable object id for this check.")
+    sage_order_parser.add_argument(
+        "--group",
+        required=True,
+        help="Sage group expression, for example PermutationGroup([[(1,2,3)]]).",
+    )
+    sage_order_parser.add_argument(
+        "--expected-order",
+        type=int,
+        required=True,
+        help="Expected finite group order.",
+    )
+    sage_order_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=30,
+        help="Maximum seconds to wait for Sage; defaults to 30.",
+    )
+    sage_order_parser.add_argument("--title", default=None, help="Optional title for reports.")
+    sage_order_parser.set_defaults(func=_handle_tool_sage_order)
     tool_list_parser = tool_subparsers.add_parser(
         "list",
         help="List persisted tool-verification records.",
@@ -1505,6 +1532,36 @@ def _handle_tool_gap_order(args: argparse.Namespace) -> int:
 def _tool_gap_order_result_text(result: GapGroupOrderResult) -> str:
     lines = [
         f"GAP group order status: {result.status}",
+        f"Passed: {str(result.passed).lower()}",
+        f"Tool verification artifact: {result.artifact_path}",
+        f"Tool verification report: {result.report_path}",
+        f"Tool verification manifest: {result.manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_tool_sage_order(args: argparse.Namespace) -> int:
+    if args.expected_order <= 0:
+        print("error: expected-order must be positive", file=sys.stderr)
+        return 1
+    if args.timeout_seconds <= 0:
+        print("error: timeout-seconds must be positive", file=sys.stderr)
+        return 1
+    result = verify_sage_group_order(
+        args.project,
+        object_id=args.object_id,
+        group_expression=args.group,
+        expected_order=args.expected_order,
+        title=args.title,
+        timeout_seconds=args.timeout_seconds,
+    )
+    print(_tool_sage_order_result_text(result), end="")
+    return 0 if result.status == "verified" else 1
+
+
+def _tool_sage_order_result_text(result: SageGroupOrderResult) -> str:
+    lines = [
+        f"Sage group order status: {result.status}",
         f"Passed: {str(result.passed).lower()}",
         f"Tool verification artifact: {result.artifact_path}",
         f"Tool verification report: {result.report_path}",
