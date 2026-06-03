@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
 from .context import load_project, write_text
@@ -54,6 +55,15 @@ class BenchmarkResult:
 
     total_gates: int
     passed_gates: int
+    report_path: Path
+
+
+@dataclass(frozen=True)
+class LifecycleAuditResult:
+    """Summary of a persisted lifecycle completion audit."""
+
+    total_checks: int
+    passed_checks: int
     report_path: Path
 
 
@@ -199,6 +209,34 @@ def run_project_benchmark(
     return BenchmarkResult(
         total_gates=len(gates),
         passed_gates=sum(1 for passed in gates.values() if passed),
+        report_path=report_path,
+    )
+
+
+def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
+    """Check whether the project has persisted artifacts for the full learning loop."""
+
+    context = load_project(project_path)
+    state = _read_learning_state(context.learning_state)
+    checks = {
+        "Project metadata": context.project_file.exists() and context.learning_state.exists(),
+        "Reference KB": _reference_object_count(context.root) > 0,
+        "Learning plans": _has_learning_plans(context.root),
+        "Tutoring session artifacts": _has_complete_session(context.sessions_dir),
+        "Reviewed atomic notes": _reviewed_note_count(context.root) > 0,
+        "Obsidian export": _markdown_count(context.root / "07_exports" / "obsidian") > 0,
+        "Generated exercises": _markdown_count(context.generated_exercises_dir) >= 5,
+        "Exercise attempts": _markdown_count(context.root / "05_exercises" / "attempted") > 0,
+        "Graded exercises": _markdown_count(context.root / "05_exercises" / "graded") > 0,
+        "Learning state": bool(state.get("concept_mastery")),
+        "Review schedule": _has_review_schedule(context.root, state),
+        "Learning reports": _has_learning_reports(context.root),
+    }
+    report_path = context.evals_dir / "lifecycle_eval.md"
+    write_text(report_path, _lifecycle_report(checks))
+    return LifecycleAuditResult(
+        total_checks=len(checks),
+        passed_checks=sum(1 for passed in checks.values() if passed),
         report_path=report_path,
     )
 
@@ -422,6 +460,96 @@ def _benchmark_report(gates: dict[str, bool]) -> str:
     lines.extend(
         f"- {name}: {'pass' if passed else 'fail'}"
         for name, passed in gates.items()
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _read_learning_state(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    state = json.loads(path.read_text(encoding="utf-8"))
+    return state if isinstance(state, dict) else {}
+
+
+def _reference_object_count(project_root: Path) -> int:
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    if not index_path.exists():
+        return 0
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    objects = index.get("objects", []) if isinstance(index, dict) else []
+    return len(objects) if isinstance(objects, list) else 0
+
+
+def _has_learning_plans(project_root: Path) -> bool:
+    plan_dir = project_root / "02_learning_plan"
+    required = (
+        "long_term_plan.md",
+        "short_term_plan.md",
+        "session_0001_plan.md",
+    )
+    return all((plan_dir / name).exists() for name in required)
+
+
+def _has_complete_session(sessions_dir: Path) -> bool:
+    if not sessions_dir.exists():
+        return False
+    for session_dir in sessions_dir.iterdir():
+        if not session_dir.is_dir():
+            continue
+        if all((session_dir / name).exists() for name in SESSION_REQUIRED_FILES):
+            return True
+    return False
+
+
+def _reviewed_note_count(project_root: Path) -> int:
+    notes_root = project_root / "04_atomic_notes"
+    if not notes_root.exists():
+        return 0
+    reviewed = 0
+    for folder in notes_root.iterdir():
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in folder.glob("*.md"):
+            if "reviewed_by_user: true" in note_path.read_text(encoding="utf-8"):
+                reviewed += 1
+    return reviewed
+
+
+def _markdown_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return len(list(path.glob("*.md")))
+
+
+def _has_review_schedule(project_root: Path, state: dict[str, object]) -> bool:
+    schedule = state.get("review_schedule", [])
+    return (
+        isinstance(schedule, list)
+        and bool(schedule)
+        and (project_root / "02_learning_plan" / "review_schedule.md").exists()
+    )
+
+
+def _has_learning_reports(project_root: Path) -> bool:
+    reports_dir = project_root / "07_exports" / "reports"
+    required = (
+        "weekly_report.md",
+        "monthly_report.md",
+        "project_summary.md",
+    )
+    return all((reports_dir / name).exists() for name in required)
+
+
+def _lifecycle_report(checks: dict[str, bool]) -> str:
+    lines = [
+        "# Lifecycle Eval",
+        "",
+        "## Checks",
+        "",
+    ]
+    lines.extend(
+        f"- {name}: {'pass' if passed else 'fail'}"
+        for name, passed in checks.items()
     )
     return "\n".join(lines) + "\n"
 

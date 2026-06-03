@@ -27,6 +27,7 @@ from .project_index import (
     scan_project_root,
 )
 from .quality import (
+    audit_project_lifecycle,
     check_atomic_note_quality,
     check_generated_exercise_quality,
     check_reference_ingestion_quality,
@@ -124,6 +125,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
     status_parser.set_defaults(func=_handle_status)
+
+    lifecycle_parser = subparsers.add_parser(
+        "lifecycle",
+        help="Audit persisted artifacts for the full learning lifecycle.",
+    )
+    lifecycle_subparsers = lifecycle_parser.add_subparsers(dest="lifecycle_command", required=True)
+    lifecycle_audit_parser = lifecycle_subparsers.add_parser(
+        "audit",
+        help="Write a lifecycle completion audit report.",
+    )
+    lifecycle_audit_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    lifecycle_audit_parser.set_defaults(func=_handle_lifecycle_audit)
 
     projects_parser = subparsers.add_parser(
         "projects",
@@ -429,6 +442,15 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
+    return 0
+
+
+def _handle_lifecycle_audit(args: argparse.Namespace) -> int:
+    result = audit_project_lifecycle(args.project)
+    print(
+        f"Lifecycle audit passed {result.passed_checks}/{result.total_checks} checks: "
+        f"{result.report_path}"
+    )
     return 0
 
 
