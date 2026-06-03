@@ -28,7 +28,11 @@ class V02CliFlowTests(unittest.TestCase):
                 project,
                 concept="Normal Subgroup",
                 note_type="definition",
-                body="A normal subgroup is stable under conjugation.",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
                 source_id="df",
             )
 

@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 
 from .context import append_project_log, load_project, write_text
+from .quality import atomic_note_quality_issues, check_atomic_note_quality
 
 
 NOTE_TYPE_DIRS = {
@@ -25,6 +26,14 @@ def review_atomic_note(project_path: Path | str, note_id: str) -> Path:
     draft_path = context.atomic_note_drafts_dir / f"{note_id}.md"
     if not draft_path.exists():
         raise FileNotFoundError(f"Draft note does not exist: {draft_path}")
+
+    issues = atomic_note_quality_issues(draft_path, context.root)
+    if issues:
+        result = check_atomic_note_quality(context.root)
+        raise ValueError(
+            f"Draft note {note_id} failed quality gate: "
+            f"{'; '.join(issues)}. See {result.report_path}"
+        )
 
     text = draft_path.read_text(encoding="utf-8")
     note_type = _frontmatter_value(text, "type") or "definition"

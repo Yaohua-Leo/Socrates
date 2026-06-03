@@ -233,6 +233,17 @@ def _atomic_note_paths(project_root: Path) -> list[Path]:
 
 
 def _check_note(path: Path, project_root: Path) -> dict[str, object]:
+    issues = atomic_note_quality_issues(path, project_root)
+    return {
+        "file": path.relative_to(project_root / "04_atomic_notes").as_posix(),
+        "status": "fail" if issues else "pass",
+        "issues": issues,
+    }
+
+
+def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
+    """Return checklist issues for one atomic note file."""
+
     text = path.read_text(encoding="utf-8")
     issues: list[str] = []
     if not text.startswith("---\n"):
@@ -246,11 +257,7 @@ def _check_note(path: Path, project_root: Path) -> dict[str, object]:
         issues.append("missing source id")
     if "## Review Questions" not in text:
         issues.append("missing review questions")
-    return {
-        "file": path.relative_to(project_root / "04_atomic_notes").as_posix(),
-        "status": "fail" if issues else "pass",
-        "issues": issues,
-    }
+    return issues
 
 
 def _check_curated_reference(path: Path) -> dict[str, object]:
