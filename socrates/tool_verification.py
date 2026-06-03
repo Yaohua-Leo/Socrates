@@ -9,6 +9,7 @@ import json
 from pathlib import Path
 import re
 import shutil
+import subprocess
 
 from .context import append_project_log, load_project, write_json, write_text
 
@@ -22,6 +23,18 @@ class LeanSkeletonResult:
     manifest_path: Path
     object_id: str
     status: str
+
+
+@dataclass(frozen=True)
+class LeanCheckResult:
+    """Persisted result for one optional Lean frontend check."""
+
+    status: str
+    checked: bool
+    artifact_path: Path
+    report_path: Path
+    manifest_path: Path
+    object_id: str
 
 
 @dataclass(frozen=True)
@@ -145,6 +158,64 @@ def generate_lean_statement_skeleton(
     )
 
 
+def check_lean_file(
+    project_path: Path | str,
+    *,
+    lean_file: Path | str,
+    object_id: str | None = None,
+    title: str | None = None,
+    timeout_seconds: int = 10,
+) -> LeanCheckResult:
+    """Run an optional Lean frontend check for one project-local Lean file."""
+
+    context = load_project(project_path)
+    checked_path = _resolve_project_file(context.root, lean_file)
+    check_id = object_id or checked_path.stem
+    safe_id = _lean_identifier(f"{check_id}_lean_check")
+    verification_dir = context.evals_dir / "tool_verification"
+    artifact_path = verification_dir / f"{safe_id}.json"
+    report_path = verification_dir / f"{safe_id}_report.md"
+    manifest_path = verification_dir / "manifest.json"
+    artifact = _lean_check_artifact(
+        context.root,
+        checked_path=checked_path,
+        object_id=check_id,
+        title=title,
+        timeout_seconds=timeout_seconds,
+    )
+    write_text(
+        report_path,
+        _lean_check_report(
+            artifact,
+            artifact_path=artifact_path.relative_to(context.root).as_posix(),
+        ),
+    )
+    write_json(artifact_path, artifact)
+    write_json(
+        manifest_path,
+        _updated_manifest(
+            manifest_path,
+            _lean_check_record(
+                context.root,
+                object_id=check_id,
+                title=title or check_id,
+                artifact_path=artifact_path,
+                report_path=report_path,
+                status=str(artifact["status"]),
+            ),
+        ),
+    )
+    append_project_log(context, f"Recorded Lean frontend check for {check_id}.")
+    return LeanCheckResult(
+        status=str(artifact["status"]),
+        checked=bool(artifact["checked"]),
+        artifact_path=artifact_path,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        object_id=check_id,
+    )
+
+
 def list_tool_verification_records(
     project_path: Path | str,
     *,
@@ -157,6 +228,7 @@ def list_tool_verification_records(
         "available",
         "counterexample_found",
         "failed",
+        "lean_checked",
         "no_counterexample_found",
         "partial",
         "unchecked_skeleton",
@@ -414,6 +486,166 @@ def _find_reference_object(project_root: Path, object_id: str) -> dict[str, obje
         if isinstance(item, dict) and str(item.get("id", "")) == object_id:
             return item
     raise ValueError(f"Reference KB object not found: {object_id}")
+
+
+def _resolve_project_file(project_root: Path, value: Path | str) -> Path:
+    path = Path(value).expanduser()
+    resolved = path.resolve() if path.is_absolute() else (project_root / path).resolve()
+    try:
+        resolved.relative_to(project_root)
+    except ValueError as exc:
+        raise ValueError(f"file must be inside the Socrates project: {value}") from exc
+    return resolved
+
+
+def _lean_check_artifact(
+    project_root: Path,
+    *,
+    checked_path: Path,
+    object_id: str,
+    title: str | None,
+    timeout_seconds: int,
+) -> dict[str, object]:
+    relative_checked_path = checked_path.relative_to(project_root).as_posix()
+    artifact: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "lean_frontend_check",
+        "object_id": object_id,
+        "title": title or object_id,
+        "tool": "lean",
+        "status": "failed",
+        "checked": False,
+        "input": {
+            "lean_file": relative_checked_path,
+            "timeout_seconds": timeout_seconds,
+        },
+        "output": {},
+        "issues": [],
+        "external_executable_invoked": False,
+        "accepts_sorry": True,
+    }
+    if not checked_path.exists():
+        artifact["issues"] = [f"Lean file does not exist: {relative_checked_path}"]
+        return artifact
+    lean_executable = shutil.which("lean")
+    if not lean_executable:
+        artifact["status"] = "unavailable"
+        artifact["issues"] = ["Lean executable is not available on PATH."]
+        return artifact
+
+    command = [lean_executable, str(checked_path)]
+    artifact["external_executable_invoked"] = True
+    artifact["output"] = {"command": command}
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=project_root,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        artifact["status"] = "failed"
+        artifact["issues"] = [f"Lean check timed out after {timeout_seconds} seconds."]
+        artifact["output"] = {
+            "command": command,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "",
+        }
+        return artifact
+
+    artifact["output"] = {
+        "command": command,
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+    if completed.returncode == 0:
+        artifact["status"] = "lean_checked"
+        artifact["checked"] = True
+    else:
+        artifact["status"] = "failed"
+        artifact["issues"] = [f"Lean exited with code {completed.returncode}."]
+    return artifact
+
+
+def _lean_check_report(
+    artifact: dict[str, object],
+    *,
+    artifact_path: str,
+) -> str:
+    input_data = artifact.get("input", {})
+    output_data = artifact.get("output", {})
+    issues = artifact.get("issues", [])
+    lines = [
+        "# Tool Verification: Lean Frontend Check",
+        "",
+        "## Summary",
+        "",
+        f"- Object: {artifact.get('object_id', '')}",
+        f"- Title: {artifact.get('title', '')}",
+        f"- Status: {artifact.get('status', '')}",
+        f"- Checked: {str(artifact.get('checked', False)).lower()}",
+        f"- Artifact: {artifact_path}",
+        "- Tool: Lean",
+        (
+            "- External executable invoked: "
+            f"{str(artifact.get('external_executable_invoked', False)).lower()}"
+        ),
+        f"- Accepts sorry: {str(artifact.get('accepts_sorry', True)).lower()}",
+        "",
+        "## Input",
+        "",
+        f"- lean_file: {input_data.get('lean_file', '') if isinstance(input_data, dict) else ''}",
+        f"- timeout_seconds: {input_data.get('timeout_seconds', '') if isinstance(input_data, dict) else ''}",
+        "",
+        "## Output",
+        "",
+    ]
+    if isinstance(output_data, dict) and output_data:
+        for key, value in sorted(output_data.items()):
+            lines.append(f"- {key}: {value!r}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Issues", ""])
+    if isinstance(issues, list) and issues:
+        lines.extend(f"- {issue}" for issue in issues)
+    else:
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- This check only records Lean frontend success or failure for the file.",
+            "- Files containing `sorry` may still pass this check.",
+            "- A passing check is not a completed formal proof.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _lean_check_record(
+    project_root: Path,
+    *,
+    object_id: str,
+    title: str,
+    artifact_path: Path,
+    report_path: Path,
+    status: str,
+) -> dict[str, object]:
+    return {
+        "kind": "lean_frontend_check",
+        "object_id": object_id,
+        "object_type": "lean_file",
+        "title": title,
+        "status": status,
+        "artifact_path": artifact_path.relative_to(project_root).as_posix(),
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "source": {"tool": "lean"},
+    }
 
 
 def _lean_skeleton_text(

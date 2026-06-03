@@ -388,6 +388,115 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Tool verification records: 1", status.stdout)
 
+    def test_lean_check_cli_persists_frontend_result_or_unavailable_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_kernel_reference(root / "p")
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-skeleton",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-check",
+                    "--project",
+                    str(project),
+                    "--file",
+                    "08_evals/tool_verification/kernel_normality_statement.lean",
+                    "--object-id",
+                    "kernel_normality_lean_frontend",
+                    "--title",
+                    "Kernel Normality Lean Frontend",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "kernel_normality_lean_frontend_lean_check.json"
+            report_path = verification_dir / "kernel_normality_lean_frontend_lean_check_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            expected_returncode = 0 if artifact["status"] == "lean_checked" else 1
+            self.assertEqual(result.returncode, expected_returncode, result.stderr)
+            self.assertIn("Lean check status:", result.stdout)
+            self.assertEqual(artifact["schema_version"], 1)
+            self.assertEqual(artifact["kind"], "lean_frontend_check")
+            self.assertEqual(artifact["object_id"], "kernel_normality_lean_frontend")
+            self.assertEqual(
+                artifact["input"]["lean_file"],
+                "08_evals/tool_verification/kernel_normality_statement.lean",
+            )
+            self.assertEqual(artifact["accepts_sorry"], True)
+            self.assertIn(artifact["status"], {"lean_checked", "failed", "unavailable"})
+            if artifact["status"] == "lean_checked":
+                self.assertEqual(artifact["checked"], True)
+                self.assertEqual(artifact["output"]["exit_code"], 0)
+                self.assertEqual(artifact["external_executable_invoked"], True)
+            else:
+                self.assertEqual(artifact["checked"], False)
+                self.assertGreaterEqual(len(artifact["issues"]), 1)
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("# Tool Verification: Lean Frontend Check", report_text)
+            self.assertIn("- Files containing `sorry` may still pass this check.", report_text)
+            self.assertIn("- A passing check is not a completed formal proof.", report_text)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = next(
+                row
+                for row in manifest["records"]
+                if row["object_id"] == "kernel_normality_lean_frontend"
+            )
+            self.assertEqual(record["kind"], "lean_frontend_check")
+            self.assertEqual(
+                record["artifact_path"],
+                "08_evals/tool_verification/kernel_normality_lean_frontend_lean_check.json",
+            )
+            self.assertEqual(
+                record["report_path"],
+                "08_evals/tool_verification/kernel_normality_lean_frontend_lean_check_report.md",
+            )
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 0, check_result.stderr)
+            self.assertIn(
+                "Checked 2 tool-verification records: 2 passed, 0 failed",
+                check_result.stdout,
+            )
+
     def test_tool_check_cli_writes_quality_report_for_persisted_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

@@ -77,6 +77,8 @@ from .state import (
 )
 from .tool_verification import (
     check_tool_verification_records,
+    check_lean_file,
+    LeanCheckResult,
     search_sympy_counterexample,
     SympyCounterexampleResult,
     SympyIdentityResult,
@@ -597,6 +599,21 @@ def build_parser() -> argparse.ArgumentParser:
         help="Lean namespace to use in the generated skeleton.",
     )
     lean_skeleton_parser.set_defaults(func=_handle_tool_lean_skeleton)
+    lean_check_parser = tool_subparsers.add_parser(
+        "lean-check",
+        help="Run optional Lean frontend checking on a project-local .lean file.",
+    )
+    lean_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    lean_check_parser.add_argument("--file", required=True, help="Project-local Lean file to check.")
+    lean_check_parser.add_argument("--object-id", default=None, help="Optional stable object id for this check.")
+    lean_check_parser.add_argument("--title", default=None, help="Optional title for reports.")
+    lean_check_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=10,
+        help="Maximum seconds to wait for Lean; defaults to 10.",
+    )
+    lean_check_parser.set_defaults(func=_handle_tool_lean_check)
     tool_inventory_parser = tool_subparsers.add_parser(
         "inventory",
         help="Record local availability of optional math verification tools.",
@@ -640,6 +657,7 @@ def build_parser() -> argparse.ArgumentParser:
             "available",
             "counterexample_found",
             "failed",
+            "lean_checked",
             "no_counterexample_found",
             "partial",
             "unchecked_skeleton",
@@ -1299,6 +1317,36 @@ def _handle_tool_lean_skeleton(args: argparse.Namespace) -> int:
     print(f"Tool verification manifest: {result.manifest_path}")
     print(f"Status: {result.status}")
     return 0
+
+
+def _handle_tool_lean_check(args: argparse.Namespace) -> int:
+    if args.timeout_seconds <= 0:
+        print("error: timeout-seconds must be positive", file=sys.stderr)
+        return 1
+    try:
+        result = check_lean_file(
+            args.project,
+            lean_file=args.file,
+            object_id=args.object_id,
+            title=args.title,
+            timeout_seconds=args.timeout_seconds,
+        )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(_tool_lean_check_result_text(result), end="")
+    return 0 if result.status == "lean_checked" else 1
+
+
+def _tool_lean_check_result_text(result: LeanCheckResult) -> str:
+    lines = [
+        f"Lean check status: {result.status}",
+        f"Checked: {str(result.checked).lower()}",
+        f"Tool verification artifact: {result.artifact_path}",
+        f"Tool verification report: {result.report_path}",
+        f"Tool verification manifest: {result.manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _handle_tool_inventory(args: argparse.Namespace) -> int:
