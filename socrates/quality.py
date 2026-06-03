@@ -431,6 +431,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
         "Review schedule": _has_review_schedule(context.root, state),
         "Learning reports": _has_learning_reports(context.root),
         "Benchmark report": _has_benchmark_report(context.root),
+        "Benchmark manifest": _has_benchmark_manifest(context.root),
     }
     report_path = context.evals_dir / "lifecycle_eval.md"
     write_text(report_path, _lifecycle_report(checks))
@@ -1397,6 +1398,73 @@ def _has_benchmark_report(project_root: Path) -> bool:
     if "Benchmark score:" not in report_path.read_text(encoding="utf-8"):
         return False
     return _latest_benchmark_input_mtime(project_root) <= report_path.stat().st_mtime_ns
+
+
+def _has_benchmark_manifest(project_root: Path) -> bool:
+    manifest_path = project_root / "08_evals" / "benchmark_manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not _valid_benchmark_manifest(project_root, manifest):
+        return False
+    return _latest_benchmark_input_mtime(project_root) <= manifest_path.stat().st_mtime_ns
+
+
+def _valid_benchmark_manifest(project_root: Path, manifest: object) -> bool:
+    if not isinstance(manifest, dict):
+        return False
+    if manifest.get("schema_version") != 1:
+        return False
+    total_gates = manifest.get("total_gates")
+    passed_gates = manifest.get("passed_gates")
+    score = manifest.get("score")
+    gates = manifest.get("gates")
+    if not isinstance(total_gates, int) or total_gates <= 0:
+        return False
+    if not isinstance(passed_gates, int) or passed_gates < 0:
+        return False
+    if not isinstance(score, int) or score < 0:
+        return False
+    if not isinstance(gates, list) or len(gates) != total_gates:
+        return False
+    expected_gates = {
+        "Ingestion",
+        "Note quality",
+        "Exercise quality",
+        "Tutoring quality",
+    }
+    gate_names = {str(gate.get("name", "")) for gate in gates if isinstance(gate, dict)}
+    if gate_names != expected_gates:
+        return False
+    passed_count = 0
+    for gate in gates:
+        if not isinstance(gate, dict):
+            return False
+        if not isinstance(gate.get("passed"), bool):
+            return False
+        if not isinstance(gate.get("checked"), int):
+            return False
+        if not isinstance(gate.get("failed"), int):
+            return False
+        if not _manifest_artifact_exists(project_root, gate.get("report_path")):
+            return False
+        if not _manifest_artifact_exists(project_root, gate.get("manifest_path")):
+            return False
+        if gate["passed"]:
+            passed_count += 1
+    return passed_count == passed_gates
+
+
+def _manifest_artifact_exists(project_root: Path, value: object) -> bool:
+    if not isinstance(value, str) or not value:
+        return False
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        return False
+    return (project_root / path).exists()
 
 
 def _latest_benchmark_input_mtime(project_root: Path) -> int:
