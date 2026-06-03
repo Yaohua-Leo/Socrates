@@ -27,13 +27,7 @@ def review_atomic_note(project_path: Path | str, note_id: str) -> Path:
     if not draft_path.exists():
         raise FileNotFoundError(f"Draft note does not exist: {draft_path}")
 
-    issues = atomic_note_quality_issues(draft_path, context.root)
-    if issues:
-        result = check_atomic_note_quality(context.root)
-        raise ValueError(
-            f"Draft note {note_id} failed quality gate: "
-            f"{'; '.join(issues)}. See {result.report_path}"
-        )
+    _require_note_quality(context.root, draft_path, f"Draft note {note_id}")
 
     text = draft_path.read_text(encoding="utf-8")
     note_type = _frontmatter_value(text, "type") or "definition"
@@ -64,6 +58,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
             text = note_path.read_text(encoding="utf-8")
             if _frontmatter_value(text, "reviewed_by_user") != "true":
                 continue
+            _require_note_quality(context.root, note_path, f"Reviewed note {note_path.stem}")
             destination = context.root / "07_exports" / "obsidian" / note_path.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(note_path, destination)
@@ -71,6 +66,17 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     if exported:
         append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
     return exported
+
+
+def _require_note_quality(project_root: Path, note_path: Path, label: str) -> None:
+    issues = atomic_note_quality_issues(note_path, project_root)
+    if not issues:
+        return
+    result = check_atomic_note_quality(project_root)
+    raise ValueError(
+        f"{label} failed quality gate: "
+        f"{'; '.join(issues)}. See {result.report_path}"
+    )
 
 
 def _frontmatter_value(text: str, key: str) -> str | None:

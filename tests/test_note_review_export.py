@@ -89,6 +89,37 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn("reviewed_by_user: true", export_text)
             self.assertIn("# Normal Subgroup", export_text)
 
+    def test_export_reviewed_notes_rejects_failed_quality_gate(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            reviewed = project / "04_atomic_notes" / "definitions" / "legacy_bad_note.md"
+            reviewed.write_text(
+                "---\n"
+                "status: reviewed\n"
+                "review_status: approved\n"
+                "reviewed_by_user: true\n"
+                "type: definition\n"
+                "concept: Legacy Bad Note\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - legacy-bad-note\n"
+                "related:\n"
+                "  []\n"
+                "---\n\n"
+                "# Legacy Bad Note\n\n"
+                "This legacy reviewed note is missing review questions.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            with self.assertRaisesRegex(ValueError, "failed quality gate"):
+                export_reviewed_notes_to_obsidian(project)
+
+            exported = project / "07_exports" / "obsidian" / "legacy_bad_note.md"
+            self.assertFalse(exported.exists())
+            report = project / "08_evals" / "note_quality_eval.md"
+            self.assertIn("definitions/legacy_bad_note.md: fail", report.read_text(encoding="utf-8"))
+
 
 if __name__ == "__main__":
     unittest.main()
