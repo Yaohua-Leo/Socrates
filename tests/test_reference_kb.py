@@ -124,6 +124,29 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(index["objects"][1]["number"], "3.2")
             self.assertEqual(index["objects"][1]["title"], "Kernel Normality")
 
+    def test_build_reference_kb_records_object_page_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "paged.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+
+            result = build_reference_kb(project)
+
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            source = index["objects"][0]["source"]
+            chunk_source = index["chunks"][0]["metadata"]["source"]
+            self.assertEqual(source["page"], "82")
+            self.assertEqual(chunk_source["page"], "82")
+            self.assertNotIn("Page: 82", index["objects"][0]["statement"])
+
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

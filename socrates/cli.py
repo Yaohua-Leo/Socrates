@@ -863,7 +863,12 @@ def _source_location(source: object) -> str:
     if not isinstance(source, dict):
         return "unknown"
     path = str(source.get("path", "unknown"))
+    page = str(source.get("page", "")).strip()
     line = source.get("line")
+    if page and line:
+        return f"{path}:p{page}:{line}"
+    if page:
+        return f"{path}:p{page}"
     if line:
         return f"{path}:{line}"
     return path

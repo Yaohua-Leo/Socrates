@@ -64,6 +64,30 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertTrue((project / "06_kb" / "chunks" / "reference_index.json").exists())
             self.assertTrue((project / "07_exports" / "obsidian" / "normal_subgroup.md").exists())
 
+    def test_kb_search_displays_page_provenance_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            search = self._run_cli(
+                "kb",
+                "search",
+                "--project",
+                str(project),
+                "--query",
+                "conjugation",
+            ).stdout
+
+            self.assertIn("normality.curated.md:p82:1", search)
+
     def test_import_curate_kb_plan_teach_review_export_flow_from_cli(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

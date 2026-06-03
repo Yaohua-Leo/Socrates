@@ -104,9 +104,13 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
         nonlocal body, current
         if current is None:
             return
-        statement, dependencies = _split_statement_and_dependencies(body)
+        statement, dependencies, page = _split_statement_and_metadata(body)
         current["statement"] = statement
         current["dependencies"] = dependencies
+        if page:
+            source = current.get("source")
+            if isinstance(source, dict):
+                source["page"] = page
         objects.append(current)
         body = []
         current = None
@@ -170,9 +174,10 @@ def parse_object_heading(heading: str) -> tuple[str, str, str | None] | None:
     return object_type, title.strip(), number
 
 
-def _split_statement_and_dependencies(lines: list[str]) -> tuple[str, list[str]]:
+def _split_statement_and_metadata(lines: list[str]) -> tuple[str, list[str], str | None]:
     statement_lines: list[str] = []
     dependencies: list[str] = []
+    page: str | None = None
     for line in lines:
         stripped = line.strip()
         if stripped.casefold().startswith("depends:"):
@@ -181,9 +186,21 @@ def _split_statement_and_dependencies(lines: list[str]) -> tuple[str, list[str]]
                 for item in stripped.split(":", 1)[1].split(",")
                 if item.strip()
             )
+        elif _metadata_key(stripped) == "page":
+            page = _metadata_value(stripped)
         else:
             statement_lines.append(line)
-    return "\n".join(statement_lines).strip(), dependencies
+    return "\n".join(statement_lines).strip(), dependencies, page
+
+
+def _metadata_key(line: str) -> str:
+    key, separator, _ = line.removeprefix("-").strip().partition(":")
+    return key.strip().casefold() if separator else ""
+
+
+def _metadata_value(line: str) -> str:
+    _, _, value = line.removeprefix("-").strip().partition(":")
+    return value.strip().strip('"')
 
 
 def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
