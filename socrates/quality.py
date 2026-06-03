@@ -6,7 +6,7 @@ from dataclasses import dataclass
 import json
 from pathlib import Path
 
-from .context import load_project, write_text
+from .context import load_project, write_json, write_text
 from .kb import find_counterexamples, parse_object_heading
 
 
@@ -18,6 +18,7 @@ class ExerciseQualityResult:
     passed: int
     failed: int
     report_path: Path
+    manifest_path: Path
 
 
 @dataclass(frozen=True)
@@ -114,15 +115,28 @@ def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualit
     passed = sum(1 for row in rows if row["status"] == "pass")
     failed = len(rows) - passed
     report_path = context.evals_dir / "exercise_quality_eval.md"
+    manifest_path = context.evals_dir / "exercise_quality_manifest.json"
     write_text(
         report_path,
         _exercise_quality_report(rows, passed, failed, counterexample_rows),
+    )
+    write_json(
+        manifest_path,
+        _exercise_quality_manifest(
+            context.root,
+            exercise_paths,
+            rows,
+            counterexample_rows,
+            passed=passed,
+            failed=failed,
+        ),
     )
     return ExerciseQualityResult(
         checked=len(rows),
         passed=passed,
         failed=failed,
         report_path=report_path,
+        manifest_path=manifest_path,
     )
 
 
@@ -343,6 +357,131 @@ def _exercise_counterexample_search(project_root: Path, exercise_path: Path) -> 
     }
 
 
+def _exercise_quality_manifest(
+    project_root: Path,
+    exercise_paths: list[Path],
+    rows: list[dict[str, object]],
+    counterexample_rows: list[dict[str, object]],
+    *,
+    passed: int,
+    failed: int,
+) -> dict[str, object]:
+    row_by_file = {str(row["file"]): row for row in rows}
+    counterexample_by_file = {
+        str(row["file"]): row for row in counterexample_rows
+    }
+    return {
+        "schema_version": 1,
+        "checked": len(exercise_paths),
+        "passed": passed,
+        "failed": failed,
+        "exercises": [
+            _exercise_manifest_entry(
+                project_root,
+                exercise_path,
+                row_by_file.get(exercise_path.name, {}),
+                counterexample_by_file.get(exercise_path.name, {}),
+            )
+            for exercise_path in exercise_paths
+        ],
+    }
+
+
+def _exercise_manifest_entry(
+    project_root: Path,
+    exercise_path: Path,
+    quality_row: dict[str, object],
+    counterexample_row: dict[str, object],
+) -> dict[str, object]:
+    text = exercise_path.read_text(encoding="utf-8")
+    issues = quality_row.get("issues", [])
+    if not isinstance(issues, list):
+        issues = []
+    return {
+        "id": exercise_path.stem,
+        "path": exercise_path.relative_to(project_root).as_posix(),
+        "quality_status": quality_row.get("status", "unknown"),
+        "issues": issues,
+        "frontmatter": _exercise_frontmatter(text),
+        "sections": _exercise_section_manifest(text),
+        "counterexample_search": _counterexample_search_manifest(counterexample_row),
+    }
+
+
+def _exercise_frontmatter(text: str) -> dict[str, object]:
+    keys = (
+        "status",
+        "review_status",
+        "type",
+        "concept",
+        "source_id",
+        "difficulty",
+        "priority",
+        "due",
+        "scheduled_for",
+    )
+    values: dict[str, object] = {}
+    for key in keys:
+        value = _frontmatter_value(text, key)
+        if value is None:
+            continue
+        values[key] = _int_if_possible(value) if key == "difficulty" else value
+    return values
+
+
+def _exercise_section_manifest(text: str) -> dict[str, object]:
+    return {
+        "has_statement": "## Statement" in text,
+        "has_review_prompt": "## Review Prompt" in text,
+        "has_target_training_point": "## Target Training Point" in text,
+        "hint_count": _numbered_line_count(_section_text(text, "## Hints"), "Hint "),
+        "solution_step_count": _numbered_line_count(
+            _section_text(text, "## Solution Outline"),
+            "Step ",
+        ),
+        "rubric_total_points": _rubric_total_points(text),
+        "has_common_mistakes": "## Common Mistakes" in text,
+    }
+
+
+def _counterexample_search_manifest(row: dict[str, object]) -> dict[str, object]:
+    matches = row.get("matches", [])
+    if not isinstance(matches, list):
+        matches = []
+    result: dict[str, object] = {
+        "status": row.get("status", "unknown"),
+        "match_count": len(matches),
+        "matches": [_counterexample_manifest_match(match) for match in matches],
+    }
+    if row.get("reason"):
+        result["reason"] = row["reason"]
+    return result
+
+
+def _counterexample_manifest_match(match: dict[str, object]) -> dict[str, object]:
+    source = match.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
+    result: dict[str, object] = {
+        "id": str(match.get("id", "")),
+        "type": str(match.get("type", "")),
+        "title": str(match.get("title", "")),
+        "source_path": str(source.get("path") or "unknown"),
+    }
+    if source.get("line"):
+        result["line"] = source["line"]
+    if source.get("page"):
+        result["page"] = source["page"]
+    return result
+
+
+def _int_if_possible(value: str) -> object:
+    try:
+        return int(value)
+    except ValueError:
+        return value
+
+
 def _frontmatter_value(text: str, key: str) -> str | None:
     if not text.startswith("---\n"):
         return None
@@ -371,6 +510,23 @@ def _has_rubric_points(text: str) -> bool:
     return "Total: 10 pts" in rubric_section and sum(
         1 for line in rubric_section.splitlines() if " pts" in line
     ) >= 4
+
+
+def _numbered_line_count(section: str, marker: str) -> int:
+    return sum(1 for line in section.splitlines() if marker in line)
+
+
+def _rubric_total_points(text: str) -> int | None:
+    rubric_section = _section_text(text, "## Rubric")
+    for line in rubric_section.splitlines():
+        if "Total:" not in line or "pts" not in line:
+            continue
+        value = line.split("Total:", 1)[1].split("pts", 1)[0].strip()
+        try:
+            return int(value)
+        except ValueError:
+            return None
+    return None
 
 
 def _section_text(text: str, heading: str) -> str:

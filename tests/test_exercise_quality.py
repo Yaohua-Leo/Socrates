@@ -788,6 +788,7 @@ class ExerciseQualityTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Checked 5 exercise drafts: 5 passed, 0 failed", result.stdout)
+            self.assertIn("Exercise quality manifest:", result.stdout)
             report = project / "08_evals" / "exercise_quality_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Exercise Quality Eval", report_text)
@@ -796,6 +797,25 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertIn("- Passed: 5", report_text)
             self.assertIn("- Failed: 0", report_text)
             self.assertIn("normal_subgroup_01.md: pass", report_text)
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["checked"], 5)
+            self.assertEqual(manifest["passed"], 5)
+            self.assertEqual(manifest["failed"], 0)
+            self.assertEqual(manifest["exercises"][0]["id"], "normal_subgroup_01")
+            self.assertEqual(
+                manifest["exercises"][0]["frontmatter"]["concept"],
+                "Normal Subgroup",
+            )
+            self.assertEqual(manifest["exercises"][0]["sections"]["hint_count"], 3)
+            self.assertEqual(
+                manifest["exercises"][0]["counterexample_search"]["status"],
+                "not_run",
+            )
 
     def test_exercise_check_cli_reports_reference_counterexample_candidates(self) -> None:
         from socrates.kb import build_reference_kb
@@ -852,6 +872,28 @@ class ExerciseQualityTests(unittest.TestCase):
                 "counterexample: Subgroup That Is Not Normal "
                 "(01_references/curated/counterexamples.curated.md:4)",
                 report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            first_exercise = manifest["exercises"][0]
+            self.assertEqual(first_exercise["quality_status"], "pass")
+            self.assertEqual(
+                first_exercise["counterexample_search"]["status"],
+                "searched",
+            )
+            self.assertEqual(first_exercise["counterexample_search"]["match_count"], 1)
+            self.assertEqual(
+                first_exercise["counterexample_search"]["matches"][0],
+                {
+                    "id": "subgroup_that_is_not_normal",
+                    "type": "counterexample",
+                    "title": "Subgroup That Is Not Normal",
+                    "source_path": "01_references/curated/counterexamples.curated.md",
+                    "line": 4,
+                },
             )
 
 

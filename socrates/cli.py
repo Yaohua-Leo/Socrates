@@ -1060,6 +1060,7 @@ def _handle_exercise_check(args: argparse.Namespace) -> int:
         f"{result.passed} passed, {result.failed} failed"
     )
     print(f"Exercise quality report: {result.report_path}")
+    print(f"Exercise quality manifest: {result.manifest_path}")
     return 0
 
 
