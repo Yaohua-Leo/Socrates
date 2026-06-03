@@ -498,6 +498,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
     for section in REQUIRED_SECTIONS:
         if section not in text:
             issues.append(f"missing section {section.removeprefix('## ')}")
+    if "## Concepts" in text and not _has_concept_tags(text):
+        issues.append("missing concept tags")
     if not _has_hint_ladder(text):
         issues.append("missing hint ladder")
     elif not _has_progressive_hint_ladder(text):
@@ -1061,6 +1063,18 @@ def _has_valid_exercise_difficulty(text: str) -> bool:
     except ValueError:
         return False
     return 1 <= difficulty <= 5
+
+
+def _has_concept_tags(text: str) -> bool:
+    concepts_section = _section_text(text, "## Concepts")
+    for line in concepts_section.splitlines():
+        value = line.strip()
+        if not value.startswith("- "):
+            continue
+        tag = value.removeprefix("- ").strip()
+        if tag and tag.casefold() != "none recorded.":
+            return True
+    return False
 
 
 def _is_generated_exercise(text: str) -> bool:
