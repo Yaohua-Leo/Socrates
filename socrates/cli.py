@@ -77,10 +77,12 @@ from .state import (
 )
 from .tool_verification import (
     check_tool_verification_records,
+    ToolInventoryResult,
     ToolVerificationCheckResult,
     ToolVerificationSummary,
     generate_lean_statement_skeleton,
     list_tool_verification_records,
+    write_tool_inventory,
 )
 from .tutoring import (
     TutoringSessionSummary,
@@ -591,6 +593,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Lean namespace to use in the generated skeleton.",
     )
     lean_skeleton_parser.set_defaults(func=_handle_tool_lean_skeleton)
+    tool_inventory_parser = tool_subparsers.add_parser(
+        "inventory",
+        help="Record local availability of optional math verification tools.",
+    )
+    tool_inventory_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    tool_inventory_parser.set_defaults(func=_handle_tool_inventory)
     tool_list_parser = tool_subparsers.add_parser(
         "list",
         help="List persisted tool-verification records.",
@@ -598,7 +606,15 @@ def build_parser() -> argparse.ArgumentParser:
     tool_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
     tool_list_parser.add_argument(
         "--status",
-        choices=("all", "unchecked_skeleton", "verified", "failed"),
+        choices=(
+            "all",
+            "available",
+            "failed",
+            "partial",
+            "unchecked_skeleton",
+            "unavailable",
+            "verified",
+        ),
         default="all",
         help="Filter records by verification status; defaults to all.",
     )
@@ -1252,6 +1268,23 @@ def _handle_tool_lean_skeleton(args: argparse.Namespace) -> int:
     print(f"Tool verification manifest: {result.manifest_path}")
     print(f"Status: {result.status}")
     return 0
+
+
+def _handle_tool_inventory(args: argparse.Namespace) -> int:
+    result = write_tool_inventory(args.project)
+    print(_tool_inventory_result_text(result), end="")
+    return 0
+
+
+def _tool_inventory_result_text(result: ToolInventoryResult) -> str:
+    lines = [
+        f"Tool inventory status: {result.status}",
+        f"Tools available: {result.available}/{result.tools_checked}",
+        f"Tool inventory report: {result.report_path}",
+        f"Tool inventory manifest: {result.manifest_path}",
+        f"Tool verification manifest: {result.registry_manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _handle_tool_list(args: argparse.Namespace) -> int:

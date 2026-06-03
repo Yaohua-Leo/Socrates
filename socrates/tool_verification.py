@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import importlib.util
 import json
 from pathlib import Path
 import re
+import shutil
 
 from .context import append_project_log, load_project, write_json, write_text
 
@@ -43,6 +45,18 @@ class ToolVerificationCheckResult:
     failed: int
     report_path: Path
     manifest_path: Path
+
+
+@dataclass(frozen=True)
+class ToolInventoryResult:
+    """Persisted availability inventory for optional mathematics tools."""
+
+    status: str
+    tools_checked: int
+    available: int
+    report_path: Path
+    manifest_path: Path
+    registry_manifest_path: Path
 
 
 def generate_lean_statement_skeleton(
@@ -113,7 +127,15 @@ def list_tool_verification_records(
 ) -> list[ToolVerificationSummary]:
     """Return persisted tool-verification records from the project manifest."""
 
-    allowed_statuses = {"all", "unchecked_skeleton", "verified", "failed"}
+    allowed_statuses = {
+        "all",
+        "available",
+        "failed",
+        "partial",
+        "unchecked_skeleton",
+        "unavailable",
+        "verified",
+    }
     if status not in allowed_statuses:
         allowed = ", ".join(sorted(allowed_statuses))
         raise ValueError(
@@ -140,6 +162,57 @@ def list_tool_verification_records(
         if status == "all" or summary.status == status:
             summaries.append(summary)
     return sorted(summaries, key=lambda item: (item.kind, item.object_id))
+
+
+def write_tool_inventory(project_path: Path | str) -> ToolInventoryResult:
+    """Write a local availability inventory for optional math tools.
+
+    The inventory is deliberately non-invasive: it checks command discovery and
+    Python module specs only. It does not execute Lean, SageMath, GAP, SymPy, or
+    other tool backends.
+    """
+
+    context = load_project(project_path)
+    verification_dir = context.evals_dir / "tool_verification"
+    report_path = verification_dir / "tool_inventory_report.md"
+    manifest_path = verification_dir / "tool_inventory_manifest.json"
+    registry_manifest_path = verification_dir / "manifest.json"
+    tools = _tool_inventory_rows()
+    tools_checked = len(tools)
+    available = sum(1 for tool in tools if tool["status"] == "available")
+    status = _inventory_status(available=available, total=tools_checked)
+    manifest = {
+        "schema_version": 1,
+        "status": status,
+        "tools_checked": tools_checked,
+        "available": available,
+        "missing": tools_checked - available,
+        "external_verifier_invoked": False,
+        "tools": tools,
+    }
+    write_text(report_path, _tool_inventory_report(manifest))
+    write_json(manifest_path, manifest)
+    write_json(
+        registry_manifest_path,
+        _updated_manifest(
+            registry_manifest_path,
+            _tool_inventory_record(
+                context.root,
+                report_path=report_path,
+                manifest_path=manifest_path,
+                status=status,
+            ),
+        ),
+    )
+    append_project_log(context, "Recorded local tool inventory.")
+    return ToolInventoryResult(
+        status=status,
+        tools_checked=tools_checked,
+        available=available,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        registry_manifest_path=registry_manifest_path,
+    )
 
 
 def check_tool_verification_records(project_path: Path | str) -> ToolVerificationCheckResult:
@@ -316,6 +389,148 @@ def _summary_from_record(record: dict[str, object]) -> ToolVerificationSummary:
         ),
         report_path=str(record.get("report_path", "")),
     )
+
+
+def _tool_inventory_rows() -> list[dict[str, object]]:
+    targets = (
+        {
+            "id": "lean",
+            "label": "Lean",
+            "kind": "command",
+            "command": "lean",
+            "purpose": "formal statement/type checking",
+        },
+        {
+            "id": "lake",
+            "label": "Lake",
+            "kind": "command",
+            "command": "lake",
+            "purpose": "Lean project orchestration",
+        },
+        {
+            "id": "sage",
+            "label": "SageMath",
+            "kind": "command",
+            "command": "sage",
+            "purpose": "algebra and computational examples",
+        },
+        {
+            "id": "gap",
+            "label": "GAP",
+            "kind": "command",
+            "command": "gap",
+            "purpose": "group and finite algebra computations",
+        },
+        {
+            "id": "sympy",
+            "label": "SymPy",
+            "kind": "python_module",
+            "module": "sympy",
+            "purpose": "symbolic computation checks",
+        },
+    )
+    return [_tool_inventory_row(target) for target in targets]
+
+
+def _tool_inventory_row(target: dict[str, str]) -> dict[str, object]:
+    kind = target["kind"]
+    if kind == "command":
+        command = target["command"]
+        resolved = shutil.which(command)
+        return {
+            "id": target["id"],
+            "label": target["label"],
+            "kind": kind,
+            "purpose": target["purpose"],
+            "status": "available" if resolved else "missing",
+            "command": command,
+            "path": resolved or "",
+            "probe": "PATH lookup only",
+        }
+    module = target["module"]
+    spec = importlib.util.find_spec(module)
+    return {
+        "id": target["id"],
+        "label": target["label"],
+        "kind": kind,
+        "purpose": target["purpose"],
+        "status": "available" if spec is not None else "missing",
+        "module": module,
+        "path": str(spec.origin) if spec is not None and spec.origin else "",
+        "probe": "importlib.util.find_spec only",
+    }
+
+
+def _inventory_status(*, available: int, total: int) -> str:
+    if total > 0 and available == total:
+        return "available"
+    if available > 0:
+        return "partial"
+    return "unavailable"
+
+
+def _tool_inventory_report(manifest: dict[str, object]) -> str:
+    lines = [
+        "# Tool Inventory",
+        "",
+        "## Summary",
+        "",
+        f"- Status: {manifest['status']}",
+        f"- Tools checked: {manifest['tools_checked']}",
+        f"- Available: {manifest['available']}",
+        f"- Missing: {manifest['missing']}",
+        "- External verifier invoked: false",
+        "",
+        "## Tools",
+        "",
+    ]
+    tools = manifest.get("tools", [])
+    if not isinstance(tools, list) or not tools:
+        lines.append("- none")
+    else:
+        for tool in tools:
+            if not isinstance(tool, dict):
+                continue
+            location = str(tool.get("path", "")).strip() or "not found"
+            lines.append(
+                (
+                    f"- {tool.get('id', '')} | {tool.get('status', '')} | "
+                    f"{tool.get('kind', '')} | {location}"
+                )
+            )
+            lines.append(f"  - purpose: {tool.get('purpose', '')}")
+            lines.append(f"  - probe: {tool.get('probe', '')}")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- This inventory records local tool availability only.",
+            "- No external verifier executable was invoked.",
+            "- Availability does not imply any theorem, exercise, or computation was verified.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _tool_inventory_record(
+    project_root: Path,
+    *,
+    report_path: Path,
+    manifest_path: Path,
+    status: str,
+) -> dict[str, object]:
+    return {
+        "kind": "tool_inventory",
+        "object_id": "local_tool_inventory",
+        "object_type": "environment",
+        "title": "Local Tool Inventory",
+        "status": status,
+        "artifact_path": manifest_path.relative_to(project_root).as_posix(),
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "source": {"scope": "local_environment"},
+    }
 
 
 def _checked_tool_records(

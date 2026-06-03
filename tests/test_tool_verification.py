@@ -15,6 +15,97 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ToolVerificationTests(unittest.TestCase):
+    def test_tool_inventory_cli_records_local_optional_tool_availability(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "inventory",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Tool inventory status:", result.stdout)
+            self.assertIn("Tools available:", result.stdout)
+            verification_dir = project / "08_evals" / "tool_verification"
+            inventory_report = verification_dir / "tool_inventory_report.md"
+            inventory_manifest = verification_dir / "tool_inventory_manifest.json"
+            registry_manifest = verification_dir / "manifest.json"
+            report_text = inventory_report.read_text(encoding="utf-8")
+            self.assertIn("# Tool Inventory", report_text)
+            self.assertIn("- External verifier invoked: false", report_text)
+            self.assertIn("- No external verifier executable was invoked.", report_text)
+            manifest = json.loads(inventory_manifest.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertIn(manifest["status"], {"available", "partial", "unavailable"})
+            self.assertEqual(manifest["external_verifier_invoked"], False)
+            tool_ids = {tool["id"] for tool in manifest["tools"]}
+            self.assertEqual(tool_ids, {"lean", "lake", "sage", "gap", "sympy"})
+            registry = json.loads(registry_manifest.read_text(encoding="utf-8"))
+            record = registry["records"][0]
+            self.assertEqual(record["kind"], "tool_inventory")
+            self.assertEqual(record["object_id"], "local_tool_inventory")
+            self.assertEqual(
+                record["artifact_path"],
+                "08_evals/tool_verification/tool_inventory_manifest.json",
+            )
+            self.assertEqual(
+                record["report_path"],
+                "08_evals/tool_verification/tool_inventory_report.md",
+            )
+
+            list_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "list",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(list_result.returncode, 0, list_result.stderr)
+            self.assertIn("local_tool_inventory", list_result.stdout)
+            self.assertIn("tool_inventory", list_result.stdout)
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 0, check_result.stderr)
+            self.assertIn(
+                "Checked 1 tool-verification record: 1 passed, 0 failed",
+                check_result.stdout,
+            )
+
     def test_lean_skeleton_cli_writes_unchecked_tool_verification_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
