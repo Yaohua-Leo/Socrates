@@ -77,19 +77,31 @@ def search_reference_kb(project_path: Path | str, query: str, *, limit: int = 10
     query_text = query.casefold()
     matches = []
     for item in index.get("objects", []):
-        haystack = " ".join(
-            [
-                str(item.get("number", "")),
-                str(item.get("title", "")),
-                str(item.get("statement", "")),
-                " ".join(str(dep) for dep in item.get("dependencies", [])),
-            ]
-        ).casefold()
+        haystack = _search_haystack(item)
         if query_text in haystack:
             matches.append(item)
         if len(matches) >= limit:
             break
     return matches
+
+
+def _search_haystack(item: dict[str, object]) -> str:
+    source = item.get("source", {})
+    source_terms: list[str] = []
+    if isinstance(source, dict):
+        source_terms.extend(str(value) for value in source.values() if value)
+        page = str(source.get("page", "")).strip()
+        if page:
+            source_terms.append(f"p{page}")
+    return " ".join(
+        [
+            str(item.get("number", "")),
+            str(item.get("title", "")),
+            str(item.get("statement", "")),
+            " ".join(str(dep) for dep in item.get("dependencies", [])),
+            " ".join(source_terms),
+        ]
+    ).casefold()
 
 
 def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, object]]:

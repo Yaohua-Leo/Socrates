@@ -165,6 +165,32 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(matches[0]["title"], "Normal Subgroup")
             self.assertEqual(matches[0]["number"], "3.1")
 
+    def test_search_reference_kb_matches_source_provenance_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Group Theory\n\n"
+                "## Source Metadata\n\n"
+                "- source_id: normality_notes\n\n"
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+            build_reference_kb(project)
+
+            by_source_id = search_reference_kb(project, "normality_notes")
+            by_section = search_reference_kb(project, "Section 3.1")
+            by_page = search_reference_kb(project, "p82")
+
+            self.assertEqual(by_source_id[0]["title"], "Normal Subgroup")
+            self.assertEqual(by_section[0]["title"], "Normal Subgroup")
+            self.assertEqual(by_page[0]["title"], "Normal Subgroup")
+
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
