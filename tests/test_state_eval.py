@@ -201,6 +201,35 @@ class StateEvalTests(unittest.TestCase):
             )
             self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
 
+    def test_review_schedule_orders_items_by_scheduled_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                [item["concept"] for item in learning_state["review_schedule"]],
+                ["zeta_urgent_review", "alpha_medium_review"],
+            )
+            schedule_text = (project / "02_learning_plan" / "review_schedule.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertLess(
+                schedule_text.index("## zeta_urgent_review"),
+                schedule_text.index("## alpha_medium_review"),
+            )
+
     def test_review_schedule_command_updates_status_count(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

@@ -216,7 +216,7 @@ def _review_items(
                 reason="; ".join(concept_reasons[concept]),
             )
         )
-    return items
+    return sorted(items, key=lambda item: (item.scheduled_for, item.concept))
 
 
 def _scheduled_review_date(priority: str, as_of: date) -> str:
