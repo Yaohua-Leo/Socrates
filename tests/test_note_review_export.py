@@ -170,6 +170,115 @@ class NoteReviewExportTests(unittest.TestCase):
                 ],
             )
 
+    def test_note_list_cli_shows_pending_reviewed_and_exported_notes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets using a normal subgroup.\n\n"
+                    "## Review Questions\n\n"
+                    "- Why must the subgroup be normal?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "quotient_group")
+            generate_atomic_note_draft(
+                project,
+                concept="Group Action",
+                note_type="example",
+                body=(
+                    "A group action sends each group element to a permutation.\n\n"
+                    "## Review Questions\n\n"
+                    "- What compatibility law must be checked?\n"
+                ),
+                source_id="df",
+            )
+
+            all_notes = subprocess.run(
+                [sys.executable, "-m", "socrates", "note", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            pending_notes = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "pending",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            exported_notes = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "exported",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(all_notes.returncode, 0, all_notes.stderr)
+            self.assertIn("# Atomic Notes", all_notes.stdout)
+            pending = "- group_action | pending | example | Group Action | 04_atomic_notes/drafts/group_action.md"
+            reviewed = (
+                "- quotient_group | reviewed | definition | Quotient Group | "
+                "04_atomic_notes/definitions/quotient_group.md"
+            )
+            exported = (
+                "- normal_subgroup | exported | definition | Normal Subgroup | "
+                "04_atomic_notes/definitions/normal_subgroup.md"
+            )
+            self.assertIn(pending, all_notes.stdout)
+            self.assertIn(reviewed, all_notes.stdout)
+            self.assertIn(exported, all_notes.stdout)
+            self.assertLess(all_notes.stdout.index(pending), all_notes.stdout.index(reviewed))
+            self.assertLess(all_notes.stdout.index(reviewed), all_notes.stdout.index(exported))
+
+            self.assertEqual(pending_notes.returncode, 0, pending_notes.stderr)
+            self.assertIn(pending, pending_notes.stdout)
+            self.assertNotIn("quotient_group", pending_notes.stdout)
+            self.assertNotIn("normal_subgroup", pending_notes.stdout)
+
+            self.assertEqual(exported_notes.returncode, 0, exported_notes.stderr)
+            self.assertIn(exported, exported_notes.stdout)
+            self.assertNotIn("group_action", exported_notes.stdout)
+            self.assertNotIn("quotient_group", exported_notes.stdout)
+
     def test_export_reviewed_notes_rejects_failed_quality_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

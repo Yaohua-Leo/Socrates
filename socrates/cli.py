@@ -18,7 +18,12 @@ from .context import load_project
 from .exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
 from .kb import build_reference_kb, find_counterexamples, search_reference_kb
 from .learning_queue import collect_learning_queue, format_learning_queue
-from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
+from .notes import (
+    AtomicNoteSummary,
+    export_reviewed_notes_to_obsidian,
+    list_atomic_notes,
+    review_atomic_note,
+)
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
@@ -212,6 +217,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Review and export atomic notes.",
     )
     note_subparsers = note_parser.add_subparsers(dest="note_command", required=True)
+    note_list_parser = note_subparsers.add_parser(
+        "list",
+        help="List atomic notes by review/export status.",
+    )
+    note_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    note_list_parser.add_argument(
+        "--status",
+        choices=("all", "pending", "reviewed", "exported"),
+        default="all",
+        help="Filter notes by lifecycle status; defaults to all.",
+    )
+    note_list_parser.set_defaults(func=_handle_note_list)
     note_review_parser = note_subparsers.add_parser("review", help="Review one draft note.")
     note_review_parser.add_argument("--project", required=True, help="Socrates project directory.")
     note_review_parser.add_argument("--note", required=True, help="Draft note id, without .md.")
@@ -620,6 +637,24 @@ def _handle_kb_check(args: argparse.Namespace) -> int:
     )
     print(f"Ingestion quality report: {result.report_path}")
     return 0
+
+
+def _handle_note_list(args: argparse.Namespace) -> int:
+    notes = list_atomic_notes(args.project, status=args.status)
+    print(_atomic_notes_text(notes), end="")
+    return 0
+
+
+def _atomic_notes_text(notes: list[AtomicNoteSummary]) -> str:
+    lines = ["# Atomic Notes", ""]
+    if not notes:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        f"- {note.note_id} | {note.status} | {note.note_type} | {note.concept} | {note.path}"
+        for note in notes
+    )
+    return "\n".join(lines) + "\n"
 
 
 def _handle_note_review(args: argparse.Namespace) -> int:

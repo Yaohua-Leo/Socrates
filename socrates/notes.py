@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 import shutil
@@ -18,6 +19,17 @@ NOTE_TYPE_DIRS = {
     "technique": "techniques",
     "exercise": "exercises",
 }
+
+
+@dataclass(frozen=True)
+class AtomicNoteSummary:
+    """A lifecycle summary for one atomic note."""
+
+    note_id: str
+    status: str
+    note_type: str
+    concept: str
+    path: str
 
 
 def review_atomic_note(project_path: Path | str, note_id: str) -> Path:
@@ -87,6 +99,25 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     return exported
 
 
+def list_atomic_notes(project_path: Path | str, *, status: str = "all") -> list[AtomicNoteSummary]:
+    """List atomic notes by their current lifecycle state."""
+
+    allowed_statuses = {"all", "pending", "reviewed", "exported"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(f"Unknown note status {status!r}; expected one of: {allowed}")
+
+    context = load_project(project_path)
+    exported_ids = _exported_note_ids(context.root)
+    reviewed = _reviewed_note_summaries(context.root, exported_ids)
+    reviewed_ids = {item.note_id for item in reviewed}
+    pending = _pending_note_summaries(context.root, reviewed_ids)
+    items = [*pending, *reviewed]
+    if status != "all":
+        items = [item for item in items if item.status == status]
+    return sorted(items, key=lambda item: (_note_status_order(item.status), item.note_id))
+
+
 def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, object]]) -> None:
     manifest = {
         "version": 2,
@@ -120,6 +151,97 @@ def _write_export_index(obsidian_dir: Path, exported_notes: list[dict[str, objec
         if related:
             lines.append(f"  - Related: {', '.join(related)}")
     write_text(obsidian_dir / "_socrates_index.md", "\n".join(lines).rstrip() + "\n")
+
+
+def _pending_note_summaries(
+    project_root: Path,
+    reviewed_ids: set[str],
+) -> list[AtomicNoteSummary]:
+    draft_dir = project_root / "04_atomic_notes" / "drafts"
+    if not draft_dir.exists():
+        return []
+    items: list[AtomicNoteSummary] = []
+    for note_path in sorted(draft_dir.glob("*.md"), key=lambda path: path.stem):
+        if note_path.stem in reviewed_ids:
+            continue
+        text = note_path.read_text(encoding="utf-8")
+        items.append(
+            _note_summary(
+                project_root=project_root,
+                note_path=note_path,
+                status="pending",
+                text=text,
+            )
+        )
+    return items
+
+
+def _reviewed_note_summaries(
+    project_root: Path,
+    exported_ids: set[str],
+) -> list[AtomicNoteSummary]:
+    notes_root = project_root / "04_atomic_notes"
+    if not notes_root.exists():
+        return []
+    items: list[AtomicNoteSummary] = []
+    for folder in sorted(notes_root.iterdir(), key=lambda path: path.name):
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in sorted(folder.glob("*.md"), key=lambda path: path.stem):
+            text = note_path.read_text(encoding="utf-8")
+            if _frontmatter_value(text, "reviewed_by_user") != "true":
+                continue
+            status = "exported" if note_path.stem in exported_ids else "reviewed"
+            items.append(
+                _note_summary(
+                    project_root=project_root,
+                    note_path=note_path,
+                    status=status,
+                    text=text,
+                )
+            )
+    return items
+
+
+def _note_summary(
+    *,
+    project_root: Path,
+    note_path: Path,
+    status: str,
+    text: str,
+) -> AtomicNoteSummary:
+    return AtomicNoteSummary(
+        note_id=note_path.stem,
+        status=status,
+        note_type=_frontmatter_value(text, "type") or "definition",
+        concept=_frontmatter_value(text, "concept") or note_path.stem,
+        path=note_path.relative_to(project_root).as_posix(),
+    )
+
+
+def _exported_note_ids(project_root: Path) -> set[str]:
+    obsidian_dir = project_root / "07_exports" / "obsidian"
+    manifest_path = obsidian_dir / "export_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
+        if isinstance(exported_notes, list):
+            return {
+                str(item.get("note_id"))
+                for item in exported_notes
+                if isinstance(item, dict) and item.get("note_id")
+            }
+    if not obsidian_dir.exists():
+        return set()
+    return {
+        path.stem
+        for path in obsidian_dir.glob("*.md")
+        if path.name != "_socrates_index.md"
+    }
+
+
+def _note_status_order(status: str) -> int:
+    return {"pending": 0, "reviewed": 1, "exported": 2}.get(status, 3)
 
 
 def _index_source_line(note: dict[str, object]) -> str:
