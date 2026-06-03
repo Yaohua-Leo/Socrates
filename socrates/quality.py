@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from .context import load_project, write_text
-from .kb import parse_object_heading
+from .kb import find_counterexamples, parse_object_heading
 
 
 @dataclass(frozen=True)
@@ -107,10 +107,17 @@ def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualit
     context = load_project(project_path)
     exercise_paths = sorted(context.generated_exercises_dir.glob("*.md"))
     rows = [_check_exercise(path) for path in exercise_paths]
+    counterexample_rows = [
+        _exercise_counterexample_search(context.root, path)
+        for path in exercise_paths
+    ]
     passed = sum(1 for row in rows if row["status"] == "pass")
     failed = len(rows) - passed
     report_path = context.evals_dir / "exercise_quality_eval.md"
-    write_text(report_path, _exercise_quality_report(rows, passed, failed))
+    write_text(
+        report_path,
+        _exercise_quality_report(rows, passed, failed, counterexample_rows),
+    )
     return ExerciseQualityResult(
         checked=len(rows),
         passed=passed,
@@ -294,6 +301,61 @@ def exercise_quality_issues(path: Path) -> list[str]:
     return issues
 
 
+def _exercise_counterexample_search(project_root: Path, exercise_path: Path) -> dict[str, object]:
+    text = exercise_path.read_text(encoding="utf-8")
+    concept = _frontmatter_value(text, "concept") or ""
+    if not concept:
+        return {
+            "file": exercise_path.name,
+            "concept": "",
+            "status": "skipped",
+            "reason": "missing concept frontmatter",
+            "matches": [],
+        }
+
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    if not index_path.exists():
+        return {
+            "file": exercise_path.name,
+            "concept": concept,
+            "status": "not_run",
+            "reason": "reference KB index missing",
+            "matches": [],
+        }
+
+    try:
+        matches = find_counterexamples(project_root, concept, limit=3)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {
+            "file": exercise_path.name,
+            "concept": concept,
+            "status": "not_run",
+            "reason": "reference KB index unreadable",
+            "matches": [],
+        }
+
+    return {
+        "file": exercise_path.name,
+        "concept": concept,
+        "status": "searched",
+        "reason": "",
+        "matches": matches,
+    }
+
+
+def _frontmatter_value(text: str, key: str) -> str | None:
+    if not text.startswith("---\n"):
+        return None
+    parts = text.split("---\n", 2)
+    if len(parts) != 3:
+        return None
+    prefix = f"{key}:"
+    for line in parts[1].splitlines():
+        if line.startswith(prefix):
+            return line.removeprefix(prefix).strip().strip('"')
+    return None
+
+
 def _has_hint_ladder(text: str) -> bool:
     hint_section = _section_text(text, "## Hints")
     return all(f"Hint {index}" in hint_section for index in range(1, 4))
@@ -396,6 +458,7 @@ def _exercise_quality_report(
     rows: list[dict[str, object]],
     passed: int,
     failed: int,
+    counterexample_rows: list[dict[str, object]],
 ) -> str:
     lines = [
         "# Exercise Quality Eval",
@@ -417,7 +480,50 @@ def _exercise_quality_report(
         issues = row.get("issues", [])
         if isinstance(issues, list):
             lines.extend(f"  - {issue}" for issue in issues)
+    lines.extend(["", "## Counterexample Search", ""])
+    lines.extend(_counterexample_search_report(counterexample_rows))
     return "\n".join(lines) + "\n"
+
+
+def _counterexample_search_report(rows: list[dict[str, object]]) -> list[str]:
+    if not rows:
+        return ["- No exercise drafts found."]
+
+    lines: list[str] = []
+    for row in rows:
+        matches = row.get("matches", [])
+        if not isinstance(matches, list):
+            matches = []
+        line = (
+            f"- {row['file']} | {row.get('concept') or 'unknown'} | "
+            f"{row['status']}"
+        )
+        if row["status"] == "searched":
+            line = f"{line} | matches: {len(matches)}"
+        elif row.get("reason"):
+            line = f"{line} | {row['reason']}"
+        lines.append(line)
+        lines.extend(f"  - {_counterexample_match_line(match)}" for match in matches)
+    return lines
+
+
+def _counterexample_match_line(match: dict[str, object]) -> str:
+    source = match.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
+    return (
+        f"{match.get('type', 'object')}: {match.get('title', 'Untitled')} "
+        f"({_counterexample_source_location(source)})"
+    )
+
+
+def _counterexample_source_location(source: dict[str, object]) -> str:
+    path = str(source.get("path") or "unknown")
+    if source.get("line"):
+        return f"{path}:{source['line']}"
+    if source.get("page"):
+        return f"{path}:p{source['page']}"
+    return path
 
 
 def _note_quality_report(
