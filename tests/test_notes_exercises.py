@@ -9,6 +9,7 @@ import unittest
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft
 from socrates.kb import build_reference_kb
 from socrates.context import load_project
+from socrates.exercises import approve_exercise_draft
 from socrates.project import ProjectSpec, create_project
 from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
 
@@ -184,6 +185,29 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('due: "next_session"', text)
             self.assertIn("## Target Weakness\n\nmastery 0.43", text)
             self.assertIn("## Review Prompt", text)
+
+    def test_generate_targeted_review_exercises_preserves_reviewed_existing_files(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.43}),
+            )
+            build_review_schedule(context)
+            artifacts.generate_targeted_review_exercise_drafts(project)
+            approve_exercise_draft(project, "review_normal_subgroup_01")
+
+            exercises = artifacts.generate_targeted_review_exercise_drafts(project)
+
+            self.assertEqual(len(exercises), 1)
+            text = (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn('status: "approved"', text)
+            self.assertIn('review_status: "approved"', text)
+            self.assertIn("reviewed_by_user: true", text)
 
     def _load_artifacts_module(self):
         spec = importlib.util.find_spec("socrates.artifacts")

@@ -122,15 +122,17 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
         concept = str(item.get("concept", "review"))
         exercise_id = f"review_{slugify_topic(concept)}_{index:02d}"
         relative_path = Path("05_exercises") / "generated" / f"{exercise_id}.md"
-        write_text(
-            context.root / relative_path,
-            _targeted_review_exercise_text(
-                concept=concept,
-                reason=str(item.get("reason", "review scheduled")),
-                priority=str(item.get("priority", "medium")),
-                due=str(item.get("due", "within_3_days")),
-            ),
-        )
+        exercise_path = context.root / relative_path
+        if not exercise_path.exists():
+            write_text(
+                exercise_path,
+                _targeted_review_exercise_text(
+                    concept=concept,
+                    reason=str(item.get("reason", "review scheduled")),
+                    priority=str(item.get("priority", "medium")),
+                    due=str(item.get("due", "within_3_days")),
+                ),
+            )
         drafts.append(
             ExerciseDraft(
                 id=exercise_id,
