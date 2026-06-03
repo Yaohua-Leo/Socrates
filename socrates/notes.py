@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import shutil
 
@@ -51,6 +52,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
 
     context = load_project(project_path)
     exported: list[Path] = []
+    manifest_notes: list[dict[str, str]] = []
     for folder in sorted((context.root / "04_atomic_notes").iterdir()):
         if not folder.is_dir() or folder.name == "drafts":
             continue
@@ -63,9 +65,29 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(note_path, destination)
             exported.append(destination)
+            manifest_notes.append(
+                {
+                    "note_id": note_path.stem,
+                    "concept": _frontmatter_value(text, "concept") or note_path.stem,
+                    "type": _frontmatter_value(text, "type") or folder.name.rstrip("s"),
+                    "path": destination.relative_to(destination.parent).as_posix(),
+                }
+            )
     if exported:
+        _write_export_manifest(context.root / "07_exports" / "obsidian", manifest_notes)
         append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
     return exported
+
+
+def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, str]]) -> None:
+    manifest = {
+        "version": 1,
+        "exported_notes": sorted(exported_notes, key=lambda item: item["note_id"]),
+    }
+    write_text(
+        obsidian_dir / "export_manifest.json",
+        json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
+    )
 
 
 def _require_note_quality(project_root: Path, note_path: Path, label: str) -> None:

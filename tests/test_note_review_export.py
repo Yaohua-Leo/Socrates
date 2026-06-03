@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -88,6 +89,23 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn('status: "reviewed"', export_text)
             self.assertIn("reviewed_by_user: true", export_text)
             self.assertIn("# Normal Subgroup", export_text)
+            manifest = json.loads(
+                (project / "07_exports" / "obsidian" / "export_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["version"], 1)
+            self.assertEqual(
+                manifest["exported_notes"],
+                [
+                    {
+                        "note_id": "normal_subgroup",
+                        "concept": "Normal Subgroup",
+                        "type": "definition",
+                        "path": "normal_subgroup.md",
+                    }
+                ],
+            )
 
     def test_export_reviewed_notes_rejects_failed_quality_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
