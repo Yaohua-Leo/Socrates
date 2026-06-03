@@ -7,9 +7,11 @@ import tempfile
 import unittest
 
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
+from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, record_exercise_attempt
 from socrates.notes import review_atomic_note
 from socrates.project import ProjectSpec, create_project
+from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -81,6 +83,31 @@ class LearningQueueTests(unittest.TestCase):
                     "- normal_subgroup_01_attempt_001 | "
                     "05_exercises/attempted/normal_subgroup_01_attempt_001.md"
                 ),
+                result.stdout,
+            )
+
+    def test_queue_cli_lists_scheduled_reviews(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.4}),
+            )
+            build_review_schedule(context)
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Scheduled Reviews", result.stdout)
+            self.assertIn(
+                "- normal_subgroup | 02_learning_plan/review_schedule.md",
                 result.stdout,
             )
 

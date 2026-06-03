@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from .context import load_project
+from .context import load_project, read_json
 
 
 @dataclass(frozen=True)
@@ -21,6 +21,7 @@ class LearningQueue:
     """Actionable artifact groups for CLI queue display."""
 
     notes_to_review: list[QueueItem]
+    scheduled_reviews: list[QueueItem]
     exercise_drafts_to_approve: list[QueueItem]
     exercises_to_attempt: list[QueueItem]
     attempts_to_grade: list[QueueItem]
@@ -32,6 +33,7 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
     context = load_project(project_path)
     return LearningQueue(
         notes_to_review=_notes_to_review(context.root),
+        scheduled_reviews=_scheduled_reviews(context.root),
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
         exercises_to_attempt=_exercises_to_attempt(context.root),
         attempts_to_grade=_attempts_to_grade(context.root),
@@ -43,6 +45,7 @@ def format_learning_queue(queue: LearningQueue) -> str:
 
     lines = ["# Learning Queue", ""]
     lines.extend(_section("Notes To Review", queue.notes_to_review))
+    lines.extend(_section("Scheduled Reviews", queue.scheduled_reviews))
     lines.extend(_section("Exercise Drafts To Approve", queue.exercise_drafts_to_approve))
     lines.extend(_section("Exercises To Attempt", queue.exercises_to_attempt))
     lines.extend(_section("Attempts To Grade", queue.attempts_to_grade))
@@ -87,6 +90,31 @@ def _exercise_drafts_to_approve(project_root: Path) -> list[QueueItem]:
         if _is_approved_exercise(text):
             continue
         items.append(_queue_item(exercise_path, project_root))
+    return items
+
+
+def _scheduled_reviews(project_root: Path) -> list[QueueItem]:
+    learning_state = project_root / "00_meta" / "learning_state.json"
+    schedule_path = project_root / "02_learning_plan" / "review_schedule.md"
+    if not learning_state.exists():
+        return []
+    state = read_json(learning_state)
+    if not isinstance(state, dict):
+        return []
+    schedule = state.get("review_schedule", [])
+    if not isinstance(schedule, list):
+        return []
+    items: list[QueueItem] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        concept = str(item.get("concept", "review"))
+        items.append(
+            QueueItem(
+                item_id=concept,
+                path=schedule_path.relative_to(project_root).as_posix(),
+            )
+        )
     return items
 
 
