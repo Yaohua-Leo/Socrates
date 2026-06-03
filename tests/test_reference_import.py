@@ -254,6 +254,38 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertIn("### Definition: Normal Subgroup", converted_text)
             self.assertEqual(result.object_count, 1)
 
+    def test_curate_latex_reference_preserves_numbered_object_titles_for_kb(self) -> None:
+        from socrates.kb import build_reference_kb
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.tex"
+            source.write_text(
+                "\\section{Normal Subgroups}\n"
+                "\\begin{definition}[3.1 Normal Subgroup]\n"
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
+                "Depends: subgroup, conjugation\n"
+                "\\end{definition}\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normal Subgroups TeX",
+            )
+
+            curate_reference(project, record.id)
+            result = build_reference_kb(project)
+
+            converted = project / "01_references" / "converted" / "markdown" / "normal_subgroups_tex.md"
+            converted_text = converted.read_text(encoding="utf-8")
+            index = result.index_path.read_text(encoding="utf-8")
+            self.assertIn("### Definition 3.1: Normal Subgroup", converted_text)
+            self.assertIn('"number": "3.1"', index)
+
 
 if __name__ == "__main__":
     unittest.main()

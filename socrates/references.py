@@ -251,6 +251,9 @@ LATEX_BEGIN_RE = re.compile(
     r"\\begin\{(?P<kind>[a-zA-Z*]+)\}(?:\[(?P<title>[^\]]+)\])?"
 )
 LATEX_END_RE = re.compile(r"\\end\{(?P<kind>[a-zA-Z*]+)\}")
+LATEX_OBJECT_NUMBER_RE = re.compile(
+    r"^(?P<number>[A-Za-z]?\d+(?:\.\d+)*(?:[a-z])?)\s+(?P<title>.+)$"
+)
 
 
 def _latex_to_markdown(source_text: str) -> str:
@@ -267,7 +270,7 @@ def _latex_to_markdown(source_text: str) -> str:
             kind = begin.group("kind").rstrip("*").casefold()
             if kind in LATEX_OBJECT_TYPES:
                 title = begin.group("title") or kind.replace("_", " ").title()
-                lines.append(f"### {kind.title()}: {_plain_latex_title(title)}")
+                lines.append(_latex_object_heading(kind, title))
                 continue
 
         end = LATEX_END_RE.fullmatch(stripped)
@@ -281,6 +284,15 @@ def _latex_to_markdown(source_text: str) -> str:
 
 def _plain_latex_title(title: str) -> str:
     return title.replace(r"\_", "_").strip()
+
+
+def _latex_object_heading(kind: str, title: str) -> str:
+    object_type = kind.title()
+    plain_title = _plain_latex_title(title)
+    numbered = LATEX_OBJECT_NUMBER_RE.fullmatch(plain_title)
+    if numbered:
+        return f"### {object_type} {numbered.group('number')}: {numbered.group('title').strip()}"
+    return f"### {object_type}: {plain_title}"
 
 
 def _update_registry_source(
