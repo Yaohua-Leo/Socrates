@@ -264,7 +264,18 @@ def exercise_quality_issues(path: Path) -> list[str]:
     for section in REQUIRED_SECTIONS:
         if section not in text:
             issues.append(f"missing section {section.removeprefix('## ')}")
+    if not _has_hint_ladder(text):
+        issues.append("missing hint ladder")
     return issues
+
+
+def _has_hint_ladder(text: str) -> bool:
+    _, separator, after_hints = text.partition("## Hints")
+    if not separator:
+        return False
+    next_section_index = after_hints.find("\n## ")
+    hint_section = after_hints if next_section_index < 0 else after_hints[:next_section_index]
+    return all(f"Hint {index}" in hint_section for index in range(1, 4))
 
 
 def _atomic_note_paths(project_root: Path) -> list[Path]:

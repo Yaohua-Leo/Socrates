@@ -184,8 +184,9 @@ def _exercise_text(
         + prerequisites_block
         + ("\n" + reference_context if reference_context else "")
         + "\n## Hints\n\n"
-        + "- Identify the definitions that apply directly.\n"
-        + "- Check each required condition separately.\n\n"
+        + "- Hint 1 (definition): Identify the definitions that apply directly.\n"
+        + "- Hint 2 (structure): Check each required condition separately.\n"
+        + "- Hint 3 (local step): Write one verification before trying to finish the whole proof.\n\n"
         + "## Solution Outline\n\n"
         + "- State the relevant definition.\n"
         + "- Verify the required properties in order.\n"
@@ -229,8 +230,9 @@ def _targeted_review_exercise_text(
         + "## Review Prompt\n\n"
         + f"State the relevant definition of {concept}, then give one example and one non-example.\n\n"
         + "## Hints\n\n"
-        + "- Start from the exact definition rather than a remembered slogan.\n"
-        + "- Test the definition against a borderline example.\n\n"
+        + "- Hint 1 (definition): Start from the exact definition rather than a remembered slogan.\n"
+        + "- Hint 2 (example): Test the definition against a borderline example.\n"
+        + "- Hint 3 (local step): Explain exactly which condition succeeds or fails.\n\n"
         + "## Solution Outline\n\n"
         + "- Write the formal condition.\n"
         + "- Explain why the example satisfies every condition.\n"

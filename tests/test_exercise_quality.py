@@ -558,6 +558,7 @@ class ExerciseQualityTests(unittest.TestCase):
 
             self.assertIn("missing section Target Training Point", issues)
             self.assertIn("missing section Common Mistakes", issues)
+            self.assertIn("missing hint ladder", issues)
 
     def test_exercise_check_cli_writes_quality_report_for_generated_exercises(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

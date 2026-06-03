@@ -164,6 +164,9 @@ class NotesExercisesTests(unittest.TestCase):
                 self.assertIn("- Group Action", text)
                 self.assertIn("- group", text)
                 self.assertIn("- set", text)
+                self.assertIn("Hint 1", text)
+                self.assertIn("Hint 2", text)
+                self.assertIn("Hint 3", text)
 
     def test_generate_exercise_drafts_uses_kb_reference_context(self) -> None:
         artifacts = self._load_artifacts_module()
@@ -229,6 +232,9 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("## Target Weakness\n\nmastery 0.43", text)
             self.assertIn("## Target Training Point", text)
             self.assertIn("## Review Prompt", text)
+            self.assertIn("Hint 1", text)
+            self.assertIn("Hint 2", text)
+            self.assertIn("Hint 3", text)
             self.assertIn("## Common Mistakes", text)
 
     def test_targeted_review_exercises_include_kb_reference_context(self) -> None:
