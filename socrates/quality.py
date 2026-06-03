@@ -28,6 +28,15 @@ class NoteQualityResult:
     report_path: Path
 
 
+@dataclass(frozen=True)
+class TutoringQualityResult:
+    """Summary of a tutoring-session quality check."""
+
+    session_id: str
+    status: str
+    report_path: Path
+
+
 REQUIRED_FRONTMATTER = ("status:", "review_status:", "type:", "concept:")
 REQUIRED_SECTIONS = ("## Hints", "## Solution Outline", "## Rubric")
 NOTE_REQUIRED_FRONTMATTER = (
@@ -39,6 +48,13 @@ NOTE_REQUIRED_FRONTMATTER = (
     "source_id:",
     "tags:",
     "related:",
+)
+SESSION_REQUIRED_FILES = (
+    "transcript.md",
+    "tutor_notes.md",
+    "detected_misconceptions.md",
+    "summary.md",
+    "next_actions.md",
 )
 
 
@@ -76,6 +92,35 @@ def check_atomic_note_quality(project_path: Path | str) -> NoteQualityResult:
         failed=failed,
         report_path=report_path,
     )
+
+
+def check_tutoring_session_quality(
+    project_path: Path | str,
+    *,
+    session_id: str,
+) -> TutoringQualityResult:
+    """Check one tutoring session and append a tutoring quality report."""
+
+    context = load_project(project_path)
+    session_dir = context.sessions_dir / session_id
+    missing = [name for name in SESSION_REQUIRED_FILES if not (session_dir / name).exists()]
+    transcript_path = session_dir / "transcript.md"
+    transcript = transcript_path.read_text(encoding="utf-8") if transcript_path.exists() else ""
+    issues: list[str] = []
+    if missing:
+        issues.append("missing required session artifacts")
+    if "Tutor:" not in transcript:
+        issues.append("missing tutor question")
+    if "Hint 1:" not in transcript:
+        issues.append("missing first hint")
+    premature_solution = _has_premature_solution(transcript)
+    if premature_solution:
+        issues.append("premature full solution")
+
+    status = "fail" if issues else "pass"
+    report_path = context.evals_dir / "tutoring_eval.md"
+    _append_report(report_path, _tutoring_quality_report(session_id, status, missing, premature_solution, issues))
+    return TutoringQualityResult(session_id=session_id, status=status, report_path=report_path)
 
 
 def _check_exercise(path: Path) -> dict[str, object]:
@@ -126,6 +171,14 @@ def _check_note(path: Path, project_root: Path) -> dict[str, object]:
         "status": "fail" if issues else "pass",
         "issues": issues,
     }
+
+
+def _has_premature_solution(transcript: str) -> bool:
+    if "Tutor follow-up:" not in transcript:
+        return False
+    if "Full solution withheld until after a student attempt." in transcript:
+        return False
+    return "Student attempt:" not in transcript
 
 
 def _exercise_quality_report(
@@ -182,3 +235,30 @@ def _note_quality_report(
         if isinstance(issues, list):
             lines.extend(f"  - {issue}" for issue in issues)
     return "\n".join(lines) + "\n"
+
+
+def _tutoring_quality_report(
+    session_id: str,
+    status: str,
+    missing: list[str],
+    premature_solution: bool,
+    issues: list[str],
+) -> str:
+    lines = [
+        f"## Session Quality Check: {session_id}",
+        "",
+        f"- Status: {status}",
+        f"- Missing artifacts: {', '.join(missing) if missing else 'none'}",
+        f"- Premature solution: {'yes' if premature_solution else 'no'}",
+        "",
+        "### Issues",
+    ]
+    lines.extend(f"- {issue}" for issue in issues)
+    if not issues:
+        lines.append("- none recorded")
+    return "\n".join(lines) + "\n"
+
+
+def _append_report(path: Path, content: str) -> None:
+    existing = path.read_text(encoding="utf-8") if path.exists() else "# Tutoring Eval\n\n"
+    write_text(path, existing.rstrip() + "\n\n" + content.rstrip() + "\n")

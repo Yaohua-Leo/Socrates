@@ -19,7 +19,11 @@ from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
-from .quality import check_atomic_note_quality, check_generated_exercise_quality
+from .quality import (
+    check_atomic_note_quality,
+    check_generated_exercise_quality,
+    check_tutoring_session_quality,
+)
 from .references import curate_reference, import_reference
 from .state import (
     EvalReportUpdate,
@@ -182,6 +186,19 @@ def build_parser() -> argparse.ArgumentParser:
     )
     exercise_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     exercise_check_parser.set_defaults(func=_handle_exercise_check)
+
+    session_parser = subparsers.add_parser(
+        "session",
+        help="Check and manage tutoring session artifacts.",
+    )
+    session_subparsers = session_parser.add_subparsers(dest="session_command", required=True)
+    session_check_parser = session_subparsers.add_parser(
+        "check",
+        help="Run checklist quality checks on one tutoring session.",
+    )
+    session_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_check_parser.add_argument("--session-id", required=True, help="Session identifier.")
+    session_check_parser.set_defaults(func=_handle_session_check)
 
     return parser
 
@@ -373,6 +390,13 @@ def _handle_exercise_check(args: argparse.Namespace) -> int:
         f"{result.passed} passed, {result.failed} failed"
     )
     print(f"Exercise quality report: {result.report_path}")
+    return 0
+
+
+def _handle_session_check(args: argparse.Namespace) -> int:
+    result = check_tutoring_session_quality(args.project, session_id=args.session_id)
+    print(f"Checked session {result.session_id}: {result.status}")
+    print(f"Tutoring quality report: {result.report_path}")
     return 0
 
 
