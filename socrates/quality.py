@@ -29,6 +29,7 @@ class NoteQualityResult:
     passed: int
     failed: int
     report_path: Path
+    manifest_path: Path
 
 
 @dataclass(frozen=True)
@@ -149,12 +150,24 @@ def check_atomic_note_quality(project_path: Path | str) -> NoteQualityResult:
     passed = sum(1 for row in rows if row["status"] == "pass")
     failed = len(rows) - passed
     report_path = context.evals_dir / "note_quality_eval.md"
+    manifest_path = context.evals_dir / "note_quality_manifest.json"
     write_text(report_path, _note_quality_report(rows, passed, failed))
+    write_json(
+        manifest_path,
+        _note_quality_manifest(
+            context.root,
+            note_paths,
+            rows,
+            passed=passed,
+            failed=failed,
+        ),
+    )
     return NoteQualityResult(
         checked=len(rows),
         passed=passed,
         failed=failed,
         report_path=report_path,
+        manifest_path=manifest_path,
     )
 
 
@@ -482,6 +495,15 @@ def _int_if_possible(value: str) -> object:
         return value
 
 
+def _bool_if_possible(value: str) -> object:
+    normalized = value.casefold()
+    if normalized == "true":
+        return True
+    if normalized == "false":
+        return False
+    return value
+
+
 def _frontmatter_value(text: str, key: str) -> str | None:
     if not text.startswith("---\n"):
         return None
@@ -493,6 +515,51 @@ def _frontmatter_value(text: str, key: str) -> str | None:
         if line.startswith(prefix):
             return line.removeprefix(prefix).strip().strip('"')
     return None
+
+
+def _frontmatter_list(text: str, key: str) -> list[str]:
+    frontmatter = _frontmatter_lines(text)
+    prefix = f"{key}:"
+    values: list[str] = []
+    in_list = False
+    for line in frontmatter:
+        if line.startswith(prefix):
+            in_list = True
+            inline_value = line.removeprefix(prefix).strip()
+            if inline_value == "[]":
+                return []
+            if inline_value:
+                return [_frontmatter_string(inline_value)]
+            continue
+        if not in_list:
+            continue
+        stripped = line.strip()
+        if stripped == "[]":
+            return []
+        if line.startswith("  - "):
+            values.append(_frontmatter_string(line.removeprefix("  - ").strip()))
+            continue
+        if stripped and not line.startswith(" "):
+            break
+    return values
+
+
+def _frontmatter_lines(text: str) -> list[str]:
+    if not text.startswith("---\n"):
+        return []
+    parts = text.split("---\n", 2)
+    if len(parts) != 3:
+        return []
+    return parts[1].splitlines()
+
+
+def _frontmatter_string(value: str) -> str:
+    if (
+        (value.startswith('"') and value.endswith('"'))
+        or (value.startswith("'") and value.endswith("'"))
+    ):
+        return value[1:-1]
+    return value
 
 
 def _has_hint_ladder(text: str) -> bool:
@@ -514,6 +581,10 @@ def _has_rubric_points(text: str) -> bool:
 
 def _numbered_line_count(section: str, marker: str) -> int:
     return sum(1 for line in section.splitlines() if marker in line)
+
+
+def _bullet_count(section: str) -> int:
+    return sum(1 for line in section.splitlines() if line.strip().startswith("- "))
 
 
 def _rubric_total_points(text: str) -> int | None:
@@ -552,6 +623,92 @@ def _check_note(path: Path, project_root: Path) -> dict[str, object]:
         "file": path.relative_to(project_root / "04_atomic_notes").as_posix(),
         "status": "fail" if issues else "pass",
         "issues": issues,
+    }
+
+
+def _note_quality_manifest(
+    project_root: Path,
+    note_paths: list[Path],
+    rows: list[dict[str, object]],
+    *,
+    passed: int,
+    failed: int,
+) -> dict[str, object]:
+    row_by_file = {str(row["file"]): row for row in rows}
+    return {
+        "schema_version": 1,
+        "checked": len(note_paths),
+        "passed": passed,
+        "failed": failed,
+        "notes": [
+            _note_manifest_entry(
+                project_root,
+                note_path,
+                row_by_file.get(
+                    note_path.relative_to(project_root / "04_atomic_notes").as_posix(),
+                    {},
+                ),
+            )
+            for note_path in note_paths
+        ],
+    }
+
+
+def _note_manifest_entry(
+    project_root: Path,
+    note_path: Path,
+    quality_row: dict[str, object],
+) -> dict[str, object]:
+    text = note_path.read_text(encoding="utf-8")
+    issues = quality_row.get("issues", [])
+    if not isinstance(issues, list):
+        issues = []
+    return {
+        "id": note_path.stem,
+        "path": note_path.relative_to(project_root).as_posix(),
+        "quality_status": quality_row.get("status", "unknown"),
+        "issues": issues,
+        "frontmatter": _note_frontmatter(text),
+        "sections": _note_section_manifest(text),
+    }
+
+
+def _note_frontmatter(text: str) -> dict[str, object]:
+    values: dict[str, object] = {}
+    for key in (
+        "status",
+        "review_status",
+        "reviewed_by_user",
+        "type",
+        "concept",
+        "source_id",
+        "source_title",
+        "source_location",
+    ):
+        value = _frontmatter_value(text, key)
+        if value is None:
+            continue
+        values[key] = _bool_if_possible(value) if key == "reviewed_by_user" else value
+    values["tags"] = _frontmatter_list(text, "tags")
+    values["related"] = _frontmatter_list(text, "related")
+    return values
+
+
+def _note_section_manifest(text: str) -> dict[str, object]:
+    return {
+        "has_title": "# " in text,
+        "has_key_examples": "## Key Examples" in text,
+        "has_non_examples": (
+            "## Non-Examples" in text or "## Counterexamples" in text
+        ),
+        "has_common_mistakes": "## Common Mistakes" in text,
+        "review_question_count": _bullet_count(
+            _section_text(text, "## Review Questions")
+        ),
+        "has_reference_context": "## Reference Context" in text,
+        "related_concept_count": _bullet_count(
+            _section_text(text, "## Related Concepts")
+        ),
     }
 
 

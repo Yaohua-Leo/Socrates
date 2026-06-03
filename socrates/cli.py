@@ -914,6 +914,7 @@ def _handle_note_check(args: argparse.Namespace) -> int:
         f"{'' if result.checked == 1 else 's'}: {result.passed} passed, {result.failed} failed"
     )
     print(f"Note quality report: {result.report_path}")
+    print(f"Note quality manifest: {result.manifest_path}")
     return 0
 
 

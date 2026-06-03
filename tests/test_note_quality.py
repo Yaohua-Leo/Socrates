@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -90,6 +91,7 @@ class NoteQualityTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Checked 1 atomic note: 1 passed, 0 failed", result.stdout)
+            self.assertIn("Note quality manifest:", result.stdout)
             report = project / "08_evals" / "note_quality_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Note Quality Eval", report_text)
@@ -98,6 +100,35 @@ class NoteQualityTests(unittest.TestCase):
             self.assertIn("- Passed: 1", report_text)
             self.assertIn("- Failed: 0", report_text)
             self.assertIn("drafts/normal_subgroup.md: pass", report_text)
+            manifest = json.loads(
+                (project / "08_evals" / "note_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["checked"], 1)
+            self.assertEqual(manifest["passed"], 1)
+            self.assertEqual(manifest["failed"], 0)
+            self.assertEqual(manifest["notes"][0]["id"], "normal_subgroup")
+            self.assertEqual(
+                manifest["notes"][0]["path"],
+                "04_atomic_notes/drafts/normal_subgroup.md",
+            )
+            self.assertEqual(manifest["notes"][0]["quality_status"], "pass")
+            self.assertEqual(
+                manifest["notes"][0]["frontmatter"]["concept"],
+                "Normal Subgroup",
+            )
+            self.assertEqual(
+                manifest["notes"][0]["frontmatter"]["reviewed_by_user"],
+                False,
+            )
+            self.assertIn(
+                "normal-subgroup",
+                manifest["notes"][0]["frontmatter"]["tags"],
+            )
+            self.assertEqual(manifest["notes"][0]["sections"]["review_question_count"], 1)
+            self.assertEqual(manifest["notes"][0]["sections"]["has_reference_context"], True)
 
 
 if __name__ == "__main__":
