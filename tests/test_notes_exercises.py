@@ -7,6 +7,7 @@ import tempfile
 import unittest
 
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft
+from socrates.kb import build_reference_kb
 from socrates.project import ProjectSpec, create_project
 
 
@@ -43,6 +44,33 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('source_location: "Section 1.7"', text)
             self.assertIn("# Group Action", text)
             self.assertIn("A group action is a map", text)
+
+    def test_atomic_note_draft_uses_kb_dependencies_for_related_links_and_tags(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+
+            note = artifacts.generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body="A normal subgroup is stable under conjugation.",
+                source_id="df-1",
+            )
+
+            text = (project / note.path).read_text(encoding="utf-8")
+            self.assertIn("tags:\n  - definition\n  - normal-subgroup", text)
+            self.assertIn("related:\n  - \"[[Subgroup]]\"\n  - \"[[Conjugation]]\"", text)
+            self.assertIn("## Related Concepts\n\n- [[Subgroup]]\n- [[Conjugation]]", text)
 
     def test_generate_exercise_drafts_writes_required_sections(self) -> None:
         artifacts = self._load_artifacts_module()

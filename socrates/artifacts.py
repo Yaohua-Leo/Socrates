@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+import json
 from pathlib import Path
 
 from socrates.context import load_project, write_text
@@ -26,6 +27,11 @@ def generate_atomic_note_draft(
     note_id = slugify_topic(concept)
     relative_path = Path("04_atomic_notes") / "drafts" / f"{note_id}.md"
     note_path = context.root / relative_path
+    related_concepts = _kb_related_concepts(context.root, concept)
+    related_links = [f"[[{_concept_title(item)}]]" for item in related_concepts]
+    note_body = body.rstrip()
+    if related_links:
+        note_body += "\n\n## Related Concepts\n\n" + _bullet_list(related_links).rstrip()
 
     write_text(
         note_path,
@@ -39,9 +45,11 @@ def generate_atomic_note_draft(
                 "source_id": source_id,
                 "source_title": source_title,
                 "source_location": source_location,
+                "tags": _note_tags(note_type, concept, related_concepts),
+                "related": related_links,
             }
         )
-        + f"# {concept}\n\n{body.rstrip()}\n",
+        + f"# {concept}\n\n{note_body}\n",
     )
 
     return AtomicNoteDraft(
@@ -141,9 +149,23 @@ def _exercise_text(
 def _frontmatter(values: dict[str, object]) -> str:
     lines = ["---"]
     for key, value in values.items():
+        if isinstance(value, list):
+            lines.append(f"{key}:")
+            if value:
+                lines.extend(f"  - {_yaml_list_item(item)}" for item in value)
+            else:
+                lines.append("  []")
+            continue
         lines.append(f"{key}: {yaml_scalar(value)}")
     lines.append("---")
     return "\n".join(lines) + "\n\n"
+
+
+def _yaml_list_item(value: object) -> str:
+    text = str(value)
+    if any(character in text for character in "[]:{}#"):
+        return yaml_scalar(text)
+    return text
 
 
 def _bullet_list(items: Iterable[str]) -> str:
@@ -151,6 +173,30 @@ def _bullet_list(items: Iterable[str]) -> str:
     if not values:
         return "- None recorded.\n"
     return "".join(f"- {item}\n" for item in values)
+
+
+def _kb_related_concepts(project_root: Path, concept: str) -> list[str]:
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    if not index_path.exists():
+        return []
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    concept_id = slugify_topic(concept)
+    for item in index.get("objects", []):
+        if not isinstance(item, dict):
+            continue
+        if item.get("id") == concept_id or str(item.get("title", "")).casefold() == concept.casefold():
+            return [str(value) for value in item.get("dependencies", [])]
+    return []
+
+
+def _note_tags(note_type: str, concept: str, related_concepts: list[str]) -> list[str]:
+    tags = [note_type, slugify_topic(concept).replace("_", "-")]
+    tags.extend(slugify_topic(item).replace("_", "-") for item in related_concepts)
+    return tags
+
+
+def _concept_title(value: str) -> str:
+    return value.replace("_", " ").replace("-", " ").title()
 
 
 def _as_posix(path: Path) -> str:
