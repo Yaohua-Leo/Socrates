@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import importlib.util
+import itertools
 import json
 from pathlib import Path
 import re
@@ -65,6 +66,18 @@ class SympyIdentityResult:
 
     status: str
     passed: bool
+    artifact_path: Path
+    report_path: Path
+    manifest_path: Path
+    object_id: str
+
+
+@dataclass(frozen=True)
+class SympyCounterexampleResult:
+    """Persisted result for one optional SymPy counterexample search."""
+
+    status: str
+    counterexample_found: bool
     artifact_path: Path
     report_path: Path
     manifest_path: Path
@@ -142,7 +155,9 @@ def list_tool_verification_records(
     allowed_statuses = {
         "all",
         "available",
+        "counterexample_found",
         "failed",
+        "no_counterexample_found",
         "partial",
         "unchecked_skeleton",
         "unavailable",
@@ -275,6 +290,63 @@ def verify_sympy_identity(
     return SympyIdentityResult(
         status=str(artifact["status"]),
         passed=bool(artifact["passed"]),
+        artifact_path=artifact_path,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        object_id=object_id,
+    )
+
+
+def search_sympy_counterexample(
+    project_path: Path | str,
+    *,
+    object_id: str,
+    lhs: str,
+    rhs: str,
+    samples: tuple[int, ...] = (-2, -1, 0, 1, 2),
+    title: str | None = None,
+) -> SympyCounterexampleResult:
+    """Use optional SymPy to search finite integer samples for a counterexample."""
+
+    context = load_project(project_path)
+    verification_dir = context.evals_dir / "tool_verification"
+    safe_id = _lean_identifier(f"{object_id}_sympy_counterexample")
+    artifact_path = verification_dir / f"{safe_id}.json"
+    report_path = verification_dir / f"{safe_id}_report.md"
+    manifest_path = verification_dir / "manifest.json"
+    artifact = _sympy_counterexample_artifact(
+        object_id=object_id,
+        lhs=lhs,
+        rhs=rhs,
+        samples=samples,
+        title=title,
+    )
+    write_json(artifact_path, artifact)
+    write_text(
+        report_path,
+        _sympy_counterexample_report(
+            artifact,
+            artifact_path=artifact_path.relative_to(context.root).as_posix(),
+        ),
+    )
+    write_json(
+        manifest_path,
+        _updated_manifest(
+            manifest_path,
+            _sympy_counterexample_record(
+                context.root,
+                object_id=object_id,
+                title=title or object_id,
+                artifact_path=artifact_path,
+                report_path=report_path,
+                status=str(artifact["status"]),
+            ),
+        ),
+    )
+    append_project_log(context, f"Recorded SymPy counterexample search for {object_id}.")
+    return SympyCounterexampleResult(
+        status=str(artifact["status"]),
+        counterexample_found=bool(artifact["counterexample_found"]),
         artifact_path=artifact_path,
         report_path=report_path,
         manifest_path=manifest_path,
@@ -737,6 +809,185 @@ def _sympy_identity_record(
         "kind": "sympy_identity_check",
         "object_id": object_id,
         "object_type": "computed_identity",
+        "title": title,
+        "status": status,
+        "artifact_path": artifact_path.relative_to(project_root).as_posix(),
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "source": {"tool": "sympy"},
+    }
+
+
+def _sympy_counterexample_artifact(
+    *,
+    object_id: str,
+    lhs: str,
+    rhs: str,
+    samples: tuple[int, ...],
+    title: str | None,
+) -> dict[str, object]:
+    artifact: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "sympy_counterexample_search",
+        "object_id": object_id,
+        "title": title or object_id,
+        "tool": "sympy",
+        "status": "failed",
+        "counterexample_found": False,
+        "input": {
+            "lhs": lhs,
+            "rhs": rhs,
+            "samples": list(samples),
+        },
+        "output": {},
+        "issues": [],
+        "tool_backend_invoked": False,
+        "subprocess_invoked": False,
+    }
+    if importlib.util.find_spec("sympy") is None:
+        artifact["status"] = "unavailable"
+        artifact["issues"] = ["SymPy is not available in this Python environment."]
+        return artifact
+    try:
+        import sympy  # type: ignore[import-not-found]
+
+        left = _parse_sympy_expression(sympy, lhs)
+        right = _parse_sympy_expression(sympy, rhs)
+        difference = sympy.simplify(left - right)
+        symbols = sorted(difference.free_symbols, key=lambda symbol: symbol.name)
+        counterexample = _find_sympy_counterexample(
+            sympy,
+            difference,
+            symbols=symbols,
+            samples=samples,
+        )
+        artifact["tool_backend_invoked"] = True
+        artifact["output"] = {
+            "normalized_lhs": str(left),
+            "normalized_rhs": str(right),
+            "simplified_difference": str(difference),
+            "variables": [symbol.name for symbol in symbols],
+            "counterexample": counterexample or {},
+            "sample_count": _sample_count(symbols=symbols, samples=samples),
+        }
+        if counterexample:
+            artifact["status"] = "counterexample_found"
+            artifact["counterexample_found"] = True
+        else:
+            artifact["status"] = "no_counterexample_found"
+            artifact["issues"] = [
+                "No counterexample was found in the configured finite sample set."
+            ]
+    except Exception as exc:  # pragma: no cover - exact SymPy messages vary.
+        artifact["status"] = "failed"
+        artifact["issues"] = [f"SymPy counterexample search failed: {exc}"]
+    return artifact
+
+
+def _find_sympy_counterexample(
+    sympy_module: object,
+    difference: object,
+    *,
+    symbols: list[object],
+    samples: tuple[int, ...],
+) -> dict[str, object] | None:
+    if not symbols:
+        value = sympy_module.simplify(difference)
+        if value != 0:
+            return {"assignment": {}, "difference": str(value)}
+        return None
+
+    for values in itertools.product(samples, repeat=len(symbols)):
+        assignment = dict(zip(symbols, values))
+        evaluated_difference = sympy_module.simplify(difference.subs(assignment))
+        if evaluated_difference != 0:
+            return {
+                "assignment": {
+                    symbol.name: int(sample_value)
+                    for symbol, sample_value in zip(symbols, values)
+                },
+                "difference": str(evaluated_difference),
+            }
+    return None
+
+
+def _sample_count(*, symbols: list[object], samples: tuple[int, ...]) -> int:
+    if not symbols:
+        return 1
+    return len(samples) ** len(symbols)
+
+
+def _sympy_counterexample_report(
+    artifact: dict[str, object],
+    *,
+    artifact_path: str,
+) -> str:
+    input_data = artifact.get("input", {})
+    output_data = artifact.get("output", {})
+    issues = artifact.get("issues", [])
+    lines = [
+        "# Tool Verification: SymPy Counterexample Search",
+        "",
+        "## Summary",
+        "",
+        f"- Object: {artifact.get('object_id', '')}",
+        f"- Title: {artifact.get('title', '')}",
+        f"- Status: {artifact.get('status', '')}",
+        (
+            "- Counterexample found: "
+            f"{str(artifact.get('counterexample_found', False)).lower()}"
+        ),
+        f"- Artifact: {artifact_path}",
+        "- Tool: SymPy",
+        f"- Tool backend invoked: {str(artifact.get('tool_backend_invoked', False)).lower()}",
+        f"- Subprocess invoked: {str(artifact.get('subprocess_invoked', False)).lower()}",
+        "",
+        "## Input",
+        "",
+        f"- lhs: {input_data.get('lhs', '') if isinstance(input_data, dict) else ''}",
+        f"- rhs: {input_data.get('rhs', '') if isinstance(input_data, dict) else ''}",
+        f"- samples: {input_data.get('samples', []) if isinstance(input_data, dict) else []}",
+        "",
+        "## Output",
+        "",
+    ]
+    if isinstance(output_data, dict) and output_data:
+        for key, value in sorted(output_data.items()):
+            lines.append(f"- {key}: {value}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Issues", ""])
+    if isinstance(issues, list) and issues:
+        lines.extend(f"- {issue}" for issue in issues)
+    else:
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- This search evaluates a finite integer sample set only.",
+            "- A found counterexample is computation evidence that the identity fails there.",
+            "- Not finding a counterexample is not a proof of the identity.",
+            "- No external executable or shell subprocess was invoked.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _sympy_counterexample_record(
+    project_root: Path,
+    *,
+    object_id: str,
+    title: str,
+    artifact_path: Path,
+    report_path: Path,
+    status: str,
+) -> dict[str, object]:
+    return {
+        "kind": "sympy_counterexample_search",
+        "object_id": object_id,
+        "object_type": "computed_counterexample_search",
         "title": title,
         "status": status,
         "artifact_path": artifact_path.relative_to(project_root).as_posix(),

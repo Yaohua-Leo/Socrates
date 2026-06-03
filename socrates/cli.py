@@ -77,6 +77,8 @@ from .state import (
 )
 from .tool_verification import (
     check_tool_verification_records,
+    search_sympy_counterexample,
+    SympyCounterexampleResult,
     SympyIdentityResult,
     ToolInventoryResult,
     ToolVerificationCheckResult,
@@ -611,6 +613,21 @@ def build_parser() -> argparse.ArgumentParser:
     sympy_identity_parser.add_argument("--rhs", required=True, help="Right-hand expression.")
     sympy_identity_parser.add_argument("--title", default=None, help="Optional title for reports.")
     sympy_identity_parser.set_defaults(func=_handle_tool_sympy_identity)
+    sympy_counterexample_parser = tool_subparsers.add_parser(
+        "sympy-counterexample",
+        help="Use optional SymPy to search finite integer samples for a counterexample.",
+    )
+    sympy_counterexample_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    sympy_counterexample_parser.add_argument("--object-id", required=True, help="Stable object id for this search.")
+    sympy_counterexample_parser.add_argument("--lhs", required=True, help="Left-hand expression.")
+    sympy_counterexample_parser.add_argument("--rhs", required=True, help="Right-hand expression.")
+    sympy_counterexample_parser.add_argument(
+        "--samples",
+        default="-2,-1,0,1,2",
+        help="Comma-separated integer samples for each variable.",
+    )
+    sympy_counterexample_parser.add_argument("--title", default=None, help="Optional title for reports.")
+    sympy_counterexample_parser.set_defaults(func=_handle_tool_sympy_counterexample)
     tool_list_parser = tool_subparsers.add_parser(
         "list",
         help="List persisted tool-verification records.",
@@ -621,7 +638,9 @@ def build_parser() -> argparse.ArgumentParser:
         choices=(
             "all",
             "available",
+            "counterexample_found",
             "failed",
+            "no_counterexample_found",
             "partial",
             "unchecked_skeleton",
             "unavailable",
@@ -1315,6 +1334,45 @@ def _tool_sympy_identity_result_text(result: SympyIdentityResult) -> str:
     lines = [
         f"SymPy identity status: {result.status}",
         f"Passed: {str(result.passed).lower()}",
+        f"Tool verification artifact: {result.artifact_path}",
+        f"Tool verification report: {result.report_path}",
+        f"Tool verification manifest: {result.manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_tool_sympy_counterexample(args: argparse.Namespace) -> int:
+    try:
+        samples = _parse_integer_samples(args.samples)
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    result = search_sympy_counterexample(
+        args.project,
+        object_id=args.object_id,
+        lhs=args.lhs,
+        rhs=args.rhs,
+        samples=samples,
+        title=args.title,
+    )
+    print(_tool_sympy_counterexample_result_text(result), end="")
+    return 0 if result.status in {"counterexample_found", "no_counterexample_found"} else 1
+
+
+def _parse_integer_samples(value: str) -> tuple[int, ...]:
+    try:
+        samples = tuple(int(item.strip()) for item in value.split(",") if item.strip())
+    except ValueError as exc:
+        raise ValueError("samples must be comma-separated integers") from exc
+    if not samples:
+        raise ValueError("samples must include at least one integer")
+    return samples
+
+
+def _tool_sympy_counterexample_result_text(result: SympyCounterexampleResult) -> str:
+    lines = [
+        f"SymPy counterexample status: {result.status}",
+        f"Counterexample found: {str(result.counterexample_found).lower()}",
         f"Tool verification artifact: {result.artifact_path}",
         f"Tool verification report: {result.report_path}",
         f"Tool verification manifest: {result.manifest_path}",

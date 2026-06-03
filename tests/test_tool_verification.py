@@ -194,6 +194,107 @@ class ToolVerificationTests(unittest.TestCase):
                 check_result.stdout,
             )
 
+    def test_sympy_counterexample_cli_persists_found_or_unavailable_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "sympy-counterexample",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "false_square_identity",
+                    "--lhs",
+                    "x^2",
+                    "--rhs",
+                    "x + 1",
+                    "--samples",
+                    "0,1,2",
+                    "--title",
+                    "False Square Identity",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "false_square_identity_sympy_counterexample.json"
+            report_path = verification_dir / "false_square_identity_sympy_counterexample_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            expected_returncode = (
+                0
+                if artifact["status"] in {"counterexample_found", "no_counterexample_found"}
+                else 1
+            )
+            self.assertEqual(result.returncode, expected_returncode, result.stderr)
+            self.assertIn("SymPy counterexample status:", result.stdout)
+            self.assertEqual(artifact["schema_version"], 1)
+            self.assertEqual(artifact["kind"], "sympy_counterexample_search")
+            self.assertEqual(artifact["object_id"], "false_square_identity")
+            self.assertEqual(artifact["input"]["samples"], [0, 1, 2])
+            self.assertEqual(artifact["subprocess_invoked"], False)
+            self.assertIn(
+                artifact["status"],
+                {"counterexample_found", "no_counterexample_found", "failed", "unavailable"},
+            )
+            if artifact["status"] == "counterexample_found":
+                self.assertEqual(artifact["counterexample_found"], True)
+                self.assertIn("assignment", artifact["output"]["counterexample"])
+                self.assertIn("difference", artifact["output"]["counterexample"])
+            else:
+                self.assertEqual(artifact["counterexample_found"], False)
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn(
+                "# Tool Verification: SymPy Counterexample Search",
+                report_text,
+            )
+            self.assertIn(
+                "- Not finding a counterexample is not a proof of the identity.",
+                report_text,
+            )
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = manifest["records"][0]
+            self.assertEqual(record["kind"], "sympy_counterexample_search")
+            self.assertEqual(record["object_id"], "false_square_identity")
+            self.assertEqual(
+                record["artifact_path"],
+                "08_evals/tool_verification/false_square_identity_sympy_counterexample.json",
+            )
+            self.assertEqual(
+                record["report_path"],
+                "08_evals/tool_verification/false_square_identity_sympy_counterexample_report.md",
+            )
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 0, check_result.stderr)
+            self.assertIn(
+                "Checked 1 tool-verification record: 1 passed, 0 failed",
+                check_result.stdout,
+            )
+
     def test_lean_skeleton_cli_writes_unchecked_tool_verification_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
