@@ -96,6 +96,8 @@ NOTE_REQUIRED_FRONTMATTER = (
     "tags:",
     "related:",
 )
+NOTE_ALLOWED_STATUSES = {"draft", "reviewed"}
+NOTE_ALLOWED_REVIEW_STATUSES = {"needs_review", "approved"}
 NOTE_REQUIRED_SECTIONS = (
     "## Key Examples",
     "## Non-Examples",
@@ -1319,6 +1321,10 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
     if "# " not in text:
         issues.append("missing title heading")
+    if _invalid_note_status(text):
+        issues.append("invalid status")
+    if _invalid_note_review_status(text):
+        issues.append("invalid review_status")
     if _missing_note_concept(text):
         issues.append("missing concept")
     if _missing_note_source_id(text):
@@ -1363,6 +1369,23 @@ def _missing_note_concept(text: str) -> bool:
 def _invalid_reviewed_by_user(text: str) -> bool:
     value = _frontmatter_value(text, "reviewed_by_user")
     return value is not None and value.casefold() not in {"true", "false"}
+
+
+def _invalid_note_status(text: str) -> bool:
+    return _invalid_note_frontmatter_choice(text, "status", NOTE_ALLOWED_STATUSES)
+
+
+def _invalid_note_review_status(text: str) -> bool:
+    return _invalid_note_frontmatter_choice(
+        text, "review_status", NOTE_ALLOWED_REVIEW_STATUSES
+    )
+
+
+def _invalid_note_frontmatter_choice(
+    text: str, key: str, allowed_values: set[str]
+) -> bool:
+    value = _frontmatter_value(text, key)
+    return value is not None and value.casefold() not in allowed_values
 
 
 def _check_curated_reference(path: Path) -> dict[str, object]:
