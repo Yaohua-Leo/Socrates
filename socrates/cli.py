@@ -534,7 +534,8 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
     for match in matches:
         source = match.get("source", {})
         location = _source_location(source)
-        print(f"{match['type']}: {match['title']} ({location})")
+        source_label = _source_label(source)
+        print(f"{match['type']}: {match['title']}{source_label} ({location})")
     return 0
 
 
@@ -848,6 +849,13 @@ def _source_location(source: object) -> str:
     if line:
         return f"{path}:{line}"
     return path
+
+
+def _source_label(source: object) -> str:
+    if not isinstance(source, dict):
+        return ""
+    source_id = str(source.get("source_id", "")).strip()
+    return f" [{source_id}]" if source_id else ""
 
 
 def _count_reviewed_notes(project_root: Path) -> int:

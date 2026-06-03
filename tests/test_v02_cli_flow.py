@@ -116,6 +116,14 @@ class V02CliFlowTests(unittest.TestCase):
                 "normal_subgroup_notes",
             )
             self._run_cli("kb", "build", "--project", str(project))
+            search = self._run_cli(
+                "kb",
+                "search",
+                "--project",
+                str(project),
+                "--query",
+                "conjugation",
+            ).stdout
             self._run_cli("plan", "--project", str(project))
             self._run_cli(
                 "teach",
@@ -144,6 +152,7 @@ class V02CliFlowTests(unittest.TestCase):
 
             self.assertIn("Definition: Normal Subgroup", session_plan)
             self.assertIn("Source: 01_references/curated/normal_subgroup_notes.curated.md", session_plan)
+            self.assertIn("[normal_subgroup_notes]", search)
             self.assertTrue((project / "06_kb" / "theorem_index.json").exists())
             self.assertTrue((project / "06_kb" / "exercise_index.json").exists())
             self.assertTrue(exported.exists())
