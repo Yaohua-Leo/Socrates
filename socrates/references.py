@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import shutil
 
 from .context import append_project_log, load_project, write_text
@@ -186,6 +187,7 @@ def _curated_markdown(record: dict[str, str], source_text: str) -> str:
 
 
 def _converted_markdown(record: dict[str, str], source_text: str) -> str:
+    converted_text = _latex_to_markdown(source_text) if record.get("type") == "latex" else source_text
     return (
         f"# Converted Reference: {record.get('title', record['id'])}\n\n"
         "<!-- socrates-converted-reference: generated from imported raw source -->\n\n"
@@ -193,8 +195,58 @@ def _converted_markdown(record: dict[str, str], source_text: str) -> str:
         f"- source_id: {record['id']}\n"
         f"- raw_path: {record.get('local_path', '')}\n\n"
         "## Converted Content\n\n"
-        f"{source_text.rstrip()}\n"
+        f"{converted_text.rstrip()}\n"
     )
+
+
+LATEX_OBJECT_TYPES = {
+    "definition",
+    "theorem",
+    "proposition",
+    "lemma",
+    "corollary",
+    "example",
+    "counterexample",
+    "proof",
+    "exercise",
+    "remark",
+    "notation",
+}
+LATEX_SECTION_RE = re.compile(r"\\(?P<level>section|subsection|subsubsection)\{(?P<title>[^}]*)\}")
+LATEX_BEGIN_RE = re.compile(
+    r"\\begin\{(?P<kind>[a-zA-Z*]+)\}(?:\[(?P<title>[^\]]+)\])?"
+)
+LATEX_END_RE = re.compile(r"\\end\{(?P<kind>[a-zA-Z*]+)\}")
+
+
+def _latex_to_markdown(source_text: str) -> str:
+    lines: list[str] = []
+    for raw_line in source_text.splitlines():
+        stripped = raw_line.strip()
+        section = LATEX_SECTION_RE.fullmatch(stripped)
+        if section:
+            lines.append(f"## {_plain_latex_title(section.group('title'))}")
+            continue
+
+        begin = LATEX_BEGIN_RE.fullmatch(stripped)
+        if begin:
+            kind = begin.group("kind").rstrip("*").casefold()
+            if kind in LATEX_OBJECT_TYPES:
+                title = begin.group("title") or kind.replace("_", " ").title()
+                lines.append(f"### {kind.title()}: {_plain_latex_title(title)}")
+                continue
+
+        end = LATEX_END_RE.fullmatch(stripped)
+        if end and end.group("kind").rstrip("*").casefold() in LATEX_OBJECT_TYPES:
+            continue
+        if stripped.startswith(r"\label{"):
+            continue
+        lines.append(raw_line)
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _plain_latex_title(title: str) -> str:
+    return title.replace(r"\_", "_").strip()
 
 
 def _update_registry_source(
