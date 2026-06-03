@@ -53,6 +53,44 @@ class IngestionQualityTests(unittest.TestCase):
             self.assertIn("- Extractable objects: 1", report_text)
             self.assertIn("normal_subgroups.curated.md: pass", report_text)
 
+    def test_kb_check_accepts_numbered_math_object_headings(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "numbered.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Checked 1 curated reference: 1 passed, 0 failed", result.stdout)
+            report_text = (project / "08_evals" / "ingestion_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Extractable objects: 1", report_text)
+            self.assertIn("numbered.curated.md: pass", report_text)
+
 
 if __name__ == "__main__":
     unittest.main()

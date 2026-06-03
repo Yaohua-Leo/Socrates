@@ -121,7 +121,7 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
 
         if line.startswith("### "):
             flush()
-            parsed = _parse_object_heading(line.removeprefix("### ").strip())
+            parsed = parse_object_heading(line.removeprefix("### ").strip())
             if parsed is None:
                 current = None
                 body = []
@@ -156,7 +156,7 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
     return objects
 
 
-def _parse_object_heading(heading: str) -> tuple[str, str, str | None] | None:
+def parse_object_heading(heading: str) -> tuple[str, str, str | None] | None:
     label, separator, title = heading.partition(":")
     if not separator:
         return None

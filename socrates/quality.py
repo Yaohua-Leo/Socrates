@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from .context import load_project, write_text
+from .kb import parse_object_heading
 
 
 @dataclass(frozen=True)
@@ -98,20 +99,6 @@ SESSION_REQUIRED_FILES = (
     "summary.md",
     "next_actions.md",
 )
-INGESTION_OBJECT_TYPES = {
-    "definition",
-    "theorem",
-    "proposition",
-    "lemma",
-    "corollary",
-    "example",
-    "counterexample",
-    "proof",
-    "exercise",
-    "remark",
-    "notation",
-}
-
 
 def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualityResult:
     """Check generated exercise drafts and write a quality report."""
@@ -340,8 +327,7 @@ def _extractable_object_count(text: str) -> int:
         stripped = line.strip()
         if not stripped.startswith("### "):
             continue
-        label, separator, _ = stripped.removeprefix("### ").partition(":")
-        if separator and label.strip().casefold() in INGESTION_OBJECT_TYPES:
+        if parse_object_heading(stripped.removeprefix("### ").strip()) is not None:
             count += 1
     return count
 
