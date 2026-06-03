@@ -109,6 +109,17 @@ class ReportTests(unittest.TestCase):
             self.assertIn("## Next Review Items", report_text)
             self.assertIn("- quotient_group: high, next_session", report_text)
 
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Current phase: report_ready", status.stdout)
+            self.assertIn("Learning reports: 1", status.stdout)
+
     def test_monthly_report_cli_highlights_weaknesses_and_next_steps(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

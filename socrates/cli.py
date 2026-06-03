@@ -471,13 +471,29 @@ def _handle_status(args: argparse.Namespace) -> int:
     reviewed_count = _count_reviewed_notes(context.root)
     obsidian_export_count = _count_obsidian_exports(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
+    report_count = _count_learning_reports(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
     )
     approved_exercise_count = _count_approved_exercises(context.root)
     attempted_exercise_count = len(list((context.root / "05_exercises" / "attempted").glob("*.md")))
     graded_exercise_count = len(list((context.root / "05_exercises" / "graded").glob("*.md")))
-    phase = "tutoring_complete" if latest_session != "none" else "initialization"
+    phase = _current_project_phase(
+        imported_sources=source_count,
+        converted_references=converted_count,
+        curated_references=curated_count,
+        kb_objects=kb_object_count,
+        latest_session=latest_session,
+        pending_draft_notes=draft_count,
+        reviewed_notes=reviewed_count,
+        approved_exercises=approved_exercise_count,
+        attempted_exercises=attempted_exercise_count,
+        graded_exercises=graded_exercise_count,
+        obsidian_exports=obsidian_export_count,
+        scheduled_reviews=scheduled_review_count,
+        learning_reports=report_count,
+        learning_plans=_count_learning_plans(context.learning_plan_dir),
+    )
 
     print(f"Project: {context.root}")
     print(f"Current phase: {phase}")
@@ -495,6 +511,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
+    print(f"Learning reports: {report_count}")
     print(f"Active misconceptions: {active_misconception_count}")
     print(f"Resolved misconceptions: {resolved_misconception_count}")
     return 0
@@ -897,6 +914,67 @@ def _write_teaching_eval_reports(
 def _latest_session(sessions_dir: Path) -> str:
     sessions = sorted(path.name for path in sessions_dir.iterdir() if path.is_dir())
     return sessions[-1] if sessions else "none"
+
+
+def _current_project_phase(
+    *,
+    imported_sources: int,
+    converted_references: int,
+    curated_references: int,
+    kb_objects: int,
+    latest_session: str,
+    pending_draft_notes: int,
+    reviewed_notes: int,
+    approved_exercises: int,
+    attempted_exercises: int,
+    graded_exercises: int,
+    obsidian_exports: int,
+    scheduled_reviews: int,
+    learning_reports: int,
+    learning_plans: int,
+) -> str:
+    if learning_reports > 0:
+        return "report_ready"
+    if scheduled_reviews > 0:
+        return "review_scheduled"
+    if graded_exercises > 0:
+        return "exercise_graded"
+    if attempted_exercises > 0:
+        return "exercise_attempted"
+    if approved_exercises > 0:
+        return "exercise_ready"
+    if obsidian_exports > 0:
+        return "obsidian_exported"
+    if reviewed_notes > 0:
+        return "notes_reviewed"
+    if latest_session != "none":
+        return "tutoring_complete"
+    if pending_draft_notes > 0:
+        return "notes_drafted"
+    if kb_objects > 0:
+        return "reference_kb_ready"
+    if curated_references > 0:
+        return "references_curated"
+    if converted_references > 0:
+        return "references_converted"
+    if learning_plans > 0:
+        return "planning_complete"
+    if imported_sources > 0:
+        return "references_imported"
+    return "initialization"
+
+
+def _count_learning_plans(learning_plan_dir: Path) -> int:
+    if not learning_plan_dir.exists():
+        return 0
+    return len(list(learning_plan_dir.glob("*.md")))
+
+
+def _count_learning_reports(project_root: Path) -> int:
+    reports_dir = project_root / "07_exports" / "reports"
+    if not reports_dir.exists():
+        return 0
+    return len(list(reports_dir.glob("*.md")))
 
 
 def _count_sources(registry_path: Path) -> int:
