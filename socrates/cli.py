@@ -28,6 +28,7 @@ from .quality import (
     run_project_benchmark,
 )
 from .references import curate_reference, import_reference
+from .reports import generate_weekly_report
 from .state import (
     EvalReportUpdate,
     LearningStatePatch,
@@ -245,6 +246,18 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_run_parser.add_argument("--project", required=True, help="Socrates project directory.")
     benchmark_run_parser.add_argument("--session-id", required=True, help="Session identifier to check.")
     benchmark_run_parser.set_defaults(func=_handle_benchmark_run)
+
+    report_parser = subparsers.add_parser(
+        "report",
+        help="Generate project learning reports.",
+    )
+    report_subparsers = report_parser.add_subparsers(dest="report_command", required=True)
+    weekly_report_parser = report_subparsers.add_parser(
+        "weekly",
+        help="Generate a weekly learning report.",
+    )
+    weekly_report_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    weekly_report_parser.set_defaults(func=_handle_report_weekly)
 
     return parser
 
@@ -485,6 +498,12 @@ def _handle_benchmark_run(args: argparse.Namespace) -> int:
     result = run_project_benchmark(args.project, session_id=args.session_id)
     print(f"Benchmark passed {result.passed_gates}/{result.total_gates} gates")
     print(f"Benchmark report: {result.report_path}")
+    return 0
+
+
+def _handle_report_weekly(args: argparse.Namespace) -> int:
+    report = generate_weekly_report(args.project)
+    print(f"Wrote weekly report: {report}")
     return 0
 
 

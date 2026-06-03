@@ -39,6 +39,7 @@ class ProjectInitTests(unittest.TestCase):
                 "05_exercises/mistake_bank.md",
                 "06_kb/concept_graph.json",
                 "07_exports/obsidian",
+                "07_exports/reports",
                 "08_evals/note_quality_eval.md",
             ]
             for relative_path in expected_paths:
