@@ -52,6 +52,7 @@ PROJECT_DIRECTORIES = (
     "07_exports/latex_notes",
     "07_exports/pdf",
     "08_evals",
+    "08_evals/tool_verification",
 )
 
 

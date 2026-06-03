@@ -41,6 +41,7 @@ class ProjectInitTests(unittest.TestCase):
                 "07_exports/obsidian",
                 "07_exports/reports",
                 "08_evals/note_quality_eval.md",
+                "08_evals/tool_verification",
             ]
             for relative_path in expected_paths:
                 self.assertTrue((created / relative_path).exists(), relative_path)

@@ -75,6 +75,7 @@ from .state import (
     update_eval_report,
     update_learning_state,
 )
+from .tool_verification import generate_lean_statement_skeleton
 from .tutoring import (
     TutoringSessionSummary,
     list_tutoring_sessions,
@@ -567,6 +568,24 @@ def build_parser() -> argparse.ArgumentParser:
     project_summary_parser.add_argument("--project", required=True, help="Socrates project directory.")
     project_summary_parser.set_defaults(func=_handle_report_project_summary)
 
+    tool_parser = subparsers.add_parser(
+        "tool",
+        help="Generate tool-verification artifacts.",
+    )
+    tool_subparsers = tool_parser.add_subparsers(dest="tool_command", required=True)
+    lean_skeleton_parser = tool_subparsers.add_parser(
+        "lean-skeleton",
+        help="Generate an unchecked Lean statement skeleton from a reference KB object.",
+    )
+    lean_skeleton_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    lean_skeleton_parser.add_argument("--object-id", required=True, help="Reference KB object id.")
+    lean_skeleton_parser.add_argument(
+        "--namespace",
+        default="Socrates",
+        help="Lean namespace to use in the generated skeleton.",
+    )
+    lean_skeleton_parser.set_defaults(func=_handle_tool_lean_skeleton)
+
     return parser
 
 
@@ -709,6 +728,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     obsidian_export_count = _count_obsidian_exports(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     report_count = _count_learning_reports(context.root)
+    tool_verification_count = _count_tool_verification_records(context.root)
     benchmark_status = _read_benchmark_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
@@ -753,6 +773,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     print(f"Learning reports: {report_count}")
+    print(f"Tool verification records: {tool_verification_count}")
     if benchmark_status is None:
         print("Benchmark score: none")
         print("Benchmark gates: none")
@@ -1194,6 +1215,19 @@ def _handle_report_project_summary(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_tool_lean_skeleton(args: argparse.Namespace) -> int:
+    result = generate_lean_statement_skeleton(
+        args.project,
+        object_id=args.object_id,
+        namespace=args.namespace,
+    )
+    print(f"Wrote Lean skeleton: {result.skeleton_path}")
+    print(f"Tool verification report: {result.report_path}")
+    print(f"Tool verification manifest: {result.manifest_path}")
+    print(f"Status: {result.status}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
@@ -1420,6 +1454,18 @@ def _count_learning_reports(project_root: Path) -> int:
     if not reports_dir.exists():
         return 0
     return len(list(reports_dir.glob("*.md")))
+
+
+def _count_tool_verification_records(project_root: Path) -> int:
+    manifest_path = project_root / "08_evals" / "tool_verification" / "manifest.json"
+    if not manifest_path.exists():
+        return 0
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return 0
+    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    return len(records) if isinstance(records, list) else 0
 
 
 def _read_benchmark_status(project_root: Path) -> dict[str, object] | None:
