@@ -533,8 +533,8 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
         return 0
     for match in matches:
         source = match.get("source", {})
-        path = source.get("path", "unknown") if isinstance(source, dict) else "unknown"
-        print(f"{match['type']}: {match['title']} ({path})")
+        location = _source_location(source)
+        print(f"{match['type']}: {match['title']} ({location})")
     return 0
 
 
@@ -838,6 +838,16 @@ def _count_kb_objects(project_root: Path) -> int:
     index = json.loads(index_path.read_text(encoding="utf-8"))
     objects = index.get("objects", [])
     return len(objects) if isinstance(objects, list) else 0
+
+
+def _source_location(source: object) -> str:
+    if not isinstance(source, dict):
+        return "unknown"
+    path = str(source.get("path", "unknown"))
+    line = source.get("line")
+    if line:
+        return f"{path}:{line}"
+    return path
 
 
 def _count_reviewed_notes(project_root: Path) -> int:

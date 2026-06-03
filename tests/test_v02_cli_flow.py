@@ -58,6 +58,7 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("Indexed 1 reference object", build_result.stdout)
             self.assertIn("Normal Subgroup", search_result.stdout)
             self.assertIn("definition", search_result.stdout)
+            self.assertIn("normal_subgroups.curated.md:1", search_result.stdout)
             self.assertIn("Reviewed note normal_subgroup", review_result.stdout)
             self.assertIn("Exported 1 reviewed note", export_result.stdout)
             self.assertTrue((project / "06_kb" / "chunks" / "reference_index.json").exists())
