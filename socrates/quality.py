@@ -1330,11 +1330,20 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
         _section_text(text, "## Review Questions")
     ) == 0:
         issues.append("missing review questions")
-    if not _frontmatter_list(text, "related") and _bullet_count(
-        _section_text(text, "## Related Concepts")
-    ) == 0:
+    if not _has_related_concept_link(text):
         issues.append("missing related concept links")
     return issues
+
+
+def _has_related_concept_link(text: str) -> bool:
+    frontmatter_links = _frontmatter_list(text, "related")
+    if any("[[" in item and "]]" in item for item in frontmatter_links):
+        return True
+    return any(
+        "[[" in line and "]]" in line
+        for line in _section_text(text, "## Related Concepts").splitlines()
+        if line.strip().startswith("- ")
+    )
 
 
 def _check_curated_reference(path: Path) -> dict[str, object]:
