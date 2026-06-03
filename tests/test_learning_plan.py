@@ -1,13 +1,20 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
+from socrates.context import load_project
 from socrates.contracts import SourceRecord
 from socrates.kb import build_reference_kb
 from socrates.planning import create_learning_plan
 from socrates.project import ProjectSpec, create_project
+from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class LearningPlanTests(unittest.TestCase):
@@ -106,6 +113,57 @@ class LearningPlanTests(unittest.TestCase):
                 session_plan,
             )
             self.assertIn("Depends: subgroup, conjugation", session_plan)
+
+    def test_review_adjust_plan_command_updates_short_term_plan_from_schedule(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            create_learning_plan(project)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.41}),
+            )
+            build_review_schedule(context)
+
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "adjust-plan",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            second = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "adjust-plan",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(first.returncode, 0, first.stderr)
+            self.assertEqual(second.returncode, 0, second.stderr)
+            self.assertIn("Adjusted short-term plan", first.stdout)
+            short_term_plan = (
+                project / "02_learning_plan" / "short_term_plan.md"
+            ).read_text(encoding="utf-8")
+            self.assertEqual(short_term_plan.count("## Review Adjustments"), 1)
+            self.assertIn("- normal_subgroup (high, next_session): mastery 0.41", short_term_plan)
 
 
 if __name__ == "__main__":

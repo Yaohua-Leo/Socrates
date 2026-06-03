@@ -40,6 +40,25 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
     return list(plans)
 
 
+def adjust_short_term_plan_from_review_schedule(project_path: Path | str) -> Path:
+    """Update the short-term plan with review tasks from learning state."""
+
+    context = load_project(project_path)
+    short_term_path = context.learning_plan_dir / "short_term_plan.md"
+    if short_term_path.exists():
+        current = short_term_path.read_text(encoding="utf-8")
+    else:
+        current = "# Short Term Plan\n"
+
+    state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    if not isinstance(schedule, list):
+        schedule = []
+
+    write_text(short_term_path, _replace_review_adjustments(current, schedule))
+    return short_term_path
+
+
 def _read_project_metadata(project_file: Path) -> dict[str, str]:
     topic = ""
     goal = ""
@@ -170,6 +189,35 @@ Use the first study cycle to turn {topic} into a concrete reading and practice p
 - Select the first definitions and examples to study.
 - End the cycle with a short diagnostic and exercise attempt.
 """
+
+
+def _replace_review_adjustments(current: str, schedule: list[object]) -> str:
+    marker = "## Review Adjustments"
+    before, separator, after = current.partition(marker)
+    if separator:
+        next_section_index = after.find("\n## ")
+        if next_section_index >= 0:
+            suffix = after[next_section_index + 1 :]
+        else:
+            suffix = ""
+        current = before.rstrip() + "\n\n" + suffix.lstrip()
+    section = _review_adjustments_section(schedule)
+    return current.rstrip() + "\n\n" + section
+
+
+def _review_adjustments_section(schedule: list[object]) -> str:
+    lines = ["## Review Adjustments", ""]
+    items = [item for item in schedule if isinstance(item, dict)]
+    if not items:
+        lines.append("- No scheduled review adjustments.")
+        return "\n".join(lines) + "\n"
+    for item in items:
+        concept = item.get("concept", "review")
+        priority = item.get("priority", "medium")
+        due = item.get("due", "within_3_days")
+        reason = item.get("reason", "review scheduled")
+        lines.append(f"- {concept} ({priority}, {due}): {reason}")
+    return "\n".join(lines) + "\n"
 
 
 def _session_plan(

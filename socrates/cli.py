@@ -16,7 +16,7 @@ from .artifacts import (
 from .context import load_project
 from .kb import build_reference_kb, search_reference_kb
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
-from .planning import create_learning_plan
+from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
 from .references import curate_reference, import_reference
@@ -157,6 +157,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_exercises_parser.add_argument("--project", required=True, help="Socrates project directory.")
     review_exercises_parser.set_defaults(func=_handle_review_exercises)
+    review_adjust_plan_parser = review_subparsers.add_parser(
+        "adjust-plan",
+        help="Update the short-term plan from the review schedule.",
+    )
+    review_adjust_plan_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_adjust_plan_parser.set_defaults(func=_handle_review_adjust_plan)
 
     return parser
 
@@ -322,6 +328,12 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
     exercises = generate_targeted_review_exercise_drafts(args.project)
     noun = "exercise" if len(exercises) == 1 else "exercises"
     print(f"Generated {len(exercises)} targeted review {noun}")
+    return 0
+
+
+def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
+    short_term_plan = adjust_short_term_plan_from_review_schedule(args.project)
+    print(f"Adjusted short-term plan: {short_term_plan}")
     return 0
 
 
