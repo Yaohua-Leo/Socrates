@@ -250,6 +250,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
         "Learning state": bool(state.get("concept_mastery")),
         "Review schedule": _has_review_schedule(context.root, state),
         "Learning reports": _has_learning_reports(context.root),
+        "Benchmark report": _has_benchmark_report(context.root),
     }
     report_path = context.evals_dir / "lifecycle_eval.md"
     write_text(report_path, _lifecycle_report(checks))
@@ -639,6 +640,13 @@ def _has_learning_reports(project_root: Path) -> bool:
         "project_summary.md",
     )
     return all((reports_dir / name).exists() for name in required)
+
+
+def _has_benchmark_report(project_root: Path) -> bool:
+    report_path = project_root / "08_evals" / "benchmark_report.md"
+    if not report_path.exists():
+        return False
+    return "Benchmark score:" in report_path.read_text(encoding="utf-8")
 
 
 def _lifecycle_report(checks: dict[str, bool]) -> str:

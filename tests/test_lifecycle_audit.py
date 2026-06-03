@@ -17,6 +17,7 @@ from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.planning import create_learning_plan
 from socrates.project import ProjectSpec, create_project
+from socrates.quality import run_project_benchmark
 from socrates.reports import (
     generate_monthly_report,
     generate_project_summary,
@@ -51,12 +52,13 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 1/12 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 1/13 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
             self.assertIn("- Learning plans: fail", report_text)
             self.assertIn("- Obsidian export: fail", report_text)
+            self.assertIn("- Benchmark report: fail", report_text)
 
     def test_lifecycle_audit_does_not_count_obsidian_utility_index_as_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -151,6 +153,7 @@ class LifecycleAuditTests(unittest.TestCase):
             generate_weekly_report(project)
             generate_monthly_report(project)
             generate_project_summary(project)
+            run_project_benchmark(project, session_id="session_0001")
 
             result = subprocess.run(
                 [
@@ -169,7 +172,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 12/12 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 13/13 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -177,6 +180,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Tutoring session artifacts: pass", report_text)
             self.assertIn("- Obsidian export: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
+            self.assertIn("- Benchmark report: pass", report_text)
 
     def test_lifecycle_audit_accepts_completed_empty_review_schedule(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
