@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
+import re
 
 from .context import load_project, write_json, write_text
 from .kb import find_counterexamples, parse_object_heading
@@ -106,6 +107,7 @@ SESSION_REQUIRED_FILES = (
     "summary.md",
     "next_actions.md",
 )
+RUBRIC_POINT_PATTERN = re.compile(r":\s*(\d+)\s+pts\b")
 
 def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualityResult:
     """Check generated exercise drafts and write a quality report."""
@@ -485,6 +487,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
         issues.append("missing structured solution steps")
     if not _has_rubric_points(text):
         issues.append("missing rubric point values")
+    elif not _rubric_points_sum_to_total(text):
+        issues.append("rubric point values do not sum to total")
     return issues
 
 
@@ -1031,6 +1035,28 @@ def _has_rubric_points(text: str) -> bool:
     return "Total: 10 pts" in rubric_section and sum(
         1 for line in rubric_section.splitlines() if " pts" in line
     ) >= 4
+
+
+def _rubric_points_sum_to_total(text: str) -> bool:
+    total = _rubric_total_points(text)
+    if total is None:
+        return False
+    component_points = _rubric_component_points(text)
+    if not component_points:
+        return False
+    return sum(component_points) == total
+
+
+def _rubric_component_points(text: str) -> list[int]:
+    rubric_section = _section_text(text, "## Rubric")
+    points: list[int] = []
+    for line in rubric_section.splitlines():
+        if "Total:" in line:
+            continue
+        match = RUBRIC_POINT_PATTERN.search(line)
+        if match:
+            points.append(int(match.group(1)))
+    return points
 
 
 def _numbered_line_count(section: str, marker: str) -> int:
