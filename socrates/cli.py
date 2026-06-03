@@ -76,6 +76,8 @@ from .state import (
     update_learning_state,
 )
 from .tool_verification import (
+    check_tool_verification_records,
+    ToolVerificationCheckResult,
     ToolVerificationSummary,
     generate_lean_statement_skeleton,
     list_tool_verification_records,
@@ -601,6 +603,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter records by verification status; defaults to all.",
     )
     tool_list_parser.set_defaults(func=_handle_tool_list)
+    tool_check_parser = tool_subparsers.add_parser(
+        "check",
+        help="Run checklist checks on persisted tool-verification records.",
+    )
+    tool_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    tool_check_parser.set_defaults(func=_handle_tool_check)
 
     return parser
 
@@ -1248,6 +1256,25 @@ def _handle_tool_list(args: argparse.Namespace) -> int:
     records = list_tool_verification_records(args.project, status=args.status)
     print(_tool_verification_records_text(records), end="")
     return 0
+
+
+def _handle_tool_check(args: argparse.Namespace) -> int:
+    result = check_tool_verification_records(args.project)
+    print(_tool_verification_check_text(result), end="")
+    return 0 if result.status == "pass" else 1
+
+
+def _tool_verification_check_text(result: ToolVerificationCheckResult) -> str:
+    noun = "record" if result.checked == 1 else "records"
+    lines = [
+        (
+            f"Checked {result.checked} tool-verification {noun}: "
+            f"{result.passed} passed, {result.failed} failed"
+        ),
+        f"Tool verification eval report: {result.report_path}",
+        f"Tool verification quality manifest: {result.manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
 
 
 def _tool_verification_records_text(records: list[ToolVerificationSummary]) -> str:

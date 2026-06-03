@@ -33,6 +33,18 @@ class ToolVerificationSummary:
     report_path: str
 
 
+@dataclass(frozen=True)
+class ToolVerificationCheckResult:
+    """Aggregate checklist result for persisted tool-verification records."""
+
+    status: str
+    checked: int
+    passed: int
+    failed: int
+    report_path: Path
+    manifest_path: Path
+
+
 def generate_lean_statement_skeleton(
     project_path: Path | str,
     *,
@@ -128,6 +140,54 @@ def list_tool_verification_records(
         if status == "all" or summary.status == status:
             summaries.append(summary)
     return sorted(summaries, key=lambda item: (item.kind, item.object_id))
+
+
+def check_tool_verification_records(project_path: Path | str) -> ToolVerificationCheckResult:
+    """Write an aggregate checklist report for tool-verification artifacts.
+
+    This validates provenance files already written under ``08_evals``. It does
+    not invoke Lean, SymPy, GAP, SageMath, or any other external verifier.
+    """
+
+    context = load_project(project_path)
+    source_manifest_path = context.evals_dir / "tool_verification" / "manifest.json"
+    report_path = context.evals_dir / "tool_verification_eval.md"
+    manifest_path = context.evals_dir / "tool_verification_quality_manifest.json"
+    records, manifest_issues = _checked_tool_records(context.root, source_manifest_path)
+    passed = sum(1 for record in records if record["quality_status"] == "pass")
+    failed = sum(1 for record in records if record["quality_status"] == "fail")
+    checked = len(records)
+    if manifest_issues:
+        failed += len(manifest_issues)
+    status = "pass" if failed == 0 and checked > 0 else "fail"
+    manifest = _tool_quality_manifest(
+        context.root,
+        status=status,
+        checked=checked,
+        passed=passed,
+        failed=failed,
+        records=records,
+        issues=manifest_issues,
+        source_manifest_path=source_manifest_path,
+    )
+    write_text(
+        report_path,
+        _tool_quality_report(
+            context.root,
+            manifest,
+            source_manifest_path=source_manifest_path,
+        ),
+    )
+    write_json(manifest_path, manifest)
+    append_project_log(context, "Checked tool-verification records.")
+    return ToolVerificationCheckResult(
+        status=status,
+        checked=checked,
+        passed=passed,
+        failed=failed,
+        report_path=report_path,
+        manifest_path=manifest_path,
+    )
 
 
 def _find_reference_object(project_root: Path, object_id: str) -> dict[str, object]:
@@ -256,6 +316,177 @@ def _summary_from_record(record: dict[str, object]) -> ToolVerificationSummary:
         ),
         report_path=str(record.get("report_path", "")),
     )
+
+
+def _checked_tool_records(
+    project_root: Path,
+    manifest_path: Path,
+) -> tuple[list[dict[str, object]], list[str]]:
+    if not manifest_path.exists():
+        return ([], ["missing tool-verification manifest"])
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return ([], ["invalid tool-verification manifest JSON"])
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return ([], ["invalid tool-verification manifest schema"])
+    records = manifest.get("records")
+    if not isinstance(records, list):
+        return ([], ["tool-verification manifest records must be a list"])
+    if not records:
+        return ([], ["no tool-verification records"])
+    return (
+        [
+            _checked_tool_record(project_root, record, index=index)
+            for index, record in enumerate(records, start=1)
+        ],
+        [],
+    )
+
+
+def _checked_tool_record(
+    project_root: Path,
+    record: object,
+    *,
+    index: int,
+) -> dict[str, object]:
+    if not isinstance(record, dict):
+        return {
+            "object_id": f"record_{index}",
+            "kind": "",
+            "record_status": "",
+            "quality_status": "fail",
+            "artifact_path": "",
+            "report_path": "",
+            "issues": ["tool-verification record must be an object"],
+        }
+
+    issues: list[str] = []
+    for key in ("kind", "object_id", "status", "report_path"):
+        if not isinstance(record.get(key), str) or not str(record.get(key)).strip():
+            issues.append(f"missing {key}")
+    artifact_path = _record_artifact_path(record)
+    artifact_issue = _artifact_issue(project_root, artifact_path, label="artifact")
+    if artifact_issue:
+        issues.append(artifact_issue)
+    report_issue = _artifact_issue(project_root, record.get("report_path"), label="report")
+    if report_issue:
+        issues.append(report_issue)
+    return {
+        "object_id": str(record.get("object_id") or f"record_{index}"),
+        "kind": str(record.get("kind") or ""),
+        "record_status": str(record.get("status") or ""),
+        "quality_status": "fail" if issues else "pass",
+        "artifact_path": artifact_path if isinstance(artifact_path, str) else "",
+        "report_path": str(record.get("report_path") or ""),
+        "issues": issues,
+    }
+
+
+def _record_artifact_path(record: dict[object, object]) -> object:
+    return (
+        record.get("skeleton_path")
+        or record.get("artifact_path")
+        or record.get("output_path")
+    )
+
+
+def _artifact_issue(project_root: Path, value: object, *, label: str) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return f"missing {label}"
+    path = Path(value)
+    if path.is_absolute() or ".." in path.parts:
+        return f"unsafe {label}: {value}"
+    if not (project_root / path).exists():
+        return f"missing {label}: {value}"
+    return None
+
+
+def _tool_quality_manifest(
+    project_root: Path,
+    *,
+    status: str,
+    checked: int,
+    passed: int,
+    failed: int,
+    records: list[dict[str, object]],
+    issues: list[str],
+    source_manifest_path: Path,
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "status": status,
+        "checked": checked,
+        "passed": passed,
+        "failed": failed,
+        "source_manifest": source_manifest_path.relative_to(project_root).as_posix(),
+        "records": records,
+        "issues": issues,
+        "verification_boundary": {
+            "external_verifier_invoked": False,
+            "unchecked_skeleton_policy": "scaffold_only_not_proof",
+        },
+    }
+
+
+def _tool_quality_report(
+    project_root: Path,
+    manifest: dict[str, object],
+    *,
+    source_manifest_path: Path,
+) -> str:
+    source_manifest = source_manifest_path.relative_to(project_root).as_posix()
+    lines = [
+        "# Tool Verification Eval",
+        "",
+        "## Summary",
+        "",
+        f"- Status: {manifest['status']}",
+        f"- Records checked: {manifest['checked']}",
+        f"- Passed: {manifest['passed']}",
+        f"- Failed: {manifest['failed']}",
+        f"- Source manifest: {source_manifest}",
+        "",
+    ]
+    issues = manifest.get("issues", [])
+    if isinstance(issues, list) and issues:
+        lines.extend(["## Issues", ""])
+        lines.extend(f"- {issue}" for issue in issues)
+        lines.append("")
+
+    lines.extend(["## Records", ""])
+    records = manifest.get("records", [])
+    if not isinstance(records, list) or not records:
+        lines.append("- none")
+    else:
+        for record in records:
+            if not isinstance(record, dict):
+                continue
+            lines.append(
+                (
+                    f"- {record.get('object_id', '')}: {record.get('quality_status', '')} | "
+                    f"{record.get('record_status', '')} | {record.get('kind', '')}"
+                )
+            )
+            lines.append(f"  - artifact: {record.get('artifact_path', '')}")
+            lines.append(f"  - report: {record.get('report_path', '')}")
+            record_issues = record.get("issues", [])
+            if isinstance(record_issues, list) and record_issues:
+                lines.append(f"  - issues: {', '.join(str(issue) for issue in record_issues)}")
+            else:
+                lines.append("  - issues: none")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- This check validates persisted tool-verification artifacts only.",
+            "- `unchecked_skeleton` records are scaffolds, not verified proofs.",
+            "- No external verifier executable was invoked.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
 
 
 def _manifest_record(
