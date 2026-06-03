@@ -15,6 +15,39 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class NoteQualityTests(unittest.TestCase):
+    def test_note_quality_requires_example_non_example_and_mistake_sections(self) -> None:
+        from socrates.quality import atomic_note_quality_issues
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            note = project / "04_atomic_notes" / "drafts" / "thin_note.md"
+            note.write_text(
+                "---\n"
+                "status: draft\n"
+                "review_status: needs_review\n"
+                "reviewed_by_user: false\n"
+                "type: definition\n"
+                "concept: Normal Subgroup\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - normal-subgroup\n"
+                "related:\n"
+                "  []\n"
+                "---\n\n"
+                "# Normal Subgroup\n\n"
+                "A normal subgroup is stable under conjugation.\n\n"
+                "## Review Questions\n\n"
+                "- How is normality different from centrality?\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            issues = atomic_note_quality_issues(note, project)
+
+            self.assertIn("missing section Key Examples", issues)
+            self.assertIn("missing section Non-Examples", issues)
+            self.assertIn("missing section Common Mistakes", issues)
+
     def test_note_check_cli_writes_quality_report_for_atomic_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

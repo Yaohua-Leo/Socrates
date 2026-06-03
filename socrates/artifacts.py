@@ -30,7 +30,7 @@ def generate_atomic_note_draft(
     reference_object = _kb_reference_object(context.root, concept)
     related_concepts = _kb_related_concepts(reference_object)
     related_links = [f"[[{_concept_title(item)}]]" for item in related_concepts]
-    note_body = body.rstrip()
+    note_body = _with_required_note_sections(body.rstrip(), concept)
     reference_context = _reference_context_section(reference_object)
     if reference_context:
         note_body += "\n\n" + reference_context.rstrip()
@@ -311,6 +311,35 @@ def _reference_context_section(reference_object: dict[str, object] | None) -> st
     if statement:
         lines.extend(["", statement])
     return "\n".join(lines) + "\n"
+
+
+def _with_required_note_sections(body: str, concept: str) -> str:
+    note_body = body.rstrip()
+    additions: list[str] = []
+    if "## Key Examples" not in note_body:
+        additions.append(
+            "## Key Examples\n\n"
+            f"- Add a user-checked example illustrating {concept}."
+        )
+    if "## Non-Examples" not in note_body and "## Counterexamples" not in note_body:
+        additions.append(
+            "## Non-Examples\n\n"
+            f"- Add a contrasting case where the defining condition of {concept} fails."
+        )
+    if "## Common Mistakes" not in note_body:
+        additions.append(
+            "## Common Mistakes\n\n"
+            "- Record one misconception or skipped condition to watch for during review."
+        )
+    if "## Review Questions" not in note_body:
+        additions.append(
+            "## Review Questions\n\n"
+            f"- What must be checked before applying {concept}?"
+        )
+    if not additions:
+        return note_body
+    separator = "\n\n" if note_body else ""
+    return note_body + separator + "\n\n".join(additions)
 
 
 def _note_tags(note_type: str, concept: str, related_concepts: list[str]) -> list[str]:

@@ -47,6 +47,9 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('source_location: "Section 1.7"', text)
             self.assertIn("# Group Action", text)
             self.assertIn("A group action is a map", text)
+            self.assertIn("## Key Examples", text)
+            self.assertIn("## Non-Examples", text)
+            self.assertIn("## Common Mistakes", text)
 
     def test_atomic_note_draft_uses_kb_dependencies_for_related_links_and_tags(self) -> None:
         artifacts = self._load_artifacts_module()
