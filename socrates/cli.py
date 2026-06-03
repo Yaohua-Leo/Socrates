@@ -431,6 +431,9 @@ def _handle_status(args: argparse.Namespace) -> int:
     reviewed_count = _count_reviewed_notes(context.root)
     obsidian_export_count = len(list((context.root / "07_exports" / "obsidian").glob("*.md")))
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
+    active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
+        context.learning_state
+    )
     approved_exercise_count = _count_approved_exercises(context.root)
     attempted_exercise_count = len(list((context.root / "05_exercises" / "attempted").glob("*.md")))
     graded_exercise_count = len(list((context.root / "05_exercises" / "graded").glob("*.md")))
@@ -450,6 +453,8 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
+    print(f"Active misconceptions: {active_misconception_count}")
+    print(f"Resolved misconceptions: {resolved_misconception_count}")
     return 0
 
 
@@ -855,3 +860,24 @@ def _count_scheduled_reviews(learning_state: Path) -> int:
     state = json.loads(learning_state.read_text(encoding="utf-8"))
     schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
     return len(schedule) if isinstance(schedule, list) else 0
+
+
+def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
+    if not learning_state.exists():
+        return (0, 0)
+    state = json.loads(learning_state.read_text(encoding="utf-8"))
+    misconceptions = state.get("misconceptions", {}) if isinstance(state, dict) else {}
+    if not isinstance(misconceptions, dict):
+        return (0, 0)
+
+    active = 0
+    resolved = 0
+    for value in misconceptions.values():
+        if not isinstance(value, dict):
+            continue
+        status = value.get("status", "active")
+        if status == "resolved":
+            resolved += 1
+        elif status == "active" or "status" not in value:
+            active += 1
+    return (active, resolved)

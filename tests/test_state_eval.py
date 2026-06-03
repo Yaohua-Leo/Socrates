@@ -14,6 +14,7 @@ from socrates.state import (
     LearningStatePatch,
     MistakeRecord,
     build_review_schedule,
+    resolve_active_misconceptions_for_concept,
     update_eval_report,
     update_learning_state,
 )
@@ -199,6 +200,47 @@ class StateEvalTests(unittest.TestCase):
             self.assertEqual(status_result.returncode, 0, status_result.stderr)
             self.assertIn("Scheduled reviews: 1", status_result.stdout)
             self.assertIn("Generated exercises: 1", status_result.stdout)
+
+    def test_status_counts_active_and_resolved_misconceptions(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Each coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether arbitrary cosets contain the identity.",
+                        ),
+                    ],
+                ),
+            )
+            resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+
+            status_result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status_result.returncode, 0, status_result.stderr)
+            self.assertIn("Active misconceptions: 1", status_result.stdout)
+            self.assertIn("Resolved misconceptions: 1", status_result.stdout)
 
     def test_update_eval_report_scaffolds_allowed_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
