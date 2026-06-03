@@ -14,7 +14,7 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
 )
 from .context import load_project
-from .exercises import approve_exercise_draft
+from .exercises import approve_exercise_draft, record_exercise_attempt
 from .kb import build_reference_kb, search_reference_kb
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
@@ -202,6 +202,14 @@ def build_parser() -> argparse.ArgumentParser:
     exercise_approve_parser.add_argument("--project", required=True, help="Socrates project directory.")
     exercise_approve_parser.add_argument("--exercise", required=True, help="Generated exercise id, without .md.")
     exercise_approve_parser.set_defaults(func=_handle_exercise_approve)
+    exercise_attempt_parser = exercise_subparsers.add_parser(
+        "attempt",
+        help="Record one answer for an approved exercise.",
+    )
+    exercise_attempt_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_attempt_parser.add_argument("--exercise", required=True, help="Generated exercise id, without .md.")
+    exercise_attempt_parser.add_argument("--answer", required=True, help="Markdown/text answer file.")
+    exercise_attempt_parser.set_defaults(func=_handle_exercise_attempt)
 
     session_parser = subparsers.add_parser(
         "session",
@@ -332,6 +340,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     obsidian_export_count = len(list((context.root / "07_exports" / "obsidian").glob("*.md")))
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     approved_exercise_count = _count_approved_exercises(context.root)
+    attempted_exercise_count = len(list((context.root / "05_exercises" / "attempted").glob("*.md")))
     phase = "tutoring_complete" if latest_session != "none" else "initialization"
 
     print(f"Project: {context.root}")
@@ -344,6 +353,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Reviewed notes: {reviewed_count}")
     print(f"Generated exercises: {exercise_count}")
     print(f"Approved exercises: {approved_exercise_count}")
+    print(f"Attempted exercises: {attempted_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     return 0
@@ -438,6 +448,12 @@ def _handle_exercise_check(args: argparse.Namespace) -> int:
 def _handle_exercise_approve(args: argparse.Namespace) -> int:
     approved = approve_exercise_draft(args.project, args.exercise)
     print(f"Approved exercise {args.exercise}: {approved}")
+    return 0
+
+
+def _handle_exercise_attempt(args: argparse.Namespace) -> int:
+    attempt = record_exercise_attempt(args.project, args.exercise, args.answer)
+    print(f"Recorded attempt for exercise {args.exercise}: {attempt}")
     return 0
 
 

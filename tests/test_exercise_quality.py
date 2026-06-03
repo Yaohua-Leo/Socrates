@@ -61,6 +61,114 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Approved exercises: 1", status.stdout)
 
+    def test_exercise_attempt_cli_records_answer_for_approved_exercise(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            answer.write_text(
+                "I would prove normality by checking gng^-1 remains in N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            from socrates.exercises import approve_exercise_draft
+
+            approve_exercise_draft(project, "normal_subgroup_01")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "attempt",
+                    "--project",
+                    str(project),
+                    "--exercise",
+                    "normal_subgroup_01",
+                    "--answer",
+                    str(answer),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Recorded attempt for exercise normal_subgroup_01", result.stdout)
+            attempted = project / "05_exercises" / "attempted" / "normal_subgroup_01_attempt_001.md"
+            attempt_text = attempted.read_text(encoding="utf-8")
+            self.assertIn('exercise_id: "normal_subgroup_01"', attempt_text)
+            self.assertIn('status: "attempted"', attempt_text)
+            self.assertIn("I would prove normality", attempt_text)
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Attempted exercises: 1", status.stdout)
+
+    def test_record_exercise_attempt_rejects_unapproved_exercise(self) -> None:
+        from socrates.exercises import record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            answer.write_text("A first attempt.\n", encoding="utf-8", newline="\n")
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+
+            with self.assertRaisesRegex(ValueError, "not approved"):
+                record_exercise_attempt(project, "normal_subgroup_01", answer)
+
+            attempted = project / "05_exercises" / "attempted" / "normal_subgroup_01_attempt_001.md"
+            self.assertFalse(attempted.exists())
+
+    def test_record_exercise_attempt_keeps_multiple_attempts(self) -> None:
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            first_answer = root / "first_answer.md"
+            second_answer = root / "second_answer.md"
+            first_answer.write_text("First attempt.\n", encoding="utf-8", newline="\n")
+            second_answer.write_text("Second attempt.\n", encoding="utf-8", newline="\n")
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+
+            first = record_exercise_attempt(project, "normal_subgroup_01", first_answer)
+            second = record_exercise_attempt(project, "normal_subgroup_01", second_answer)
+
+            self.assertEqual(first.name, "normal_subgroup_01_attempt_001.md")
+            self.assertEqual(second.name, "normal_subgroup_01_attempt_002.md")
+            self.assertIn("First attempt.", first.read_text(encoding="utf-8"))
+            self.assertIn("Second attempt.", second.read_text(encoding="utf-8"))
+
     def test_approve_exercise_draft_rejects_failed_quality_gate(self) -> None:
         from socrates.exercises import approve_exercise_draft
 
