@@ -231,6 +231,41 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("## Review Prompt", text)
             self.assertIn("## Common Mistakes", text)
 
+    def test_targeted_review_exercises_include_kb_reference_context(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.43}),
+            )
+            build_review_schedule(context)
+
+            exercises = artifacts.generate_targeted_review_exercise_drafts(project)
+
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn("## Reference Context", text)
+            self.assertIn("- Object: definition 3.1 Normal Subgroup", text)
+            self.assertIn("- Source: 01_references/curated/normality.curated.md", text)
+            self.assertIn("- Page: 82", text)
+            self.assertIn(
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.",
+                text,
+            )
+
     def test_generate_targeted_review_exercises_preserves_reviewed_existing_files(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:

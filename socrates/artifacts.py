@@ -123,6 +123,7 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
         if not isinstance(item, dict):
             continue
         concept = str(item.get("concept", "review"))
+        reference_object = _kb_reference_object(context.root, concept)
         concept_id = slugify_topic(concept)
         concept_counts[concept_id] = concept_counts.get(concept_id, 0) + 1
         exercise_id = f"review_{concept_id}_{concept_counts[concept_id]:02d}"
@@ -136,6 +137,7 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
                     reason=str(item.get("reason", "review scheduled")),
                     priority=str(item.get("priority", "medium")),
                     due=str(item.get("due", "within_3_days")),
+                    reference_object=reference_object,
                 ),
             )
         drafts.append(
@@ -204,7 +206,9 @@ def _targeted_review_exercise_text(
     reason: str,
     priority: str,
     due: str,
+    reference_object: dict[str, object] | None,
 ) -> str:
+    reference_context = _reference_context_section(reference_object)
     return (
         _frontmatter(
             {
@@ -219,6 +223,7 @@ def _targeted_review_exercise_text(
         + f"# Review Exercise: {concept}\n\n"
         + "## Target Weakness\n\n"
         + f"{reason}\n\n"
+        + (reference_context + "\n" if reference_context else "")
         + "## Target Training Point\n\n"
         + f"Repair the scheduled weakness in {concept} by contrasting the definition with a borderline case.\n\n"
         + "## Review Prompt\n\n"
