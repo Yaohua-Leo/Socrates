@@ -333,6 +333,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate targeted exercise drafts from the review schedule.",
     )
     review_exercises_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_exercises_parser.add_argument(
+        "--due-by",
+        default=None,
+        help="Only generate exercises for review items due on or before this ISO date.",
+    )
     review_exercises_parser.set_defaults(func=_handle_review_exercises)
     review_adjust_plan_parser = review_subparsers.add_parser(
         "adjust-plan",
@@ -931,7 +936,12 @@ def _handle_review_schedule(args: argparse.Namespace) -> int:
 
 
 def _handle_review_exercises(args: argparse.Namespace) -> int:
-    exercises = generate_targeted_review_exercise_drafts(args.project)
+    try:
+        due_by = _parse_iso_date(args.due_by) if args.due_by else None
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    exercises = generate_targeted_review_exercise_drafts(args.project, due_by=due_by)
     noun = "exercise" if len(exercises) == 1 else "exercises"
     print(f"Generated {len(exercises)} targeted review {noun}")
     return 0

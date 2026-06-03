@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import date
 import json
 from pathlib import Path
 
@@ -108,7 +109,11 @@ def generate_exercise_drafts(
     return drafts
 
 
-def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[ExerciseDraft]:
+def generate_targeted_review_exercise_drafts(
+    project_path: Path | str,
+    *,
+    due_by: date | None = None,
+) -> list[ExerciseDraft]:
     """Write exercises targeted at the current review schedule."""
 
     context = load_project(project_path)
@@ -121,6 +126,8 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
     concept_counts: dict[str, int] = {}
     for item in schedule:
         if not isinstance(item, dict):
+            continue
+        if due_by is not None and not _is_due_review_item(item, due_by):
             continue
         concept = str(item.get("concept", "review"))
         reference_object = _kb_reference_object(context.root, concept)
@@ -150,6 +157,17 @@ def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[E
             )
         )
     return drafts
+
+
+def _is_due_review_item(item: dict[str, object], due_by: date) -> bool:
+    scheduled_for = str(item.get("scheduled_for", "")).strip()
+    if not scheduled_for:
+        return False
+    try:
+        scheduled_date = date.fromisoformat(scheduled_for)
+    except ValueError:
+        return False
+    return scheduled_date <= due_by
 
 
 def _exercise_text(

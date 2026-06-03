@@ -336,6 +336,35 @@ class NotesExercisesTests(unittest.TestCase):
                 (project / "05_exercises" / "generated" / "review_quotient_group_02.md").exists()
             )
 
+    def test_targeted_review_exercises_can_filter_by_due_date(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    },
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            exercises = artifacts.generate_targeted_review_exercise_drafts(
+                project,
+                due_by=date(2026, 6, 4),
+            )
+
+            self.assertEqual([exercise.id for exercise in exercises], ["review_normal_subgroup_01"])
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
     def _load_artifacts_module(self):
         spec = importlib.util.find_spec("socrates.artifacts")
         self.assertIsNotNone(spec, "socrates.artifacts module should exist")
