@@ -52,7 +52,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
 
     context = load_project(project_path)
     exported: list[Path] = []
-    manifest_notes: list[dict[str, str]] = []
+    manifest_notes: list[dict[str, object]] = []
     for folder in sorted((context.root / "04_atomic_notes").iterdir()):
         if not folder.is_dir() or folder.name == "drafts":
             continue
@@ -71,6 +71,8 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
                     "concept": _frontmatter_value(text, "concept") or note_path.stem,
                     "type": _frontmatter_value(text, "type") or folder.name.rstrip("s"),
                     "path": destination.relative_to(destination.parent).as_posix(),
+                    "tags": _frontmatter_list(text, "tags"),
+                    "related": _frontmatter_list(text, "related"),
                 }
             )
     if exported:
@@ -79,7 +81,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     return exported
 
 
-def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, str]]) -> None:
+def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, object]]) -> None:
     manifest = {
         "version": 1,
         "exported_notes": sorted(exported_notes, key=lambda item: item["note_id"]),
@@ -108,6 +110,42 @@ def _frontmatter_value(text: str, key: str) -> str | None:
         if line.startswith(prefix):
             return line.removeprefix(prefix).strip().strip('"')
     return None
+
+
+def _frontmatter_list(text: str, key: str) -> list[str]:
+    frontmatter = _frontmatter_lines(text)
+    prefix = f"{key}:"
+    values: list[str] = []
+    in_list = False
+    for line in frontmatter:
+        if line.startswith(prefix):
+            in_list = True
+            inline_value = line.removeprefix(prefix).strip()
+            if inline_value == "[]":
+                return []
+            if inline_value:
+                return [_frontmatter_string(inline_value)]
+            continue
+        if not in_list:
+            continue
+        stripped = line.strip()
+        if stripped == "[]":
+            return []
+        if line.startswith("  - "):
+            values.append(_frontmatter_string(line.removeprefix("  - ").strip()))
+            continue
+        if stripped and not line.startswith(" "):
+            break
+    return values
+
+
+def _frontmatter_string(value: str) -> str:
+    if (
+        (value.startswith('"') and value.endswith('"'))
+        or (value.startswith("'") and value.endswith("'"))
+    ):
+        return value[1:-1]
+    return value
 
 
 def _set_frontmatter_values(text: str, values: dict[str, str]) -> str:

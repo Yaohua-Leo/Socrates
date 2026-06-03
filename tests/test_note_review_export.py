@@ -8,6 +8,7 @@ import tempfile
 import unittest
 
 from socrates.artifacts import generate_atomic_note_draft
+from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
 
@@ -102,6 +103,15 @@ class NoteReviewExportTests(unittest.TestCase):
     def test_export_reviewed_notes_to_obsidian_copies_only_reviewed_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
             generate_atomic_note_draft(
                 project,
                 concept="Normal Subgroup",
@@ -136,6 +146,8 @@ class NoteReviewExportTests(unittest.TestCase):
                         "concept": "Normal Subgroup",
                         "type": "definition",
                         "path": "normal_subgroup.md",
+                        "tags": ["definition", "normal-subgroup", "subgroup", "conjugation"],
+                        "related": ["[[Subgroup]]", "[[Conjugation]]"],
                     }
                 ],
             )
