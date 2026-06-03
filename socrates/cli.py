@@ -9,6 +9,8 @@ from typing import Sequence
 
 from .artifacts import generate_atomic_note_draft, generate_exercise_drafts
 from .context import load_project
+from .kb import build_reference_kb, search_reference_kb
+from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
@@ -93,6 +95,36 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
     status_parser.set_defaults(func=_handle_status)
+
+    kb_parser = subparsers.add_parser(
+        "kb",
+        help="Build and search the curated reference knowledge base.",
+    )
+    kb_subparsers = kb_parser.add_subparsers(dest="kb_command", required=True)
+    kb_build_parser = kb_subparsers.add_parser("build", help="Build the reference KB.")
+    kb_build_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_build_parser.set_defaults(func=_handle_kb_build)
+    kb_search_parser = kb_subparsers.add_parser("search", help="Search the reference KB.")
+    kb_search_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_search_parser.add_argument("--query", required=True, help="Search query.")
+    kb_search_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
+    kb_search_parser.set_defaults(func=_handle_kb_search)
+
+    note_parser = subparsers.add_parser(
+        "note",
+        help="Review and export atomic notes.",
+    )
+    note_subparsers = note_parser.add_subparsers(dest="note_command", required=True)
+    note_review_parser = note_subparsers.add_parser("review", help="Review one draft note.")
+    note_review_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    note_review_parser.add_argument("--note", required=True, help="Draft note id, without .md.")
+    note_review_parser.set_defaults(func=_handle_note_review)
+    note_export_parser = note_subparsers.add_parser(
+        "export-obsidian",
+        help="Export reviewed notes to the Obsidian directory.",
+    )
+    note_export_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    note_export_parser.set_defaults(func=_handle_note_export_obsidian)
 
     return parser
 
@@ -198,6 +230,39 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Latest session: {latest_session}")
     print(f"Pending draft notes: {draft_count}")
     print(f"Generated exercises: {exercise_count}")
+    return 0
+
+
+def _handle_kb_build(args: argparse.Namespace) -> int:
+    result = build_reference_kb(args.project)
+    noun = "object" if result.object_count == 1 else "objects"
+    print(f"Indexed {result.object_count} reference {noun}")
+    print(f"Reference index: {result.index_path}")
+    return 0
+
+
+def _handle_kb_search(args: argparse.Namespace) -> int:
+    matches = search_reference_kb(args.project, args.query, limit=args.limit)
+    if not matches:
+        print("No reference matches")
+        return 0
+    for match in matches:
+        source = match.get("source", {})
+        path = source.get("path", "unknown") if isinstance(source, dict) else "unknown"
+        print(f"{match['type']}: {match['title']} ({path})")
+    return 0
+
+
+def _handle_note_review(args: argparse.Namespace) -> int:
+    reviewed = review_atomic_note(args.project, args.note)
+    print(f"Reviewed note {args.note}: {reviewed}")
+    return 0
+
+
+def _handle_note_export_obsidian(args: argparse.Namespace) -> int:
+    exported = export_reviewed_notes_to_obsidian(args.project)
+    noun = "note" if len(exported) == 1 else "notes"
+    print(f"Exported {len(exported)} reviewed {noun}")
     return 0
 
 

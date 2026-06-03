@@ -33,6 +33,7 @@ def generate_atomic_note_draft(
             {
                 "status": "draft",
                 "review_status": "needs_review",
+                "reviewed_by_user": False,
                 "type": note_type,
                 "concept": concept,
                 "source_id": source_id,
