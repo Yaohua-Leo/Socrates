@@ -573,7 +573,88 @@ def _exercise_tool_verification_evidence(
         "status": "linked" if linked_records else "not_linked",
         "reason": "" if linked_records else "no matching tool-verification record",
         "records": linked_records,
+        "quality": (
+            _exercise_tool_verification_quality(project_root, exercise_path.stem)
+            if linked_records
+            else {"status": "not_applicable", "reason": "", "records": []}
+        ),
     }
+
+
+def _exercise_tool_verification_quality(
+    project_root: Path,
+    exercise_id: str,
+) -> dict[str, object]:
+    manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
+    source_manifest_path = project_root / "08_evals" / "tool_verification" / "manifest.json"
+    if not manifest_path.exists():
+        return {
+            "status": "not_run",
+            "reason": "tool-verification check not run",
+            "records": [],
+        }
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "status": "invalid",
+            "reason": "tool-verification quality manifest unreadable",
+            "records": [],
+        }
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {
+            "status": "invalid",
+            "reason": "tool-verification quality manifest has invalid schema",
+            "records": [],
+        }
+    records = manifest.get("records", [])
+    if not isinstance(records, list):
+        return {
+            "status": "invalid",
+            "reason": "tool-verification quality manifest has invalid records",
+            "records": [],
+        }
+
+    linked_quality_records = [
+        record
+        for record in records
+        if isinstance(record, dict)
+        and str(record.get("object_id", "")).strip() == exercise_id
+    ]
+    if _tool_verification_quality_is_stale(manifest_path, source_manifest_path):
+        return {
+            "status": "stale",
+            "reason": "tool-verification check is older than source manifest",
+            "records": linked_quality_records,
+        }
+    if not linked_quality_records:
+        return {
+            "status": "not_found",
+            "reason": "no matching tool-verification quality record",
+            "records": [],
+        }
+
+    statuses = [
+        str(record.get("quality_status", "")).strip()
+        for record in linked_quality_records
+        if isinstance(record, dict)
+    ]
+    if any(status == "fail" for status in statuses):
+        status = "fail"
+    elif statuses and all(status == "pass" for status in statuses):
+        status = "pass"
+    else:
+        status = "unknown"
+    return {"status": status, "reason": "", "records": linked_quality_records}
+
+
+def _tool_verification_quality_is_stale(
+    manifest_path: Path,
+    source_manifest_path: Path,
+) -> bool:
+    if not source_manifest_path.exists():
+        return False
+    return source_manifest_path.stat().st_mtime > manifest_path.stat().st_mtime
 
 
 def _exercise_quality_manifest(
@@ -705,13 +786,26 @@ def _tool_verification_evidence_manifest(row: dict[str, object]) -> dict[str, ob
     records = row.get("records", [])
     if not isinstance(records, list):
         records = []
+    quality = row.get("quality", {})
+    if not isinstance(quality, dict):
+        quality = {}
+    quality_records = quality.get("records", [])
+    if not isinstance(quality_records, list):
+        quality_records = []
     result: dict[str, object] = {
         "status": row.get("status", "unknown"),
         "record_count": len(records),
         "records": [_tool_verification_manifest_record(record) for record in records],
+        "quality_status": quality.get("status", "unknown"),
+        "quality_records": [
+            _tool_verification_quality_manifest_record(record)
+            for record in quality_records
+        ],
     }
     if row.get("reason"):
         result["reason"] = row["reason"]
+    if quality.get("reason"):
+        result["quality_reason"] = quality["reason"]
     return result
 
 
@@ -728,6 +822,29 @@ def _tool_verification_manifest_record(record: object) -> dict[str, object]:
             or ""
         ),
         "report_path": str(record.get("report_path", "")),
+    }
+
+
+def _tool_verification_quality_manifest_record(record: object) -> dict[str, object]:
+    if not isinstance(record, dict):
+        return {
+            "kind": "",
+            "record_status": "",
+            "quality_status": "",
+            "artifact_path": "",
+            "report_path": "",
+            "issues": [],
+        }
+    issues = record.get("issues", [])
+    if not isinstance(issues, list):
+        issues = []
+    return {
+        "kind": str(record.get("kind", "")),
+        "record_status": str(record.get("record_status", "")),
+        "quality_status": str(record.get("quality_status", "")),
+        "artifact_path": str(record.get("artifact_path", "")),
+        "report_path": str(record.get("report_path", "")),
+        "issues": [str(issue) for issue in issues],
     }
 
 
@@ -1194,12 +1311,29 @@ def _tool_verification_evidence_report(rows: list[dict[str, object]]) -> list[st
             records = []
         line = f"- {row['file']} | {row['status']}"
         if row["status"] == "linked":
-            line = f"{line} | records: {len(records)}"
+            line = (
+                f"{line} | records: {len(records)}"
+                f"{_tool_verification_quality_suffix(row)}"
+            )
         elif row.get("reason"):
             line = f"{line} | {row['reason']}"
         lines.append(line)
         lines.extend(f"  - {_tool_verification_record_line(record)}" for record in records)
     return lines
+
+
+def _tool_verification_quality_suffix(row: dict[str, object]) -> str:
+    quality = row.get("quality", {})
+    if not isinstance(quality, dict):
+        return ""
+    status = str(quality.get("status", "")).strip()
+    if not status or status == "not_applicable":
+        return ""
+    suffix = f" | quality: {status}"
+    reason = str(quality.get("reason", "")).strip()
+    if reason:
+        suffix = f"{suffix} ({reason})"
+    return suffix
 
 
 def _tool_verification_record_line(record: object) -> str:

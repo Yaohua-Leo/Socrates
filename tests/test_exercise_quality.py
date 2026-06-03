@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -906,60 +907,7 @@ class ExerciseQualityTests(unittest.TestCase):
                 prerequisites=["subgroup", "conjugation"],
                 count=5,
             )
-            verification_dir = project / "08_evals" / "tool_verification"
-            artifact_path = verification_dir / "normal_subgroup_01_sage_order.json"
-            report_path = verification_dir / "normal_subgroup_01_sage_order_report.md"
-            artifact_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "kind": "sage_group_order_check",
-                        "object_id": "normal_subgroup_01",
-                        "status": "verified",
-                        "passed": True,
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n",
-                encoding="utf-8",
-                newline="\n",
-            )
-            report_path.write_text(
-                "# Tool Verification: Sage Group Order Check\n\n",
-                encoding="utf-8",
-                newline="\n",
-            )
-            (verification_dir / "manifest.json").write_text(
-                json.dumps(
-                    {
-                        "schema_version": 1,
-                        "records": [
-                            {
-                                "kind": "sage_group_order_check",
-                                "object_id": "normal_subgroup_01",
-                                "object_type": "finite_group_order",
-                                "title": "Normal Subgroup Exercise 01",
-                                "status": "verified",
-                                "artifact_path": (
-                                    "08_evals/tool_verification/"
-                                    "normal_subgroup_01_sage_order.json"
-                                ),
-                                "report_path": (
-                                    "08_evals/tool_verification/"
-                                    "normal_subgroup_01_sage_order_report.md"
-                                ),
-                                "source": {"tool": "sage"},
-                            }
-                        ],
-                    },
-                    ensure_ascii=False,
-                    indent=2,
-                )
-                + "\n",
-                encoding="utf-8",
-                newline="\n",
-            )
+            _write_linked_sage_tool_record(project)
 
             result = subprocess.run(
                 [
@@ -983,7 +931,10 @@ class ExerciseQualityTests(unittest.TestCase):
             )
             self.assertIn("## Tool Verification Evidence", report_text)
             self.assertIn(
-                "- normal_subgroup_01.md | linked | records: 1",
+                (
+                    "- normal_subgroup_01.md | linked | records: 1 | "
+                    "quality: not_run (tool-verification check not run)"
+                ),
                 report_text,
             )
             self.assertIn(
@@ -1000,6 +951,11 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(first_exercise["id"], "normal_subgroup_01")
             self.assertEqual(first_exercise["tool_verification"]["status"], "linked")
             self.assertEqual(first_exercise["tool_verification"]["record_count"], 1)
+            self.assertEqual(first_exercise["tool_verification"]["quality_status"], "not_run")
+            self.assertEqual(
+                first_exercise["tool_verification"]["quality_reason"],
+                "tool-verification check not run",
+            )
             self.assertEqual(
                 first_exercise["tool_verification"]["records"][0],
                 {
@@ -1014,6 +970,223 @@ class ExerciseQualityTests(unittest.TestCase):
                     ),
                 },
             )
+
+    def test_exercise_check_cli_reports_tool_verification_quality_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            _write_linked_sage_tool_record(project)
+            _write_sage_tool_quality_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (project / "08_evals" / "exercise_quality_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                "- normal_subgroup_01.md | linked | records: 1 | quality: pass",
+                report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            first_exercise = manifest["exercises"][0]
+            self.assertEqual(first_exercise["tool_verification"]["quality_status"], "pass")
+            self.assertEqual(
+                first_exercise["tool_verification"]["quality_records"][0],
+                {
+                    "kind": "sage_group_order_check",
+                    "record_status": "verified",
+                    "quality_status": "pass",
+                    "artifact_path": (
+                        "08_evals/tool_verification/normal_subgroup_01_sage_order.json"
+                    ),
+                    "report_path": (
+                        "08_evals/tool_verification/"
+                        "normal_subgroup_01_sage_order_report.md"
+                    ),
+                    "issues": [],
+                },
+            )
+
+    def test_exercise_check_cli_marks_stale_tool_verification_quality(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            _write_linked_sage_tool_record(project)
+            quality_manifest = _write_sage_tool_quality_manifest(project)
+            source_manifest = project / "08_evals" / "tool_verification" / "manifest.json"
+            os.utime(quality_manifest, (1000, 1000))
+            os.utime(source_manifest, (2000, 2000))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (project / "08_evals" / "exercise_quality_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                (
+                    "- normal_subgroup_01.md | linked | records: 1 | "
+                    "quality: stale (tool-verification check is older than source manifest)"
+                ),
+                report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            first_exercise = manifest["exercises"][0]
+            self.assertEqual(first_exercise["tool_verification"]["quality_status"], "stale")
+            self.assertEqual(
+                first_exercise["tool_verification"]["quality_reason"],
+                "tool-verification check is older than source manifest",
+            )
+
+
+def _write_linked_sage_tool_record(project: Path) -> None:
+    verification_dir = project / "08_evals" / "tool_verification"
+    artifact_path = verification_dir / "normal_subgroup_01_sage_order.json"
+    report_path = verification_dir / "normal_subgroup_01_sage_order_report.md"
+    artifact_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "kind": "sage_group_order_check",
+                "object_id": "normal_subgroup_01",
+                "status": "verified",
+                "passed": True,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    report_path.write_text(
+        "# Tool Verification: Sage Group Order Check\n\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    (verification_dir / "manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "records": [
+                    {
+                        "kind": "sage_group_order_check",
+                        "object_id": "normal_subgroup_01",
+                        "object_type": "finite_group_order",
+                        "title": "Normal Subgroup Exercise 01",
+                        "status": "verified",
+                        "artifact_path": (
+                            "08_evals/tool_verification/"
+                            "normal_subgroup_01_sage_order.json"
+                        ),
+                        "report_path": (
+                            "08_evals/tool_verification/"
+                            "normal_subgroup_01_sage_order_report.md"
+                        ),
+                        "source": {"tool": "sage"},
+                    }
+                ],
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def _write_sage_tool_quality_manifest(project: Path) -> Path:
+    manifest_path = project / "08_evals" / "tool_verification_quality_manifest.json"
+    manifest_path.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "status": "pass",
+                "checked": 1,
+                "passed": 1,
+                "failed": 0,
+                "source_manifest": "08_evals/tool_verification/manifest.json",
+                "records": [
+                    {
+                        "object_id": "normal_subgroup_01",
+                        "kind": "sage_group_order_check",
+                        "record_status": "verified",
+                        "quality_status": "pass",
+                        "artifact_path": (
+                            "08_evals/tool_verification/"
+                            "normal_subgroup_01_sage_order.json"
+                        ),
+                        "report_path": (
+                            "08_evals/tool_verification/"
+                            "normal_subgroup_01_sage_order_report.md"
+                        ),
+                        "issues": [],
+                    }
+                ],
+                "issues": [],
+                "verification_boundary": {
+                    "external_verifier_invoked": False,
+                    "unchecked_skeleton_policy": "scaffold_only_not_proof",
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return manifest_path
 
 
 if __name__ == "__main__":
