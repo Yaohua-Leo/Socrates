@@ -55,6 +55,23 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Wrote Lean skeleton:", result.stdout)
             self.assertIn("Status: unchecked_skeleton", result.stdout)
+            list_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "unchecked_skeleton",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
             verification_dir = project / "08_evals" / "tool_verification"
             skeleton = verification_dir / "kernel_normality_statement.lean"
             report = verification_dir / "kernel_normality_statement_report.md"
@@ -80,6 +97,17 @@ class ToolVerificationTests(unittest.TestCase):
                 "08_evals/tool_verification/kernel_normality_statement.lean",
             )
             self.assertEqual(record["source"]["page"], "83")
+            self.assertEqual(list_result.returncode, 0, list_result.stderr)
+            self.assertIn("# Tool Verification Records", list_result.stdout)
+            self.assertIn(
+                "- kernel_normality | unchecked_skeleton | lean_statement_skeleton | "
+                "Kernel Normality | 08_evals/tool_verification/kernel_normality_statement.lean",
+                list_result.stdout,
+            )
+            self.assertIn(
+                "  - report: 08_evals/tool_verification/kernel_normality_statement_report.md",
+                list_result.stdout,
+            )
 
             status = subprocess.run(
                 [sys.executable, "-m", "socrates", "status", "--project", str(project)],

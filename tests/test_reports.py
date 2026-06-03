@@ -175,6 +175,58 @@ class ReportTests(unittest.TestCase):
             )
             self.assertNotIn("weekly_report.md", stale_reports.stdout)
 
+    def test_report_list_marks_project_summary_stale_after_tool_verification_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            report_path = project / "07_exports" / "reports" / "project_summary.md"
+            manifest_path = project / "08_evals" / "tool_verification" / "manifest.json"
+            os.utime(report_path, (1_000_000, 1_000_000))
+            os.utime(manifest_path, (1_000_100, 1_000_100))
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- project-summary | stale | Project Summary | "
+                "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("weekly_report.md", stale_reports.stdout)
+
     def test_report_list_marks_weekly_report_stale_after_learning_state_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -366,8 +418,15 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Approved exercises: 1", report_text)
             self.assertIn("- Attempted exercises: 1", report_text)
             self.assertIn("- Graded exercises: 1", report_text)
+            self.assertIn("- Tool verification records: 1", report_text)
             self.assertIn("## Benchmark Snapshot", report_text)
             self.assertIn("- not run", report_text)
+            self.assertIn("## Tool Verification Snapshot", report_text)
+            self.assertIn(
+                "- kernel_normality: unchecked_skeleton, lean_statement_skeleton -> "
+                "08_evals/tool_verification/kernel_normality_statement.lean",
+                report_text,
+            )
             self.assertIn("## Reference KB Snapshot", report_text)
             self.assertIn(
                 "- Definition 3.1: Normal Subgroup - Normality Notes (lecture_notes) [normality_notes]",
@@ -557,6 +616,35 @@ class ReportTests(unittest.TestCase):
             patch=LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
         )
         build_review_schedule(context)
+        tool_verification_dir = project / "08_evals" / "tool_verification"
+        tool_verification_dir.mkdir(exist_ok=True)
+        (tool_verification_dir / "manifest.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "records": [
+                        {
+                            "kind": "lean_statement_skeleton",
+                            "object_id": "kernel_normality",
+                            "object_type": "theorem",
+                            "title": "Kernel Normality",
+                            "status": "unchecked_skeleton",
+                            "skeleton_path": (
+                                "08_evals/tool_verification/"
+                                "kernel_normality_statement.lean"
+                            ),
+                            "report_path": (
+                                "08_evals/tool_verification/"
+                                "kernel_normality_statement_report.md"
+                            ),
+                        }
+                    ],
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
         return project
 
 

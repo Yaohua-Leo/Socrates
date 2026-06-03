@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
+from .tool_verification import ToolVerificationSummary, list_tool_verification_records
 
 
 @dataclass(frozen=True)
@@ -69,6 +70,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
+            tool_verification_records=list_tool_verification_records(context.root),
             benchmark_snapshot=_read_benchmark_snapshot(context.root),
             state=state,
         ),
@@ -180,6 +182,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "06_kb" / "chunks" / "reference_index.json",
             project_root / "07_exports" / "obsidian",
             project_root / "08_evals" / "benchmark_manifest.json",
+            project_root / "08_evals" / "tool_verification" / "manifest.json",
             project_root / "00_meta" / "learning_state.json",
         )
     return ()
@@ -302,6 +305,7 @@ def _project_summary_text(
     approved_exercises: int,
     attempted_exercises: int,
     graded_exercises: int,
+    tool_verification_records: list[ToolVerificationSummary],
     benchmark_snapshot: dict[str, object],
     state: dict[str, object],
 ) -> str:
@@ -325,10 +329,15 @@ def _project_summary_text(
         f"- Approved exercises: {approved_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
+        f"- Tool verification records: {len(tool_verification_records)}",
         "",
         "## Benchmark Snapshot",
         "",
         *_benchmark_snapshot_lines(benchmark_snapshot),
+        "",
+        "## Tool Verification Snapshot",
+        "",
+        *_tool_verification_snapshot_lines(tool_verification_records),
         "",
         "## Reference KB Snapshot",
         "",
@@ -549,6 +558,18 @@ def _benchmark_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
         f"- Gates passed: {snapshot['passed_gates']}/{snapshot['total_gates']}",
         f"- Failed gates: {failed_text}",
         "- Manifest: 08_evals/benchmark_manifest.json",
+    ]
+
+
+def _tool_verification_snapshot_lines(records: list[ToolVerificationSummary]) -> list[str]:
+    if not records:
+        return ["- none recorded"]
+    return [
+        (
+            f"- {record.object_id}: {record.status}, {record.kind}"
+            f" -> {record.artifact_path}"
+        )
+        for record in records
     ]
 
 

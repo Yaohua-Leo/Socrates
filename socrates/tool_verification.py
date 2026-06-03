@@ -21,6 +21,18 @@ class LeanSkeletonResult:
     status: str
 
 
+@dataclass(frozen=True)
+class ToolVerificationSummary:
+    """One persisted tool-verification record for CLI/report display."""
+
+    kind: str
+    object_id: str
+    status: str
+    title: str
+    artifact_path: str
+    report_path: str
+
+
 def generate_lean_statement_skeleton(
     project_path: Path | str,
     *,
@@ -80,6 +92,42 @@ def generate_lean_statement_skeleton(
         object_id=object_id,
         status=status,
     )
+
+
+def list_tool_verification_records(
+    project_path: Path | str,
+    *,
+    status: str = "all",
+) -> list[ToolVerificationSummary]:
+    """Return persisted tool-verification records from the project manifest."""
+
+    allowed_statuses = {"all", "unchecked_skeleton", "verified", "failed"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(
+            f"Unknown tool verification status {status!r}; expected one of: {allowed}"
+        )
+
+    context = load_project(project_path)
+    manifest_path = context.evals_dir / "tool_verification" / "manifest.json"
+    if not manifest_path.exists():
+        return []
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    if not isinstance(records, list):
+        return []
+
+    summaries: list[ToolVerificationSummary] = []
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        summary = _summary_from_record(record)
+        if status == "all" or summary.status == status:
+            summaries.append(summary)
+    return sorted(summaries, key=lambda item: (item.kind, item.object_id))
 
 
 def _find_reference_object(project_root: Path, object_id: str) -> dict[str, object]:
@@ -192,6 +240,22 @@ def _updated_manifest(path: Path, record: dict[str, object]) -> dict[str, object
     ]
     records.append(record)
     return {"schema_version": 1, "records": records}
+
+
+def _summary_from_record(record: dict[str, object]) -> ToolVerificationSummary:
+    return ToolVerificationSummary(
+        kind=str(record.get("kind", "")),
+        object_id=str(record.get("object_id", "")),
+        status=str(record.get("status", "unknown")),
+        title=str(record.get("title", "")),
+        artifact_path=str(
+            record.get("skeleton_path")
+            or record.get("artifact_path")
+            or record.get("output_path")
+            or ""
+        ),
+        report_path=str(record.get("report_path", "")),
+    )
 
 
 def _manifest_record(

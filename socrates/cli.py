@@ -75,7 +75,11 @@ from .state import (
     update_eval_report,
     update_learning_state,
 )
-from .tool_verification import generate_lean_statement_skeleton
+from .tool_verification import (
+    ToolVerificationSummary,
+    generate_lean_statement_skeleton,
+    list_tool_verification_records,
+)
 from .tutoring import (
     TutoringSessionSummary,
     list_tutoring_sessions,
@@ -585,6 +589,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Lean namespace to use in the generated skeleton.",
     )
     lean_skeleton_parser.set_defaults(func=_handle_tool_lean_skeleton)
+    tool_list_parser = tool_subparsers.add_parser(
+        "list",
+        help="List persisted tool-verification records.",
+    )
+    tool_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    tool_list_parser.add_argument(
+        "--status",
+        choices=("all", "unchecked_skeleton", "verified", "failed"),
+        default="all",
+        help="Filter records by verification status; defaults to all.",
+    )
+    tool_list_parser.set_defaults(func=_handle_tool_list)
 
     return parser
 
@@ -1226,6 +1242,29 @@ def _handle_tool_lean_skeleton(args: argparse.Namespace) -> int:
     print(f"Tool verification manifest: {result.manifest_path}")
     print(f"Status: {result.status}")
     return 0
+
+
+def _handle_tool_list(args: argparse.Namespace) -> int:
+    records = list_tool_verification_records(args.project, status=args.status)
+    print(_tool_verification_records_text(records), end="")
+    return 0
+
+
+def _tool_verification_records_text(records: list[ToolVerificationSummary]) -> str:
+    lines = ["# Tool Verification Records", ""]
+    if not records:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    for record in records:
+        lines.append(
+            (
+                f"- {record.object_id} | {record.status} | {record.kind} | "
+                f"{record.title} | {record.artifact_path}"
+            )
+        )
+        if record.report_path:
+            lines.append(f"  - report: {record.report_path}")
+    return "\n".join(lines) + "\n"
 
 
 def main(argv: Sequence[str] | None = None) -> int:
