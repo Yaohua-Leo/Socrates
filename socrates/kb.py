@@ -320,6 +320,7 @@ def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
         "source": item["source"],
         "dependencies": item.get("dependencies", []),
     }
+    metadata.update(_chunk_provenance_metadata(item))
     if item.get("number"):
         metadata["number"] = item["number"]
     return {
@@ -328,6 +329,28 @@ def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
         "text": item.get("statement", ""),
         "metadata": metadata,
     }
+
+
+def _chunk_provenance_metadata(item: dict[str, object]) -> dict[str, object]:
+    source = item.get("source", {})
+    if not isinstance(source, dict):
+        return {}
+    metadata: dict[str, object] = {}
+    for source_key, metadata_key in (
+        ("source_id", "source_id"),
+        ("chapter", "chapter"),
+        ("section", "section"),
+        ("page", "page"),
+        ("title", "source_title"),
+        ("role", "source_role"),
+        ("raw_path", "raw_path"),
+        ("path", "source_path"),
+        ("line", "source_line"),
+    ):
+        value = source.get(source_key)
+        if value:
+            metadata[metadata_key] = value
+    return metadata
 
 
 def _concept_graph(objects: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:

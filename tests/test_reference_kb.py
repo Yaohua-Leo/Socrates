@@ -157,6 +157,36 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(chunk_source["page"], "82")
             self.assertNotIn("Page: 82", index["objects"][0]["statement"])
 
+    def test_build_reference_kb_exposes_chunk_provenance_fields(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Source Metadata\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+
+            result = build_reference_kb(project)
+
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            metadata = index["chunks"][0]["metadata"]
+            self.assertEqual(metadata["source_id"], "normality_notes")
+            self.assertEqual(metadata["chapter"], "Chapter 3: Quotient Groups")
+            self.assertEqual(metadata["section"], "Section 3.1 Normal Subgroups")
+            self.assertEqual(metadata["page"], "82")
+            self.assertEqual(metadata["source_title"], "Normality Notes")
+            self.assertEqual(metadata["source_role"], "lecture_notes")
+            self.assertEqual(metadata["dependencies"], ["subgroup", "conjugation"])
+
     def test_search_reference_kb_matches_math_object_numbers(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
