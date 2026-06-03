@@ -140,13 +140,22 @@ def _reference_context_section(reference_context: list[dict[str, object]]) -> st
         if isinstance(source, dict):
             source_path = str(source.get("path", "unknown"))
         dependencies = [str(dep) for dep in item.get("dependencies", [])]
-        lines.append(f"  - {str(item.get('type', '')).title()}: {item.get('title', '')}")
+        lines.append(f"  - {_reference_object_label(item)}")
         lines.append(f"    Source: {source_path}")
         if isinstance(source, dict) and source.get("page"):
             lines.append(f"    Page: {source['page']}")
         if dependencies:
             lines.append(f"    Depends: {', '.join(dependencies)}")
     return "\n".join(lines) + "\n"
+
+
+def _reference_object_label(item: dict[str, object]) -> str:
+    object_type = str(item.get("type", "object")).title()
+    number = str(item.get("number", "")).strip()
+    title = str(item.get("title", "Untitled"))
+    if number:
+        return f"{object_type} {number}: {title}"
+    return f"{object_type}: {title}"
 
 
 def _long_term_plan(topic: str, goal: str, source_titles: list[str]) -> str:

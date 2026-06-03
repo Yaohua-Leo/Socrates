@@ -57,7 +57,7 @@ class NotesExercisesTests(unittest.TestCase):
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
             curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
             curated.write_text(
-                "### Definition: Normal Subgroup\n"
+                "### Definition 3.1: Normal Subgroup\n"
                 "A normal subgroup is stable under conjugation.\n"
                 "Depends: subgroup, conjugation\n",
                 encoding="utf-8",
@@ -86,7 +86,7 @@ class NotesExercisesTests(unittest.TestCase):
             curated.write_text(
                 "# Chapter 3: Quotient Groups\n"
                 "## Section 3.1 Normal Subgroups\n"
-                "### Definition: Normal Subgroup\n"
+                "### Definition 3.1: Normal Subgroup\n"
                 "Page: 82\n"
                 "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
                 "Depends: subgroup, conjugation\n",
@@ -109,7 +109,7 @@ class NotesExercisesTests(unittest.TestCase):
 
             text = (project / note.path).read_text(encoding="utf-8")
             self.assertIn("## Reference Context", text)
-            self.assertIn("- Object: definition Normal Subgroup", text)
+            self.assertIn("- Object: definition 3.1 Normal Subgroup", text)
             self.assertIn("- Source: 01_references/curated/normal_subgroups.curated.md", text)
             self.assertIn("- Line: 3", text)
             self.assertIn("- Page: 82", text)

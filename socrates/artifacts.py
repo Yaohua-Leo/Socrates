@@ -297,7 +297,7 @@ def _reference_context_section(reference_object: dict[str, object] | None) -> st
     lines = [
         "## Reference Context",
         "",
-        f"- Object: {object_type} {title}",
+        f"- Object: {_reference_object_label(reference_object, object_type, title)}",
         f"- Source: {source.get('path', 'unknown')}",
     ]
     if source.get("line"):
@@ -313,6 +313,17 @@ def _reference_context_section(reference_object: dict[str, object] | None) -> st
     if statement:
         lines.extend(["", statement])
     return "\n".join(lines) + "\n"
+
+
+def _reference_object_label(
+    reference_object: dict[str, object],
+    object_type: str,
+    title: str,
+) -> str:
+    number = str(reference_object.get("number", "")).strip()
+    if number:
+        return f"{object_type} {number} {title}"
+    return f"{object_type} {title}"
 
 
 def _with_required_note_sections(body: str, concept: str) -> str:

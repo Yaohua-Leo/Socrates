@@ -93,7 +93,7 @@ class LearningPlanTests(unittest.TestCase):
             curated.write_text(
                 "# Group Theory\n"
                 "## Subgroups\n"
-                "### Definition: Normal Subgroup\n"
+                "### Definition 3.1: Normal Subgroup\n"
                 "Page: 82\n"
                 "A subgroup N of G is normal when it is stable under conjugation.\n"
                 "Depends: subgroup, conjugation\n",
@@ -108,7 +108,7 @@ class LearningPlanTests(unittest.TestCase):
                 project / "02_learning_plan" / "session_0001_plan.md"
             ).read_text(encoding="utf-8")
             self.assertIn("## Reference Context", session_plan)
-            self.assertIn("Definition: Normal Subgroup", session_plan)
+            self.assertIn("Definition 3.1: Normal Subgroup", session_plan)
             self.assertIn(
                 "Source: 01_references/curated/normal_subgroups.curated.md",
                 session_plan,
