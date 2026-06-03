@@ -12,6 +12,7 @@ import shutil
 import subprocess
 
 from .context import append_project_log, load_project, write_json, write_text
+from .project import slugify_topic
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,19 @@ class LeanCheckResult:
 
     status: str
     checked: bool
+    artifact_path: Path
+    report_path: Path
+    manifest_path: Path
+    object_id: str
+
+
+@dataclass(frozen=True)
+class LeanDependencyMapResult:
+    """Persisted result for one Lean-oriented dependency map."""
+
+    status: str
+    dependency_count: int
+    resolved_count: int
     artifact_path: Path
     report_path: Path
     manifest_path: Path
@@ -216,6 +230,54 @@ def check_lean_file(
     )
 
 
+def map_lean_dependencies(
+    project_path: Path | str,
+    *,
+    object_id: str,
+) -> LeanDependencyMapResult:
+    """Persist a Lean-oriented dependency map for one reference-KB object."""
+
+    context = load_project(project_path)
+    item = _find_reference_object(context.root, object_id)
+    verification_dir = context.evals_dir / "tool_verification"
+    safe_id = _lean_identifier(f"{object_id}_lean_dependencies")
+    artifact_path = verification_dir / f"{safe_id}.json"
+    report_path = verification_dir / f"{safe_id}_report.md"
+    manifest_path = verification_dir / "manifest.json"
+    artifact = _lean_dependency_map_artifact(context.root, item)
+    write_json(artifact_path, artifact)
+    write_text(
+        report_path,
+        _lean_dependency_map_report(
+            artifact,
+            artifact_path=artifact_path.relative_to(context.root).as_posix(),
+        ),
+    )
+    write_json(
+        manifest_path,
+        _updated_manifest(
+            manifest_path,
+            _lean_dependency_map_record(
+                context.root,
+                item,
+                artifact_path=artifact_path,
+                report_path=report_path,
+                status=str(artifact["status"]),
+            ),
+        ),
+    )
+    append_project_log(context, f"Recorded Lean dependency map for {object_id}.")
+    return LeanDependencyMapResult(
+        status=str(artifact["status"]),
+        dependency_count=int(artifact["dependency_count"]),
+        resolved_count=int(artifact["resolved_count"]),
+        artifact_path=artifact_path,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        object_id=object_id,
+    )
+
+
 def list_tool_verification_records(
     project_path: Path | str,
     *,
@@ -229,6 +291,7 @@ def list_tool_verification_records(
         "counterexample_found",
         "failed",
         "lean_checked",
+        "mapped",
         "no_counterexample_found",
         "partial",
         "unchecked_skeleton",
@@ -486,6 +549,179 @@ def _find_reference_object(project_root: Path, object_id: str) -> dict[str, obje
         if isinstance(item, dict) and str(item.get("id", "")) == object_id:
             return item
     raise ValueError(f"Reference KB object not found: {object_id}")
+
+
+def _lean_dependency_map_artifact(
+    project_root: Path,
+    item: dict[str, object],
+) -> dict[str, object]:
+    dependencies = [
+        str(dependency).strip()
+        for dependency in item.get("dependencies", [])
+        if str(dependency).strip()
+    ]
+    dependency_rows = _lean_dependency_rows(project_root, dependencies)
+    resolved_count = sum(1 for row in dependency_rows if row["status"] == "resolved")
+    status = "mapped" if resolved_count == len(dependencies) else "partial"
+    issues = [
+        f"Unresolved dependency: {row['label']}"
+        for row in dependency_rows
+        if row["status"] != "resolved"
+    ]
+    return {
+        "schema_version": 1,
+        "kind": "lean_dependency_map",
+        "object_id": str(item.get("id", "")),
+        "title": str(item.get("title", "")),
+        "object_type": str(item.get("type", "")),
+        "status": status,
+        "dependency_count": len(dependencies),
+        "resolved_count": resolved_count,
+        "dependencies": dependency_rows,
+        "issues": issues,
+        "external_executable_invoked": False,
+        "verification_boundary": {
+            "scope": "reference_kb_dependency_mapping",
+            "proof_status": "not_a_proof",
+            "lean_invoked": False,
+        },
+    }
+
+
+def _lean_dependency_rows(
+    project_root: Path,
+    dependencies: list[str],
+) -> list[dict[str, object]]:
+    lookup = _reference_object_lookup(project_root)
+    rows: list[dict[str, object]] = []
+    for label in dependencies:
+        dependency_id = slugify_topic(label)
+        matched = lookup.get(dependency_id)
+        if matched is None:
+            rows.append(
+                {
+                    "label": label,
+                    "dependency_id": dependency_id,
+                    "status": "unresolved",
+                    "relationship": "prerequisite",
+                    "lean_identifier": _lean_identifier(dependency_id),
+                }
+            )
+            continue
+        source = matched.get("source", {})
+        rows.append(
+            {
+                "label": label,
+                "dependency_id": dependency_id,
+                "status": "resolved",
+                "relationship": "prerequisite",
+                "resolved_object_id": str(matched.get("id", "")),
+                "resolved_object_type": str(matched.get("type", "")),
+                "resolved_title": str(matched.get("title", "")),
+                "lean_identifier": _lean_identifier(str(matched.get("id", dependency_id))),
+                "source": source if isinstance(source, dict) else {},
+            }
+        )
+    return rows
+
+
+def _reference_object_lookup(project_root: Path) -> dict[str, dict[str, object]]:
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    objects = index.get("objects", []) if isinstance(index, dict) else []
+    lookup: dict[str, dict[str, object]] = {}
+    if not isinstance(objects, list):
+        return lookup
+    for item in objects:
+        if not isinstance(item, dict):
+            continue
+        object_id = str(item.get("id", "")).strip()
+        title = str(item.get("title", "")).strip()
+        if object_id:
+            lookup.setdefault(object_id, item)
+        if title:
+            lookup.setdefault(slugify_topic(title), item)
+    return lookup
+
+
+def _lean_dependency_map_report(
+    artifact: dict[str, object],
+    *,
+    artifact_path: str,
+) -> str:
+    lines = [
+        "# Tool Verification: Lean Dependency Map",
+        "",
+        "## Summary",
+        "",
+        f"- Object: {artifact.get('object_id', '')}",
+        f"- Title: {artifact.get('title', '')}",
+        f"- Type: {artifact.get('object_type', '')}",
+        f"- Status: {artifact.get('status', '')}",
+        f"- Dependencies: {artifact.get('dependency_count', 0)}",
+        f"- Resolved: {artifact.get('resolved_count', 0)}",
+        f"- Artifact: {artifact_path}",
+        "- External executable invoked: false",
+        "",
+        "## Dependencies",
+        "",
+    ]
+    dependencies = artifact.get("dependencies", [])
+    if isinstance(dependencies, list) and dependencies:
+        for row in dependencies:
+            if not isinstance(row, dict):
+                continue
+            lines.append(
+                (
+                    f"- {row.get('label', '')} | {row.get('status', '')} | "
+                    f"{row.get('dependency_id', '')}"
+                )
+            )
+            if row.get("resolved_object_id"):
+                lines.append(f"  - resolved_object_id: {row.get('resolved_object_id', '')}")
+                lines.append(f"  - resolved_title: {row.get('resolved_title', '')}")
+            lines.append(f"  - lean_identifier: {row.get('lean_identifier', '')}")
+    else:
+        lines.append("- none")
+    issues = artifact.get("issues", [])
+    lines.extend(["", "## Issues", ""])
+    if isinstance(issues, list) and issues:
+        lines.extend(f"- {issue}" for issue in issues)
+    else:
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- This map links Reference KB dependencies to Lean formalization targets.",
+            "- It does not prove the statement or any prerequisite.",
+            "- No Lean executable was invoked.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _lean_dependency_map_record(
+    project_root: Path,
+    item: dict[str, object],
+    *,
+    artifact_path: Path,
+    report_path: Path,
+    status: str,
+) -> dict[str, object]:
+    source = item.get("source", {})
+    return {
+        "kind": "lean_dependency_map",
+        "object_id": str(item.get("id", "")),
+        "object_type": str(item.get("type", "")),
+        "title": str(item.get("title", "")),
+        "status": status,
+        "artifact_path": artifact_path.relative_to(project_root).as_posix(),
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "source": source if isinstance(source, dict) else {},
+    }
 
 
 def _resolve_project_file(project_root: Path, value: Path | str) -> Path:

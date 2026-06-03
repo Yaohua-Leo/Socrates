@@ -497,6 +497,117 @@ class ToolVerificationTests(unittest.TestCase):
                 check_result.stdout,
             )
 
+    def test_lean_deps_cli_maps_reference_dependencies_for_formalization(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_resolved_kernel_dependencies(root / "p")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-deps",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Lean dependency map status: mapped", result.stdout)
+            self.assertIn("Dependencies: 3", result.stdout)
+            self.assertIn("Resolved: 3", result.stdout)
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "kernel_normality_lean_dependencies.json"
+            report_path = verification_dir / "kernel_normality_lean_dependencies_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            self.assertEqual(artifact["schema_version"], 1)
+            self.assertEqual(artifact["kind"], "lean_dependency_map")
+            self.assertEqual(artifact["object_id"], "kernel_normality")
+            self.assertEqual(artifact["object_type"], "theorem")
+            self.assertEqual(artifact["status"], "mapped")
+            self.assertEqual(artifact["dependency_count"], 3)
+            self.assertEqual(artifact["resolved_count"], 3)
+            self.assertEqual(artifact["external_executable_invoked"], False)
+            mapped = {row["label"]: row for row in artifact["dependencies"]}
+            self.assertEqual(mapped["kernel"]["resolved_object_id"], "kernel")
+            self.assertEqual(
+                mapped["normal_subgroup"]["resolved_object_id"],
+                "normal_subgroup",
+            )
+            self.assertEqual(
+                mapped["homomorphism"]["resolved_object_id"],
+                "homomorphism",
+            )
+            self.assertEqual(mapped["kernel"]["lean_identifier"], "kernel")
+            self.assertEqual(artifact["issues"], [])
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("# Tool Verification: Lean Dependency Map", report_text)
+            self.assertIn("- This map links Reference KB dependencies to Lean formalization targets.", report_text)
+            self.assertIn("- It does not prove the statement or any prerequisite.", report_text)
+            self.assertIn("- No Lean executable was invoked.", report_text)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = manifest["records"][0]
+            self.assertEqual(record["kind"], "lean_dependency_map")
+            self.assertEqual(record["status"], "mapped")
+            self.assertEqual(
+                record["artifact_path"],
+                "08_evals/tool_verification/kernel_normality_lean_dependencies.json",
+            )
+            self.assertEqual(
+                record["report_path"],
+                "08_evals/tool_verification/kernel_normality_lean_dependencies_report.md",
+            )
+
+            list_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "mapped",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(list_result.returncode, 0, list_result.stderr)
+            self.assertIn("kernel_normality | mapped | lean_dependency_map", list_result.stdout)
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 0, check_result.stderr)
+            self.assertIn(
+                "Checked 1 tool-verification record: 1 passed, 0 failed",
+                check_result.stdout,
+            )
+
     def test_tool_check_cli_writes_quality_report_for_persisted_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -670,6 +781,28 @@ def _project_with_kernel_reference(path: Path) -> Path:
         "## Kernels\n\n"
         "### Theorem 3.2: Kernel Normality\n"
         "Page: 83\n"
+        "The kernel of a group homomorphism is a normal subgroup.\n"
+        "Depends: kernel, normal_subgroup, homomorphism\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    build_reference_kb(project)
+    return project
+
+
+def _project_with_resolved_kernel_dependencies(path: Path) -> Path:
+    project = create_project(ProjectSpec(topic="Group Theory", path=path))
+    curated = project / "01_references" / "curated" / "kernel_dependencies.curated.md"
+    curated.write_text(
+        "# Homomorphisms\n\n"
+        "## Kernels\n\n"
+        "### Definition: Kernel\n"
+        "The kernel of a group homomorphism is the preimage of the identity.\n\n"
+        "### Definition: Normal Subgroup\n"
+        "A subgroup is normal when it is invariant under conjugation.\n\n"
+        "### Definition: Homomorphism\n"
+        "A homomorphism preserves multiplication and identities.\n\n"
+        "### Theorem 3.2: Kernel Normality\n"
         "The kernel of a group homomorphism is a normal subgroup.\n"
         "Depends: kernel, normal_subgroup, homomorphism\n",
         encoding="utf-8",

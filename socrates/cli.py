@@ -78,7 +78,9 @@ from .state import (
 from .tool_verification import (
     check_tool_verification_records,
     check_lean_file,
+    LeanDependencyMapResult,
     LeanCheckResult,
+    map_lean_dependencies,
     search_sympy_counterexample,
     SympyCounterexampleResult,
     SympyIdentityResult,
@@ -614,6 +616,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum seconds to wait for Lean; defaults to 10.",
     )
     lean_check_parser.set_defaults(func=_handle_tool_lean_check)
+    lean_deps_parser = tool_subparsers.add_parser(
+        "lean-deps",
+        help="Map a reference KB object's dependencies for Lean formalization.",
+    )
+    lean_deps_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    lean_deps_parser.add_argument("--object-id", required=True, help="Reference KB object id.")
+    lean_deps_parser.set_defaults(func=_handle_tool_lean_deps)
     tool_inventory_parser = tool_subparsers.add_parser(
         "inventory",
         help="Record local availability of optional math verification tools.",
@@ -658,6 +667,7 @@ def build_parser() -> argparse.ArgumentParser:
             "counterexample_found",
             "failed",
             "lean_checked",
+            "mapped",
             "no_counterexample_found",
             "partial",
             "unchecked_skeleton",
@@ -1342,6 +1352,28 @@ def _tool_lean_check_result_text(result: LeanCheckResult) -> str:
     lines = [
         f"Lean check status: {result.status}",
         f"Checked: {str(result.checked).lower()}",
+        f"Tool verification artifact: {result.artifact_path}",
+        f"Tool verification report: {result.report_path}",
+        f"Tool verification manifest: {result.manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_tool_lean_deps(args: argparse.Namespace) -> int:
+    try:
+        result = map_lean_dependencies(args.project, object_id=args.object_id)
+    except (FileNotFoundError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(_tool_lean_deps_result_text(result), end="")
+    return 0
+
+
+def _tool_lean_deps_result_text(result: LeanDependencyMapResult) -> str:
+    lines = [
+        f"Lean dependency map status: {result.status}",
+        f"Dependencies: {result.dependency_count}",
+        f"Resolved: {result.resolved_count}",
         f"Tool verification artifact: {result.artifact_path}",
         f"Tool verification report: {result.report_path}",
         f"Tool verification manifest: {result.manifest_path}",
