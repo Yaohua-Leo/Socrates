@@ -646,7 +646,26 @@ def _has_benchmark_report(project_root: Path) -> bool:
     report_path = project_root / "08_evals" / "benchmark_report.md"
     if not report_path.exists():
         return False
-    return "Benchmark score:" in report_path.read_text(encoding="utf-8")
+    if "Benchmark score:" not in report_path.read_text(encoding="utf-8"):
+        return False
+    return _latest_benchmark_input_mtime(project_root) <= report_path.stat().st_mtime_ns
+
+
+def _latest_benchmark_input_mtime(project_root: Path) -> int:
+    roots = (
+        project_root / "01_references" / "curated",
+        project_root / "03_sessions",
+        project_root / "04_atomic_notes",
+        project_root / "05_exercises" / "generated",
+    )
+    latest = 0
+    for root in roots:
+        if not root.exists():
+            continue
+        for path in root.rglob("*.md"):
+            if path.is_file():
+                latest = max(latest, path.stat().st_mtime_ns)
+    return latest
 
 
 def _lifecycle_report(checks: dict[str, bool]) -> str:

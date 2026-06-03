@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -91,6 +92,42 @@ class LifecycleAuditTests(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertIn("- Obsidian export: fail", report_text)
+
+    def test_lifecycle_audit_rejects_stale_benchmark_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            benchmark_report = project / "08_evals" / "benchmark_report.md"
+            benchmark_report.write_text(
+                "# Benchmark Report\n\n## Summary\n\n- Benchmark score: 100/100\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(benchmark_report, (1_000_000, 1_000_000))
+            exercise = project / "05_exercises" / "generated" / "new_exercise.md"
+            exercise.write_text("# New Exercise\n", encoding="utf-8", newline="\n")
+            os.utime(exercise, (1_000_100, 1_000_100))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Benchmark report: fail", report_text)
 
     def test_lifecycle_audit_cli_reports_complete_learning_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
