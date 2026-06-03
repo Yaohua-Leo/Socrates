@@ -133,6 +133,32 @@ def build_review_schedule(
     return schedule_path
 
 
+def repair_review_schedule(
+    context: ProjectContext,
+    *,
+    as_of: date | None = None,
+) -> tuple[int, Path]:
+    """Repair missing or malformed scheduled review dates in persisted state."""
+
+    state = _learning_state_dict(context.learning_state)
+    repaired_count, items = _repaired_review_items(state, as_of=as_of or date.today())
+    state["review_schedule"] = [
+        {
+            "concept": item.concept,
+            "priority": item.priority,
+            "due": item.due,
+            "scheduled_for": item.scheduled_for,
+            "reason": item.reason,
+        }
+        for item in items
+    ]
+    write_json(context.learning_state, state)
+
+    schedule_path = context.learning_plan_dir / "review_schedule.md"
+    write_text(schedule_path, _review_schedule_markdown(items))
+    return repaired_count, schedule_path
+
+
 def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: str) -> int:
     """Mark active misconception records for one concept as resolved."""
 
@@ -219,10 +245,61 @@ def _review_items(
     return sorted(items, key=lambda item: (item.scheduled_for, item.concept))
 
 
+def _repaired_review_items(
+    state: dict[str, object],
+    *,
+    as_of: date,
+) -> tuple[int, list[ReviewScheduleItem]]:
+    schedule = state.get("review_schedule", [])
+    if not isinstance(schedule, list):
+        return (0, [])
+
+    repaired_count = 0
+    items: list[ReviewScheduleItem] = []
+    for raw_item in schedule:
+        if not isinstance(raw_item, dict):
+            continue
+        item_repaired = False
+        priority = str(raw_item.get("priority", "medium")).strip() or "medium"
+        due = str(raw_item.get("due", "")).strip()
+        if not due:
+            due = "next_session" if priority == "high" else "within_3_days"
+            item_repaired = True
+        scheduled_for = str(raw_item.get("scheduled_for", "")).strip()
+        if not _is_iso_date(scheduled_for):
+            scheduled_for = _scheduled_review_date(priority, as_of)
+            item_repaired = True
+        if item_repaired:
+            repaired_count += 1
+        items.append(
+            ReviewScheduleItem(
+                concept=str(raw_item.get("concept", "review")),
+                priority=priority,
+                due=due,
+                scheduled_for=scheduled_for,
+                reason=str(raw_item.get("reason", "review scheduled")),
+            )
+        )
+    return (
+        repaired_count,
+        sorted(items, key=lambda item: (item.scheduled_for, item.concept)),
+    )
+
+
 def _scheduled_review_date(priority: str, as_of: date) -> str:
     if priority == "high":
         return as_of.isoformat()
     return (as_of + timedelta(days=3)).isoformat()
+
+
+def _is_iso_date(value: str) -> bool:
+    if not value:
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:

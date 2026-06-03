@@ -43,6 +43,7 @@ from .state import (
     LearningStatePatch,
     MistakeRecord,
     build_review_schedule,
+    repair_review_schedule,
     update_eval_report,
     update_learning_state,
 )
@@ -262,6 +263,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="ISO date used as the due-review cutoff; defaults to today.",
     )
     review_due_parser.set_defaults(func=_handle_review_due)
+    review_repair_parser = review_subparsers.add_parser(
+        "repair-schedule",
+        help="Repair missing or invalid review scheduled_for dates.",
+    )
+    review_repair_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_repair_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used to repair missing or invalid dates; defaults to today.",
+    )
+    review_repair_parser.set_defaults(func=_handle_review_repair_schedule)
 
     exercise_parser = subparsers.add_parser(
         "exercise",
@@ -646,6 +658,19 @@ def _handle_review_due(args: argparse.Namespace) -> int:
         return 1
     context = load_project(args.project)
     print(_due_reviews_text(context.learning_state, as_of), end="")
+    return 0
+
+
+def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else date.today()
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    context = load_project(args.project)
+    repaired_count, schedule_path = repair_review_schedule(context, as_of=as_of)
+    noun = "item" if repaired_count == 1 else "items"
+    print(f"Repaired {repaired_count} review schedule {noun}: {schedule_path}")
     return 0
 
 
