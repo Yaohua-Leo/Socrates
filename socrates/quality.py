@@ -502,6 +502,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
         issues.append("missing concept tags")
     if "## Prerequisites" in text and not _has_prerequisites(text):
         issues.append("missing prerequisites")
+    if "## Target Training Point" in text and not _has_target_training_point(text):
+        issues.append("missing target training point")
     if "## Common Mistakes" in text and not _has_common_mistakes(text):
         issues.append("missing common mistakes")
     if not _has_hint_ladder(text):
@@ -1081,6 +1083,10 @@ def _has_common_mistakes(text: str) -> bool:
     return _has_real_bullet(_section_text(text, "## Common Mistakes"))
 
 
+def _has_target_training_point(text: str) -> bool:
+    return _has_section_content(_section_text(text, "## Target Training Point"))
+
+
 def _has_real_bullet(section: str) -> bool:
     for line in section.splitlines():
         value = line.strip()
@@ -1088,6 +1094,14 @@ def _has_real_bullet(section: str) -> bool:
             continue
         tag = value.removeprefix("- ").strip()
         if tag and tag.casefold() != "none recorded.":
+            return True
+    return False
+
+
+def _has_section_content(section: str) -> bool:
+    for line in section.splitlines():
+        value = line.strip()
+        if value and value.casefold() != "none recorded.":
             return True
     return False
 
