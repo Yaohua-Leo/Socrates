@@ -424,7 +424,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     context = load_project(args.project)
     latest_session = _latest_session(context.sessions_dir)
     source_count = _count_sources(context.source_registry)
-    draft_count = len(list(context.atomic_note_drafts_dir.glob("*.md")))
+    draft_count = len(collect_learning_queue(context.root).notes_to_review)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_object_count = _count_kb_objects(context.root)

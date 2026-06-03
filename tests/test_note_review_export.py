@@ -2,12 +2,17 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
 from socrates.artifacts import generate_atomic_note_draft
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class NoteReviewExportTests(unittest.TestCase):
@@ -36,6 +41,34 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn('status: "reviewed"', text)
             self.assertIn("reviewed_by_user: true", text)
             self.assertIn("[[Subgroup]]", text)
+
+    def test_status_excludes_reviewed_notes_from_pending_drafts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- How is normality different from commutativity?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Pending draft notes: 0", result.stdout)
+            self.assertIn("Reviewed notes: 1", result.stdout)
 
     def test_review_atomic_note_rejects_failed_quality_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
