@@ -8,7 +8,11 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
-from .artifacts import generate_atomic_note_draft, generate_exercise_drafts
+from .artifacts import (
+    generate_atomic_note_draft,
+    generate_exercise_drafts,
+    generate_targeted_review_exercise_drafts,
+)
 from .context import load_project
 from .kb import build_reference_kb, search_reference_kb
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
@@ -147,6 +151,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_schedule_parser.add_argument("--project", required=True, help="Socrates project directory.")
     review_schedule_parser.set_defaults(func=_handle_review_schedule)
+    review_exercises_parser = review_subparsers.add_parser(
+        "exercises",
+        help="Generate targeted exercise drafts from the review schedule.",
+    )
+    review_exercises_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_exercises_parser.set_defaults(func=_handle_review_exercises)
 
     return parser
 
@@ -310,6 +320,13 @@ def _handle_review_schedule(args: argparse.Namespace) -> int:
     count = _count_scheduled_reviews(context.learning_state)
     noun = "item" if count == 1 else "items"
     print(f"Scheduled {count} review {noun}: {schedule_path}")
+    return 0
+
+
+def _handle_review_exercises(args: argparse.Namespace) -> int:
+    exercises = generate_targeted_review_exercise_drafts(args.project)
+    noun = "exercise" if len(exercises) == 1 else "exercises"
+    print(f"Generated {len(exercises)} targeted review {noun}")
     return 0
 
 

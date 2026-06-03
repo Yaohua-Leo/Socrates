@@ -166,6 +166,21 @@ class StateEvalTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            exercises_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
             status_result = subprocess.run(
                 [sys.executable, "-m", "socrates", "status", "--project", str(project)],
                 cwd=REPO_ROOT,
@@ -176,8 +191,14 @@ class StateEvalTests(unittest.TestCase):
 
             self.assertEqual(schedule_result.returncode, 0, schedule_result.stderr)
             self.assertIn("Scheduled 1 review item", schedule_result.stdout)
+            self.assertEqual(exercises_result.returncode, 0, exercises_result.stderr)
+            self.assertIn("Generated 1 targeted review exercise", exercises_result.stdout)
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
             self.assertEqual(status_result.returncode, 0, status_result.stderr)
             self.assertIn("Scheduled reviews: 1", status_result.stdout)
+            self.assertIn("Generated exercises: 1", status_result.stdout)
 
     def test_update_eval_report_scaffolds_allowed_reports(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

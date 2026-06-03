@@ -8,7 +8,9 @@ import unittest
 
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft
 from socrates.kb import build_reference_kb
+from socrates.context import load_project
 from socrates.project import ProjectSpec, create_project
+from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
 
 
 class NotesExercisesTests(unittest.TestCase):
@@ -117,6 +119,33 @@ class NotesExercisesTests(unittest.TestCase):
                 self.assertIn("- Group Action", text)
                 self.assertIn("- group", text)
                 self.assertIn("- set", text)
+
+    def test_generate_targeted_review_exercises_uses_review_schedule(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.43}),
+            )
+            build_review_schedule(context)
+
+            exercises = artifacts.generate_targeted_review_exercise_drafts(project)
+
+            self.assertEqual(len(exercises), 1)
+            self.assertEqual(exercises[0].id, "review_normal_subgroup_01")
+            self.assertEqual(
+                exercises[0].path,
+                "05_exercises/generated/review_normal_subgroup_01.md",
+            )
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn('type: "targeted_review_exercise"', text)
+            self.assertIn('concept: "normal_subgroup"', text)
+            self.assertIn('priority: "high"', text)
+            self.assertIn('due: "next_session"', text)
+            self.assertIn("## Target Weakness\n\nmastery 0.43", text)
+            self.assertIn("## Review Prompt", text)
 
     def _load_artifacts_module(self):
         spec = importlib.util.find_spec("socrates.artifacts")

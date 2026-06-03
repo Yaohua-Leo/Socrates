@@ -102,6 +102,42 @@ def generate_exercise_drafts(
     return drafts
 
 
+def generate_targeted_review_exercise_drafts(project_path: Path | str) -> list[ExerciseDraft]:
+    """Write exercises targeted at the current review schedule."""
+
+    context = load_project(project_path)
+    state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    if not isinstance(schedule, list):
+        return []
+
+    drafts: list[ExerciseDraft] = []
+    for index, item in enumerate(schedule, start=1):
+        if not isinstance(item, dict):
+            continue
+        concept = str(item.get("concept", "review"))
+        exercise_id = f"review_{slugify_topic(concept)}_{index:02d}"
+        relative_path = Path("05_exercises") / "generated" / f"{exercise_id}.md"
+        write_text(
+            context.root / relative_path,
+            _targeted_review_exercise_text(
+                concept=concept,
+                reason=str(item.get("reason", "review scheduled")),
+                priority=str(item.get("priority", "medium")),
+                due=str(item.get("due", "within_3_days")),
+            ),
+        )
+        drafts.append(
+            ExerciseDraft(
+                id=exercise_id,
+                type="targeted_review",
+                difficulty=3 if item.get("priority") == "high" else 2,
+                path=_as_posix(relative_path),
+            )
+        )
+    return drafts
+
+
 def _exercise_text(
     *,
     concept: str,
@@ -143,6 +179,43 @@ def _exercise_text(
         + "## Common Mistakes\n\n"
         + "- Skipping one condition in the definition.\n"
         + "- Confusing examples with a proof of the general statement.\n"
+    )
+
+
+def _targeted_review_exercise_text(
+    *,
+    concept: str,
+    reason: str,
+    priority: str,
+    due: str,
+) -> str:
+    return (
+        _frontmatter(
+            {
+                "status": "draft",
+                "review_status": "needs_review",
+                "type": "targeted_review_exercise",
+                "concept": concept,
+                "priority": priority,
+                "due": due,
+            }
+        )
+        + f"# Review Exercise: {concept}\n\n"
+        + "## Target Weakness\n\n"
+        + f"{reason}\n\n"
+        + "## Review Prompt\n\n"
+        + f"State the relevant definition of {concept}, then give one example and one non-example.\n\n"
+        + "## Hints\n\n"
+        + "- Start from the exact definition rather than a remembered slogan.\n"
+        + "- Test the definition against a borderline example.\n\n"
+        + "## Solution Outline\n\n"
+        + "- Write the formal condition.\n"
+        + "- Explain why the example satisfies every condition.\n"
+        + "- Explain exactly which condition fails in the non-example.\n\n"
+        + "## Rubric\n\n"
+        + "- Definition is stated accurately.\n"
+        + "- Example and non-example are both justified.\n"
+        + "- The explanation addresses the scheduled weakness.\n"
     )
 
 
