@@ -7,7 +7,10 @@ from pathlib import Path
 from .context import append_project_log, load_project, write_text
 from .quality import check_generated_exercise_quality, exercise_quality_issues
 from .project import slugify_topic
-from .state import LearningStatePatch, update_learning_state
+from .state import LearningStatePatch, build_review_schedule, update_learning_state
+
+
+REVIEW_MASTERY_THRESHOLD = 0.7
 
 
 def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
@@ -119,6 +122,8 @@ def grade_exercise_attempt(
             proof_skills={"exercise_solving": score},
         ),
     )
+    if score < REVIEW_MASTERY_THRESHOLD:
+        build_review_schedule(context, mastery_threshold=REVIEW_MASTERY_THRESHOLD)
     append_project_log(context, f"Graded attempt {attempt_id} with score {score:g}.")
     return grade_path
 
