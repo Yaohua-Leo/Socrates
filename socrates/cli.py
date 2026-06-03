@@ -28,7 +28,7 @@ from .quality import (
     run_project_benchmark,
 )
 from .references import curate_reference, import_reference
-from .reports import generate_project_summary, generate_weekly_report
+from .reports import generate_monthly_report, generate_project_summary, generate_weekly_report
 from .state import (
     EvalReportUpdate,
     LearningStatePatch,
@@ -258,6 +258,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     weekly_report_parser.add_argument("--project", required=True, help="Socrates project directory.")
     weekly_report_parser.set_defaults(func=_handle_report_weekly)
+    monthly_report_parser = report_subparsers.add_parser(
+        "monthly",
+        help="Generate a monthly learning review report.",
+    )
+    monthly_report_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    monthly_report_parser.set_defaults(func=_handle_report_monthly)
     project_summary_parser = report_subparsers.add_parser(
         "project-summary",
         help="Generate a project lifecycle summary report.",
@@ -510,6 +516,12 @@ def _handle_benchmark_run(args: argparse.Namespace) -> int:
 def _handle_report_weekly(args: argparse.Namespace) -> int:
     report = generate_weekly_report(args.project)
     print(f"Wrote weekly report: {report}")
+    return 0
+
+
+def _handle_report_monthly(args: argparse.Namespace) -> int:
+    report = generate_monthly_report(args.project)
+    print(f"Wrote monthly report: {report}")
     return 0
 
 

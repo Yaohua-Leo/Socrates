@@ -11,7 +11,12 @@ from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
 from socrates.notes import review_atomic_note
 from socrates.project import ProjectSpec, create_project
-from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+from socrates.state import (
+    LearningStatePatch,
+    MistakeRecord,
+    build_review_schedule,
+    update_learning_state,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -90,6 +95,63 @@ class ReportTests(unittest.TestCase):
             self.assertIn("## Current Learning State", report_text)
             self.assertIn("- normal_subgroup: 0.8", report_text)
             self.assertIn("## Next Review Items", report_text)
+            self.assertIn("- quotient_group: high, next_session", report_text)
+
+    def test_monthly_report_cli_highlights_weaknesses_and_next_steps(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session_0001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal subgroups are central.",
+                            analysis="Confuses invariance under conjugation with centrality.",
+                            repair_suggestion="Compare N normal with N contained in Z(G).",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Wrote monthly report", result.stdout)
+            report = project / "07_exports" / "reports" / "monthly_report.md"
+            report_text = report.read_text(encoding="utf-8")
+            self.assertIn("# Monthly Learning Report", report_text)
+            self.assertIn("## Concepts Studied", report_text)
+            self.assertIn("- normal_subgroup: 0.8", report_text)
+            self.assertIn("- quotient_group: 0.42", report_text)
+            self.assertIn("## Notes And Exercises", report_text)
+            self.assertIn("- Reviewed notes: 1", report_text)
+            self.assertIn("- Generated exercises: 5", report_text)
+            self.assertIn("- Graded exercises: 1", report_text)
+            self.assertIn("## Misconceptions", report_text)
+            self.assertIn("- normal_equals_central: normal_subgroup, active x1", report_text)
+            self.assertIn("## Weak Concepts", report_text)
+            self.assertIn("- quotient_group: 0.42", report_text)
+            self.assertIn("## Recommended Next Steps", report_text)
             self.assertIn("- quotient_group: high, next_session", report_text)
 
     def _create_report_fixture(self, root: Path) -> Path:

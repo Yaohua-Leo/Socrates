@@ -57,6 +57,29 @@ def generate_project_summary(project_path: Path | str) -> Path:
     return report_path
 
 
+def generate_monthly_report(project_path: Path | str) -> Path:
+    """Write a monthly learning review from persisted project artifacts."""
+
+    context = load_project(project_path)
+    report_path = context.root / "07_exports" / "reports" / "monthly_report.md"
+    state = _read_learning_state(context.learning_state)
+    write_text(
+        report_path,
+        _monthly_report_text(
+            reviewed_notes=_count_reviewed_notes(context.root),
+            draft_notes=_count_markdown(context.atomic_note_drafts_dir),
+            obsidian_exports=_count_markdown(context.root / "07_exports" / "obsidian"),
+            generated_exercises=_count_markdown(context.generated_exercises_dir),
+            approved_exercises=_count_approved_exercises(context.root),
+            attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
+            graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
+            state=state,
+        ),
+    )
+    append_project_log(context, "Generated monthly learning report.")
+    return report_path
+
+
 def _weekly_report_text(
     *,
     sessions_completed: int,
@@ -86,6 +109,50 @@ def _weekly_report_text(
         *_score_lines(state.get("proof_skills", {})),
         "",
         "## Scheduled Review",
+        "",
+        *_review_lines(state.get("review_schedule", [])),
+    ]
+    return "\n".join(lines).rstrip() + "\n"
+
+
+def _monthly_report_text(
+    *,
+    reviewed_notes: int,
+    draft_notes: int,
+    obsidian_exports: int,
+    generated_exercises: int,
+    approved_exercises: int,
+    attempted_exercises: int,
+    graded_exercises: int,
+    state: dict[str, object],
+) -> str:
+    concept_mastery = state.get("concept_mastery", {})
+    lines = [
+        "# Monthly Learning Report",
+        "",
+        "## Concepts Studied",
+        "",
+        *_score_lines(concept_mastery),
+        "",
+        "## Notes And Exercises",
+        "",
+        f"- Draft notes: {draft_notes}",
+        f"- Reviewed notes: {reviewed_notes}",
+        f"- Obsidian exports: {obsidian_exports}",
+        f"- Generated exercises: {generated_exercises}",
+        f"- Approved exercises: {approved_exercises}",
+        f"- Attempted exercises: {attempted_exercises}",
+        f"- Graded exercises: {graded_exercises}",
+        "",
+        "## Misconceptions",
+        "",
+        *_misconception_lines(state.get("misconceptions", {})),
+        "",
+        "## Weak Concepts",
+        "",
+        *_weak_concept_lines(concept_mastery),
+        "",
+        "## Recommended Next Steps",
         "",
         *_review_lines(state.get("review_schedule", [])),
     ]
@@ -241,6 +308,31 @@ def _review_lines(value: object) -> list[str]:
         reason = str(item.get("reason", "review scheduled"))
         lines.append(f"- {concept}: {priority}, {due} - {reason}")
     return lines or ["- none scheduled"]
+
+
+def _misconception_lines(value: object) -> list[str]:
+    if not isinstance(value, dict) or not value:
+        return ["- none recorded"]
+    lines: list[str] = []
+    for misconception_id, item in sorted(value.items()):
+        if not isinstance(item, dict):
+            continue
+        concept = str(item.get("concept", "general"))
+        status = str(item.get("status", "active"))
+        count = int(item.get("count", 1))
+        lines.append(f"- {misconception_id}: {concept}, {status} x{count}")
+    return lines or ["- none recorded"]
+
+
+def _weak_concept_lines(value: object, *, threshold: float = 0.7) -> list[str]:
+    if not isinstance(value, dict) or not value:
+        return ["- none below threshold"]
+    lines: list[str] = []
+    for concept, score_value in sorted(value.items()):
+        score = float(score_value)
+        if score < threshold:
+            lines.append(f"- {concept}: {score:g}")
+    return lines or ["- none below threshold"]
 
 
 def _yaml_like_string(value: str) -> str:
