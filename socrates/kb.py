@@ -314,6 +314,7 @@ def _metadata_value(line: str) -> str:
 
 def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
     metadata = {
+        "object_id": item["id"],
         "type": item["type"],
         "title": item["title"],
         "source": item["source"],

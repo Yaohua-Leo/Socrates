@@ -200,6 +200,25 @@ class ReferenceKbTests(unittest.TestCase):
                 "3.1",
             )
 
+    def test_build_reference_kb_includes_object_id_in_chunk_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+
+            result = build_reference_kb(project)
+
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            chunk = index["chunks"][0]
+            self.assertEqual(chunk["object_id"], "normal_subgroup")
+            self.assertIn("object_id", chunk["metadata"])
+            self.assertEqual(chunk["metadata"]["object_id"], "normal_subgroup")
+
     def test_search_reference_kb_matches_source_provenance_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
