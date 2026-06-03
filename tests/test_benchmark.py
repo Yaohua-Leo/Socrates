@@ -153,6 +153,54 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIn("Current phase: benchmark_ready", status.stdout)
             self.assertIn("Benchmark score: 100/100", status.stdout)
             self.assertIn("Benchmark gates: 4/4", status.stdout)
+            self.assertIn("Benchmark failed gates: none", status.stdout)
+
+    def test_status_lists_failed_benchmark_gates_from_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p")
+            )
+            manifest_path = project / "08_evals" / "benchmark_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "score": 75,
+                        "passed_gates": 3,
+                        "total_gates": 4,
+                        "gates": [
+                            {"name": "Ingestion", "passed": True},
+                            {"name": "Note quality", "passed": True},
+                            {"name": "Exercise quality", "passed": True},
+                            {"name": "Tutoring quality", "passed": False},
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Current phase: benchmark_ready", status.stdout)
+            self.assertIn("Benchmark score: 75/100", status.stdout)
+            self.assertIn("Benchmark gates: 3/4", status.stdout)
+            self.assertIn("Benchmark failed gates: Tutoring quality", status.stdout)
 
 
 if __name__ == "__main__":

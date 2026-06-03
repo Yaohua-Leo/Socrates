@@ -756,6 +756,10 @@ def _handle_status(args: argparse.Namespace) -> int:
             "Benchmark gates: "
             f"{benchmark_status['passed_gates']}/{benchmark_status['total_gates']}"
         )
+        print(
+            "Benchmark failed gates: "
+            f"{_benchmark_failed_gates_text(benchmark_status)}"
+        )
     print(f"Active misconceptions: {active_misconception_count}")
     print(f"Resolved misconceptions: {resolved_misconception_count}")
     return 0
@@ -1406,7 +1410,7 @@ def _count_learning_reports(project_root: Path) -> int:
     return len(list(reports_dir.glob("*.md")))
 
 
-def _read_benchmark_status(project_root: Path) -> dict[str, int] | None:
+def _read_benchmark_status(project_root: Path) -> dict[str, object] | None:
     manifest_path = project_root / "08_evals" / "benchmark_manifest.json"
     if not manifest_path.exists():
         return None
@@ -1427,7 +1431,38 @@ def _read_benchmark_status(project_root: Path) -> dict[str, int] | None:
         "score": score,
         "passed_gates": passed_gates,
         "total_gates": total_gates,
+        "failed_gates": _failed_benchmark_gates(manifest.get("gates")),
     }
+
+
+def _failed_benchmark_gates(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    failed: list[str] = []
+    for gate in value:
+        if not isinstance(gate, dict):
+            continue
+        if gate.get("passed") is not False:
+            continue
+        name = str(gate.get("name", "")).strip()
+        if name:
+            failed.append(name)
+    return failed
+
+
+def _benchmark_failed_gates_text(benchmark_status: dict[str, object]) -> str:
+    failed_gates = benchmark_status.get("failed_gates", [])
+    if isinstance(failed_gates, list) and failed_gates:
+        return ", ".join(str(name) for name in failed_gates)
+    passed_gates = benchmark_status.get("passed_gates")
+    total_gates = benchmark_status.get("total_gates")
+    if (
+        isinstance(passed_gates, int)
+        and isinstance(total_gates, int)
+        and passed_gates < total_gates
+    ):
+        return "unknown"
+    return "none"
 
 
 def _count_sources(registry_path: Path) -> int:
