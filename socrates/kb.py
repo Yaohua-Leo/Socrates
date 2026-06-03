@@ -92,6 +92,7 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
     lines = markdown_path.read_text(encoding="utf-8").splitlines()
     chapter = ""
     section = ""
+    source_id = ""
     objects: list[dict[str, object]] = []
     current: dict[str, object] | None = None
     body: list[str] = []
@@ -108,6 +109,13 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
         current = None
 
     for line_number, line in enumerate(lines, start=1):
+        stripped = line.strip()
+        if stripped.startswith("- source_id:"):
+            source_id = stripped.removeprefix("- source_id:").strip().strip('"')
+            if current is not None:
+                body.append(line)
+            continue
+
         if line.startswith("### "):
             flush()
             parsed = _parse_object_heading(line.removeprefix("### ").strip())
@@ -122,6 +130,7 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
                 "type": object_type,
                 "title": title,
                 "source": {
+                    "source_id": source_id,
                     "path": markdown_path.relative_to(project_root).as_posix(),
                     "chapter": chapter,
                     "section": section,

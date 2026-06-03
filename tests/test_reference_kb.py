@@ -72,6 +72,31 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(matches[0]["type"], "theorem")
             self.assertIn("kernels.curated.md", matches[0]["source"]["path"])
 
+    def test_build_reference_kb_preserves_source_id_from_curated_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Curated Reference: Normality Notes\n\n"
+                "## Source Metadata\n\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n\n"
+                "## Curated Content\n\n"
+                "### Definition: Normal Subgroup\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+
+            result = build_reference_kb(project)
+
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            self.assertEqual(index["objects"][0]["source"]["source_id"], "normality_notes")
+            self.assertEqual(
+                index["chunks"][0]["metadata"]["source"]["source_id"],
+                "normality_notes",
+            )
+
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
