@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from pathlib import Path
 import subprocess
 import sys
@@ -94,7 +95,7 @@ class LearningQueueTests(unittest.TestCase):
                 context,
                 LearningStatePatch(concept_mastery={"normal_subgroup": 0.4}),
             )
-            build_review_schedule(context)
+            build_review_schedule(context, as_of=date(2026, 6, 4))
 
             result = subprocess.run(
                 [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
@@ -107,9 +108,45 @@ class LearningQueueTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("## Scheduled Reviews", result.stdout)
             self.assertIn(
-                "- normal_subgroup | 02_learning_plan/review_schedule.md",
+                "- normal_subgroup | 02_learning_plan/review_schedule.md | scheduled for 2026-06-04",
                 result.stdout,
             )
+
+    def test_queue_cli_orders_scheduled_reviews_by_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            urgent = (
+                "- zeta_urgent_review | 02_learning_plan/review_schedule.md | "
+                "scheduled for 2026-06-04"
+            )
+            medium = (
+                "- alpha_medium_review | 02_learning_plan/review_schedule.md | "
+                "scheduled for 2026-06-07"
+            )
+            self.assertIn(urgent, result.stdout)
+            self.assertIn(medium, result.stdout)
+            self.assertLess(result.stdout.index(urgent), result.stdout.index(medium))
 
 
 if __name__ == "__main__":

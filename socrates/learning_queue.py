@@ -14,6 +14,7 @@ class QueueItem:
 
     item_id: str
     path: str
+    detail: str = ""
 
 
 @dataclass(frozen=True)
@@ -105,14 +106,17 @@ def _scheduled_reviews(project_root: Path) -> list[QueueItem]:
     if not isinstance(schedule, list):
         return []
     items: list[QueueItem] = []
-    for item in schedule:
+    for item in sorted(schedule, key=_scheduled_review_sort_key):
         if not isinstance(item, dict):
             continue
         concept = str(item.get("concept", "review"))
+        scheduled_for = str(item.get("scheduled_for", "")).strip()
+        detail = f"scheduled for {scheduled_for}" if scheduled_for else ""
         items.append(
             QueueItem(
                 item_id=concept,
                 path=schedule_path.relative_to(project_root).as_posix(),
+                detail=detail,
             )
         )
     return items
@@ -207,11 +211,27 @@ def _queue_item(path: Path, project_root: Path) -> QueueItem:
     )
 
 
+def _scheduled_review_sort_key(item: object) -> tuple[str, str]:
+    if not isinstance(item, dict):
+        return ("9999-99-99", "")
+    return (
+        str(item.get("scheduled_for", "9999-99-99")),
+        str(item.get("concept", "review")),
+    )
+
+
 def _section(title: str, items: list[QueueItem]) -> list[str]:
     lines = [f"## {title}", ""]
     if not items:
         lines.extend(["- none", ""])
         return lines
-    lines.extend(f"- {item.item_id} | {item.path}" for item in items)
+    lines.extend(_queue_line(item) for item in items)
     lines.append("")
     return lines
+
+
+def _queue_line(item: QueueItem) -> str:
+    line = f"- {item.item_id} | {item.path}"
+    if item.detail:
+        line = f"{line} | {item.detail}"
+    return line
