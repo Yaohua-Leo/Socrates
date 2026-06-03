@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import importlib.util
 import itertools
 import json
@@ -2060,6 +2061,7 @@ def _tool_quality_manifest(
         "passed": passed,
         "failed": failed,
         "source_manifest": source_manifest_path.relative_to(project_root).as_posix(),
+        "source_manifest_fingerprint": _source_manifest_fingerprint(source_manifest_path),
         "records": records,
         "issues": issues,
         "verification_boundary": {
@@ -2086,6 +2088,7 @@ def _tool_quality_report(
         f"- Passed: {manifest['passed']}",
         f"- Failed: {manifest['failed']}",
         f"- Source manifest: {source_manifest}",
+        f"- Source manifest fingerprint: {_fingerprint_label(manifest)}",
         "",
     ]
     issues = manifest.get("issues", [])
@@ -2127,6 +2130,22 @@ def _tool_quality_report(
         ]
     )
     return "\n".join(lines)
+
+
+def _source_manifest_fingerprint(path: Path) -> dict[str, str]:
+    value = hashlib.sha256(path.read_bytes()).hexdigest() if path.exists() else ""
+    return {"algorithm": "sha256", "value": value}
+
+
+def _fingerprint_label(manifest: dict[str, object]) -> str:
+    fingerprint = manifest.get("source_manifest_fingerprint")
+    if not isinstance(fingerprint, dict):
+        return "not recorded"
+    algorithm = str(fingerprint.get("algorithm", "")).strip()
+    value = str(fingerprint.get("value", "")).strip()
+    if not algorithm or not value:
+        return "not recorded"
+    return f"{algorithm}:{value}"
 
 
 def _manifest_record(

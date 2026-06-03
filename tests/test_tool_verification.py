@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -858,6 +859,14 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(
                 manifest["source_manifest"],
                 "08_evals/tool_verification/manifest.json",
+            )
+            source_manifest = project / "08_evals" / "tool_verification" / "manifest.json"
+            self.assertEqual(
+                manifest["source_manifest_fingerprint"],
+                {
+                    "algorithm": "sha256",
+                    "value": hashlib.sha256(source_manifest.read_bytes()).hexdigest(),
+                },
             )
             record = manifest["records"][0]
             self.assertEqual(record["object_id"], "kernel_normality")

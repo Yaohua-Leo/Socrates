@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -1043,7 +1044,10 @@ class ExerciseQualityTests(unittest.TestCase):
                 count=5,
             )
             _write_linked_sage_tool_record(project)
-            quality_manifest = _write_sage_tool_quality_manifest(project)
+            quality_manifest = _write_sage_tool_quality_manifest(
+                project,
+                include_source_manifest_fingerprint=False,
+            )
             source_manifest = project / "08_evals" / "tool_verification" / "manifest.json"
             os.utime(quality_manifest, (1000, 1000))
             os.utime(source_manifest, (2000, 2000))
@@ -1085,6 +1089,67 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(
                 first_exercise["tool_verification"]["quality_reason"],
                 "tool-verification check is older than source manifest",
+            )
+
+    def test_exercise_check_cli_marks_changed_tool_manifest_fingerprint_stale(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            _write_linked_sage_tool_record(project)
+            quality_manifest = _write_sage_tool_quality_manifest(
+                project,
+                source_manifest_fingerprint={
+                    "algorithm": "sha256",
+                    "value": "stale-fingerprint",
+                },
+            )
+            source_manifest = project / "08_evals" / "tool_verification" / "manifest.json"
+            os.utime(source_manifest, (1000, 1000))
+            os.utime(quality_manifest, (2000, 2000))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (project / "08_evals" / "exercise_quality_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                (
+                    "- normal_subgroup_01.md | linked | records: 1 | "
+                    "quality: stale (tool-verification source manifest fingerprint changed)"
+                ),
+                report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            first_exercise = manifest["exercises"][0]
+            self.assertEqual(first_exercise["tool_verification"]["quality_status"], "stale")
+            self.assertEqual(
+                first_exercise["tool_verification"]["quality_reason"],
+                "tool-verification source manifest fingerprint changed",
             )
 
 
@@ -1145,8 +1210,24 @@ def _write_linked_sage_tool_record(project: Path) -> None:
     )
 
 
-def _write_sage_tool_quality_manifest(project: Path) -> Path:
+def _write_sage_tool_quality_manifest(
+    project: Path,
+    *,
+    include_source_manifest_fingerprint: bool = True,
+    source_manifest_fingerprint: dict[str, str] | None = None,
+) -> Path:
     manifest_path = project / "08_evals" / "tool_verification_quality_manifest.json"
+    source_manifest = project / "08_evals" / "tool_verification" / "manifest.json"
+    if source_manifest_fingerprint is None:
+        source_manifest_fingerprint = {
+            "algorithm": "sha256",
+            "value": hashlib.sha256(source_manifest.read_bytes()).hexdigest(),
+        }
+    source_manifest_fields: dict[str, object] = {
+        "source_manifest": "08_evals/tool_verification/manifest.json"
+    }
+    if include_source_manifest_fingerprint:
+        source_manifest_fields["source_manifest_fingerprint"] = source_manifest_fingerprint
     manifest_path.write_text(
         json.dumps(
             {
@@ -1155,7 +1236,7 @@ def _write_sage_tool_quality_manifest(project: Path) -> Path:
                 "checked": 1,
                 "passed": 1,
                 "failed": 0,
-                "source_manifest": "08_evals/tool_verification/manifest.json",
+                **source_manifest_fields,
                 "records": [
                     {
                         "object_id": "normal_subgroup_01",

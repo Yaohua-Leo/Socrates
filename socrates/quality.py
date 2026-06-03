@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import hashlib
 import json
 from pathlib import Path
 
@@ -621,10 +622,15 @@ def _exercise_tool_verification_quality(
         if isinstance(record, dict)
         and str(record.get("object_id", "")).strip() == exercise_id
     ]
-    if _tool_verification_quality_is_stale(manifest_path, source_manifest_path):
+    staleness_reason = _tool_verification_quality_staleness_reason(
+        manifest,
+        manifest_path,
+        source_manifest_path,
+    )
+    if staleness_reason:
         return {
             "status": "stale",
-            "reason": "tool-verification check is older than source manifest",
+            "reason": staleness_reason,
             "records": linked_quality_records,
         }
     if not linked_quality_records:
@@ -648,13 +654,27 @@ def _exercise_tool_verification_quality(
     return {"status": status, "reason": "", "records": linked_quality_records}
 
 
-def _tool_verification_quality_is_stale(
+def _tool_verification_quality_staleness_reason(
+    manifest: dict[str, object],
     manifest_path: Path,
     source_manifest_path: Path,
-) -> bool:
+) -> str:
+    fingerprint = manifest.get("source_manifest_fingerprint")
+    if isinstance(fingerprint, dict):
+        algorithm = str(fingerprint.get("algorithm", "")).strip()
+        value = str(fingerprint.get("value", "")).strip()
+        if algorithm == "sha256" and value:
+            if not source_manifest_path.exists():
+                return ""
+            current_value = hashlib.sha256(source_manifest_path.read_bytes()).hexdigest()
+            if current_value != value:
+                return "tool-verification source manifest fingerprint changed"
+            return ""
     if not source_manifest_path.exists():
-        return False
-    return source_manifest_path.stat().st_mtime > manifest_path.stat().st_mtime
+        return ""
+    if source_manifest_path.stat().st_mtime > manifest_path.stat().st_mtime:
+        return "tool-verification check is older than source manifest"
+    return ""
 
 
 def _exercise_quality_manifest(
