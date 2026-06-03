@@ -143,22 +143,26 @@ def generate_targeted_review_exercise_drafts(
         relative_path = Path("05_exercises") / "generated" / f"{exercise_id}.md"
         exercise_path = context.root / relative_path
         if not exercise_path.exists():
+            difficulty = _review_exercise_difficulty(str(item.get("priority", "medium")))
             write_text(
                 exercise_path,
                 _targeted_review_exercise_text(
                     concept=concept,
                     reason=str(item.get("reason", "review scheduled")),
                     priority=str(item.get("priority", "medium")),
+                    difficulty=difficulty,
                     due=str(item.get("due", "within_3_days")),
                     scheduled_for=str(item.get("scheduled_for", "")),
                     reference_object=reference_object,
                 ),
             )
+        else:
+            difficulty = _review_exercise_difficulty(str(item.get("priority", "medium")))
         drafts.append(
             ExerciseDraft(
                 id=exercise_id,
                 type="targeted_review",
-                difficulty=3 if item.get("priority") == "high" else 2,
+                difficulty=difficulty,
                 path=_as_posix(relative_path),
             )
         )
@@ -232,6 +236,7 @@ def _targeted_review_exercise_text(
     concept: str,
     reason: str,
     priority: str,
+    difficulty: int,
     due: str,
     scheduled_for: str,
     reference_object: dict[str, object] | None,
@@ -244,6 +249,7 @@ def _targeted_review_exercise_text(
                 "review_status": "needs_review",
                 "type": "targeted_review_exercise",
                 "concept": concept,
+                "difficulty": difficulty,
                 "priority": priority,
                 "due": due,
                 "scheduled_for": scheduled_for,
@@ -274,6 +280,10 @@ def _targeted_review_exercise_text(
         + "- Repeating the weak slogan without checking the definition.\n"
         + "- Giving an example without explaining the failing condition in the non-example.\n"
     )
+
+
+def _review_exercise_difficulty(priority: str) -> int:
+    return 3 if priority == "high" else 2
 
 
 def _frontmatter(values: dict[str, object]) -> str:

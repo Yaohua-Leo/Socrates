@@ -76,7 +76,7 @@ class LifecycleAuditResult:
     report_path: Path
 
 
-REQUIRED_FRONTMATTER = ("status:", "review_status:", "type:", "concept:")
+REQUIRED_FRONTMATTER = ("status:", "review_status:", "type:", "concept:", "difficulty:")
 REQUIRED_SECTIONS = (
     "## Target Training Point",
     "## Hints",

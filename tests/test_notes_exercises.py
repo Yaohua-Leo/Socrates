@@ -251,6 +251,7 @@ class NotesExercisesTests(unittest.TestCase):
             text = (project / exercises[0].path).read_text(encoding="utf-8")
             self.assertIn('type: "targeted_review_exercise"', text)
             self.assertIn('concept: "normal_subgroup"', text)
+            self.assertIn("difficulty: 3", text)
             self.assertIn('priority: "high"', text)
             self.assertIn('due: "next_session"', text)
             self.assertIn('scheduled_for: "2026-06-04"', text)
