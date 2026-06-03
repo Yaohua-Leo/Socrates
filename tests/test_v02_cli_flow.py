@@ -146,6 +146,7 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertTrue((project / "06_kb" / "theorem_index.json").exists())
             self.assertTrue((project / "06_kb" / "exercise_index.json").exists())
             self.assertTrue(exported.exists())
+            self.assertIn("Converted references: 1", status)
             self.assertIn("Curated references: 1", status)
             self.assertIn("KB objects: 1", status)
             self.assertIn("Reviewed notes: 1", status)
