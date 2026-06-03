@@ -104,6 +104,57 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(exercise_index["exercises"][0]["title"], "Prove Kernel Normality")
             self.assertIn("normal_subgroup", exercise_index["exercises"][0]["dependencies"])
 
+    def test_build_reference_kb_writes_chapter_section_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n\n"
+                "### Theorem: Kernel Normality\n"
+                "The kernel of a group homomorphism is normal.\n"
+                "Depends: kernel, normal subgroup\n\n"
+                "## Section 3.2 Quotient Groups\n"
+                "### Definition: Quotient Group\n"
+                "The quotient group G/N is formed from cosets of a normal subgroup.\n"
+                "Depends: normal subgroup, coset\n",
+                encoding="utf-8",
+            )
+
+            build_reference_kb(project)
+
+            chapter_index = json.loads(
+                (project / "06_kb" / "chapter_index.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(chapter_index["schema_version"], 1)
+            self.assertEqual(chapter_index["chapters"][0]["title"], "Chapter 3: Quotient Groups")
+            self.assertEqual(
+                chapter_index["chapters"][0]["sections"][0],
+                {
+                    "title": "Section 3.1 Normal Subgroups",
+                    "source_path": "01_references/curated/normality.curated.md",
+                    "objects": [
+                        {
+                            "id": "normal_subgroup",
+                            "type": "definition",
+                            "title": "Normal Subgroup",
+                        },
+                        {
+                            "id": "kernel_normality",
+                            "type": "theorem",
+                            "title": "Kernel Normality",
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(
+                chapter_index["chapters"][0]["sections"][1]["objects"][0]["id"],
+                "quotient_group",
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

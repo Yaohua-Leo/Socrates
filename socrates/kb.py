@@ -53,6 +53,7 @@ def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
     write_json(index_path, index)
     write_json(context.root / "06_kb" / "concept_graph.json", _concept_graph(objects))
     write_json(context.root / "06_kb" / "dependency_graph.json", _dependency_graph(objects))
+    write_json(context.root / "06_kb" / "chapter_index.json", _chapter_index(objects))
     write_json(context.root / "06_kb" / "theorem_index.json", _theorem_index(objects))
     write_json(context.root / "06_kb" / "exercise_index.json", _exercise_index(objects))
     _write_ingestion_eval(context.evals_dir / "ingestion_eval.md", len(objects))
@@ -215,6 +216,51 @@ def _dependency_graph(objects: list[dict[str, object]]) -> dict[str, list[dict[s
             edge for edge in graph["edges"] if edge["relationship"] == "prerequisite"
         ],
     }
+
+
+def _chapter_index(objects: list[dict[str, object]]) -> dict[str, object]:
+    chapters: list[dict[str, object]] = []
+    chapter_lookup: dict[str, dict[str, object]] = {}
+    section_lookup: dict[tuple[str, str, str], dict[str, object]] = {}
+
+    for item in objects:
+        source = item.get("source", {})
+        if not isinstance(source, dict):
+            source = {}
+        chapter_title = str(source.get("chapter") or "Unassigned")
+        section_title = str(source.get("section") or "Unassigned")
+        source_path = str(source.get("path") or "unknown")
+
+        chapter = chapter_lookup.get(chapter_title)
+        if chapter is None:
+            chapter = {"title": chapter_title, "sections": []}
+            chapter_lookup[chapter_title] = chapter
+            chapters.append(chapter)
+
+        section_key = (chapter_title, section_title, source_path)
+        section = section_lookup.get(section_key)
+        if section is None:
+            section = {
+                "title": section_title,
+                "source_path": source_path,
+                "objects": [],
+            }
+            section_lookup[section_key] = section
+            sections = chapter["sections"]
+            if isinstance(sections, list):
+                sections.append(section)
+
+        section_objects = section["objects"]
+        if isinstance(section_objects, list):
+            section_objects.append(
+                {
+                    "id": str(item.get("id", "")),
+                    "type": str(item.get("type", "")),
+                    "title": str(item.get("title", "")),
+                }
+            )
+
+    return {"schema_version": 1, "chapters": chapters}
 
 
 def _theorem_index(objects: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
