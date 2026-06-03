@@ -1321,6 +1321,8 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
         issues.append("missing title heading")
     if "source_id: null" in text or 'source_id: ""' in text:
         issues.append("missing source id")
+    if "tags:" in text and not _frontmatter_list(text, "tags"):
+        issues.append("missing tags")
     for section in NOTE_REQUIRED_SECTIONS:
         if section not in text:
             issues.append(f"missing section {section.removeprefix('## ')}")
