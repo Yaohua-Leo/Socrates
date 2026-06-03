@@ -204,6 +204,17 @@ def run_project_benchmark(
 
 
 def _check_exercise(path: Path) -> dict[str, object]:
+    issues = exercise_quality_issues(path)
+    return {
+        "file": path.name,
+        "status": "fail" if issues else "pass",
+        "issues": issues,
+    }
+
+
+def exercise_quality_issues(path: Path) -> list[str]:
+    """Return checklist issues for one generated exercise file."""
+
     text = path.read_text(encoding="utf-8")
     issues: list[str] = []
     if not text.startswith("---\n"):
@@ -216,11 +227,7 @@ def _check_exercise(path: Path) -> dict[str, object]:
     for section in REQUIRED_SECTIONS:
         if section not in text:
             issues.append(f"missing section {section.removeprefix('## ')}")
-    return {
-        "file": path.name,
-        "status": "fail" if issues else "pass",
-        "issues": issues,
-    }
+    return issues
 
 
 def _atomic_note_paths(project_root: Path) -> list[Path]:

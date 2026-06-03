@@ -14,6 +14,7 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
 )
 from .context import load_project
+from .exercises import approve_exercise_draft
 from .kb import build_reference_kb, search_reference_kb
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
@@ -194,6 +195,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     exercise_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     exercise_check_parser.set_defaults(func=_handle_exercise_check)
+    exercise_approve_parser = exercise_subparsers.add_parser(
+        "approve",
+        help="Approve one generated exercise draft after quality checks.",
+    )
+    exercise_approve_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_approve_parser.add_argument("--exercise", required=True, help="Generated exercise id, without .md.")
+    exercise_approve_parser.set_defaults(func=_handle_exercise_approve)
 
     session_parser = subparsers.add_parser(
         "session",
@@ -323,6 +331,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     reviewed_count = _count_reviewed_notes(context.root)
     obsidian_export_count = len(list((context.root / "07_exports" / "obsidian").glob("*.md")))
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
+    approved_exercise_count = _count_approved_exercises(context.root)
     phase = "tutoring_complete" if latest_session != "none" else "initialization"
 
     print(f"Project: {context.root}")
@@ -334,6 +343,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Pending draft notes: {draft_count}")
     print(f"Reviewed notes: {reviewed_count}")
     print(f"Generated exercises: {exercise_count}")
+    print(f"Approved exercises: {approved_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     return 0
@@ -422,6 +432,12 @@ def _handle_exercise_check(args: argparse.Namespace) -> int:
         f"{result.passed} passed, {result.failed} failed"
     )
     print(f"Exercise quality report: {result.report_path}")
+    return 0
+
+
+def _handle_exercise_approve(args: argparse.Namespace) -> int:
+    approved = approve_exercise_draft(args.project, args.exercise)
+    print(f"Approved exercise {args.exercise}: {approved}")
     return 0
 
 
@@ -629,6 +645,16 @@ def _count_reviewed_notes(project_root: Path) -> int:
             if "reviewed_by_user: true" in text:
                 reviewed += 1
     return reviewed
+
+
+def _count_approved_exercises(project_root: Path) -> int:
+    generated_root = project_root / "05_exercises" / "generated"
+    approved = 0
+    for exercise_path in generated_root.glob("*.md"):
+        text = exercise_path.read_text(encoding="utf-8")
+        if 'status: "approved"' in text and "reviewed_by_user: true" in text:
+            approved += 1
+    return approved
 
 
 def _count_scheduled_reviews(learning_state: Path) -> int:
