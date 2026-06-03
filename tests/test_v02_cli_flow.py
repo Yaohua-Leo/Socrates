@@ -86,6 +86,7 @@ class V02CliFlowTests(unittest.TestCase):
                 "conjugation",
             ).stdout
 
+            self.assertIn("definition 3.1: Normal Subgroup", search)
             self.assertIn("normality.curated.md:p82:1", search)
 
     def test_import_curate_kb_plan_teach_review_export_flow_from_cli(self) -> None:

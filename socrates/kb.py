@@ -79,6 +79,7 @@ def search_reference_kb(project_path: Path | str, query: str, *, limit: int = 10
     for item in index.get("objects", []):
         haystack = " ".join(
             [
+                str(item.get("number", "")),
                 str(item.get("title", "")),
                 str(item.get("statement", "")),
                 " ".join(str(dep) for dep in item.get("dependencies", [])),

@@ -147,6 +147,24 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(chunk_source["page"], "82")
             self.assertNotIn("Page: 82", index["objects"][0]["statement"])
 
+    def test_search_reference_kb_matches_math_object_numbers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "numbered.curated.md"
+            curated.write_text(
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+            )
+            build_reference_kb(project)
+
+            matches = search_reference_kb(project, "3.1")
+
+            self.assertEqual(len(matches), 1)
+            self.assertEqual(matches[0]["title"], "Normal Subgroup")
+            self.assertEqual(matches[0]["number"], "3.1")
+
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

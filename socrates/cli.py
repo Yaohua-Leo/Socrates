@@ -543,7 +543,8 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
         source = match.get("source", {})
         location = _source_location(source)
         source_label = _source_label(source)
-        print(f"{match['type']}: {match['title']}{source_label} ({location})")
+        object_label = _object_label(match)
+        print(f"{object_label}{source_label} ({location})")
     return 0
 
 
@@ -872,6 +873,15 @@ def _source_location(source: object) -> str:
     if line:
         return f"{path}:{line}"
     return path
+
+
+def _object_label(match: dict[str, object]) -> str:
+    object_type = str(match.get("type", "object"))
+    number = str(match.get("number", "")).strip()
+    title = str(match.get("title", "Untitled"))
+    if number:
+        return f"{object_type} {number}: {title}"
+    return f"{object_type}: {title}"
 
 
 def _source_label(source: object) -> str:
