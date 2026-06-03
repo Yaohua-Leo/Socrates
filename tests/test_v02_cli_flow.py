@@ -59,6 +59,94 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertTrue((project / "06_kb" / "chunks" / "reference_index.json").exists())
             self.assertTrue((project / "07_exports" / "obsidian" / "normal_subgroup.md").exists())
 
+    def test_import_curate_kb_plan_teach_review_export_flow_from_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "group_theory"
+            reference = root / "normal_subgroups.md"
+            reference.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            script = root / "session.script"
+            script.write_text(
+                "topic: Normal Subgroup\n"
+                "question: What must you check to prove a subgroup is normal?\n"
+                "hint: Use conjugation rather than elementwise commutativity.\n"
+                "prerequisite: subgroup\n"
+                "attempt: I think normal means every element commutes.\n"
+                "misconception: normal_equals_abelian\n"
+                "next: Compare normality with commutativity using conjugation.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli(
+                "init",
+                "--topic",
+                "Normal Subgroup",
+                "--path",
+                str(project),
+                "--goal",
+                "Prepare for quotient groups.",
+            )
+            self._run_cli(
+                "import",
+                "--project",
+                str(project),
+                str(reference),
+                "--role",
+                "lecture_notes",
+                "--title",
+                "Normal Subgroup Notes",
+            )
+            self._run_cli(
+                "curate",
+                "--project",
+                str(project),
+                "--source-id",
+                "normal_subgroup_notes",
+            )
+            self._run_cli("kb", "build", "--project", str(project))
+            self._run_cli("plan", "--project", str(project))
+            self._run_cli(
+                "teach",
+                "--project",
+                str(project),
+                "--session-id",
+                "session_0001",
+                "--script",
+                str(script),
+            )
+            self._run_cli(
+                "note",
+                "review",
+                "--project",
+                str(project),
+                "--note",
+                "normal_subgroup",
+            )
+            self._run_cli("note", "export-obsidian", "--project", str(project))
+
+            status = self._run_cli("status", "--project", str(project)).stdout
+            session_plan = (project / "02_learning_plan" / "session_0001_plan.md").read_text(
+                encoding="utf-8"
+            )
+            exported = project / "07_exports" / "obsidian" / "normal_subgroup.md"
+
+            self.assertIn("Definition: Normal Subgroup", session_plan)
+            self.assertIn("Source: 01_references/curated/normal_subgroup_notes.curated.md", session_plan)
+            self.assertTrue((project / "06_kb" / "theorem_index.json").exists())
+            self.assertTrue((project / "06_kb" / "exercise_index.json").exists())
+            self.assertTrue(exported.exists())
+            self.assertIn("Curated references: 1", status)
+            self.assertIn("KB objects: 1", status)
+            self.assertIn("Reviewed notes: 1", status)
+            self.assertIn("Obsidian exports: 1", status)
+
     def _run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
             [sys.executable, "-m", "socrates", *args],

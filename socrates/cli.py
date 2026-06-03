@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
 import sys
 from typing import Sequence
@@ -236,14 +237,22 @@ def _handle_status(args: argparse.Namespace) -> int:
     source_count = _count_sources(context.source_registry)
     draft_count = len(list(context.atomic_note_drafts_dir.glob("*.md")))
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
+    curated_count = len(list((context.references_dir / "curated").glob("*.md")))
+    kb_object_count = _count_kb_objects(context.root)
+    reviewed_count = _count_reviewed_notes(context.root)
+    obsidian_export_count = len(list((context.root / "07_exports" / "obsidian").glob("*.md")))
     phase = "tutoring_complete" if latest_session != "none" else "initialization"
 
     print(f"Project: {context.root}")
     print(f"Current phase: {phase}")
     print(f"Imported sources: {source_count}")
+    print(f"Curated references: {curated_count}")
+    print(f"KB objects: {kb_object_count}")
     print(f"Latest session: {latest_session}")
     print(f"Pending draft notes: {draft_count}")
+    print(f"Reviewed notes: {reviewed_count}")
     print(f"Generated exercises: {exercise_count}")
+    print(f"Obsidian exports: {obsidian_export_count}")
     return 0
 
 
@@ -393,3 +402,25 @@ def _count_sources(registry_path: Path) -> int:
     if not registry_path.exists():
         return 0
     return sum(1 for line in registry_path.read_text(encoding="utf-8").splitlines() if line.strip().startswith("- id:"))
+
+
+def _count_kb_objects(project_root: Path) -> int:
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    if not index_path.exists():
+        return 0
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    objects = index.get("objects", [])
+    return len(objects) if isinstance(objects, list) else 0
+
+
+def _count_reviewed_notes(project_root: Path) -> int:
+    reviewed = 0
+    notes_root = project_root / "04_atomic_notes"
+    for folder in notes_root.iterdir():
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in folder.glob("*.md"):
+            text = note_path.read_text(encoding="utf-8")
+            if "reviewed_by_user: true" in text:
+                reviewed += 1
+    return reviewed
