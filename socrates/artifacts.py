@@ -52,7 +52,9 @@ def generate_atomic_note_draft(
                 "review_status": "needs_review",
                 "reviewed_by_user": False,
                 "type": note_type,
+                "topic": _project_id(context.root),
                 "concept": concept,
+                "created_by": "socrates",
                 "source_id": source_id,
                 "source_title": source_title,
                 "source_location": source_location,
@@ -323,6 +325,25 @@ def _frontmatter(values: dict[str, object]) -> str:
         lines.append(f"{key}: {yaml_scalar(value)}")
     lines.append("---")
     return "\n".join(lines) + "\n\n"
+
+
+def _project_id(project_root: Path) -> str:
+    project_file = project_root / "project.yaml"
+    in_project_section = False
+    for line in project_file.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped == "project:":
+            in_project_section = True
+            continue
+        if not line.startswith(" ") and stripped.endswith(":"):
+            in_project_section = False
+        if in_project_section and stripped.startswith("id:"):
+            value = stripped.removeprefix("id:").strip().strip('"')
+            if value:
+                return value
+    return slugify_topic(project_root.name)
 
 
 def _yaml_list_item(value: object) -> str:

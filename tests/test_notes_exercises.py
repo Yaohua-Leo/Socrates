@@ -43,6 +43,8 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertTrue(text.startswith("---\n"))
             self.assertIn('status: "draft"', text)
             self.assertIn('review_status: "needs_review"', text)
+            self.assertIn('topic: "group_theory"', text)
+            self.assertIn('created_by: "socrates"', text)
             self.assertIn('source_id: "df-1"', text)
             self.assertIn('source_title: "Dummit and Foote"', text)
             self.assertIn('source_location: "Section 1.7"', text)
