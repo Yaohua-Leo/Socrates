@@ -63,10 +63,12 @@ from .reports import (
 )
 from .state import (
     EvalReportUpdate,
+    LearningScoreSummary,
     LearningStatePatch,
     MisconceptionSummary,
     MistakeRecord,
     build_review_schedule,
+    list_learning_scores,
     list_misconceptions,
     repair_review_schedule,
     resolve_active_misconceptions_for_concept,
@@ -380,6 +382,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter misconceptions by status; defaults to all.",
     )
     review_misconceptions_parser.set_defaults(func=_handle_review_misconceptions)
+    review_mastery_parser = review_subparsers.add_parser(
+        "mastery",
+        help="List concept mastery and proof-skill scores.",
+    )
+    review_mastery_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    review_mastery_parser.add_argument(
+        "--kind",
+        choices=("all", "concept", "proof_skill"),
+        default="all",
+        help="Filter by score kind; defaults to all.",
+    )
+    review_mastery_parser.add_argument(
+        "--status",
+        choices=("all", "weak", "ready"),
+        default="all",
+        help="Filter scores by threshold status; defaults to all.",
+    )
+    review_mastery_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.7,
+        help="Weak/ready cutoff; defaults to 0.7.",
+    )
+    review_mastery_parser.set_defaults(func=_handle_review_mastery)
 
     exercise_parser = subparsers.add_parser(
         "exercise",
@@ -932,6 +962,18 @@ def _handle_review_misconceptions(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_review_mastery(args: argparse.Namespace) -> int:
+    context = load_project(args.project)
+    scores = list_learning_scores(
+        context,
+        score_type=args.kind,
+        status=args.status,
+        threshold=args.threshold,
+    )
+    print(_learning_scores_text(scores), end="")
+    return 0
+
+
 def _misconceptions_text(misconceptions: list[MisconceptionSummary]) -> str:
     lines = ["# Misconceptions", ""]
     if not misconceptions:
@@ -943,6 +985,18 @@ def _misconceptions_text(misconceptions: list[MisconceptionSummary]) -> str:
             f"{item.concept} | x{item.count}"
         )
         for item in misconceptions
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _learning_scores_text(scores: list[LearningScoreSummary]) -> str:
+    lines = ["# Learning Mastery", ""]
+    if not scores:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        f"- {item.score_type} | {item.item_id} | {item.status} | {item.score:g}"
+        for item in scores
     )
     return "\n".join(lines) + "\n"
 

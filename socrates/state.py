@@ -66,6 +66,16 @@ class MisconceptionSummary:
     count: int
 
 
+@dataclass(frozen=True)
+class LearningScoreSummary:
+    """One concept or proof-skill score from learning state."""
+
+    score_type: str
+    item_id: str
+    status: str
+    score: float
+
+
 EVAL_REPORTS = {
     "tutoring": ("tutoring_eval.md", "Tutoring Eval"),
     "exercise": ("exercise_eval.md", "Exercise Eval"),
@@ -238,6 +248,54 @@ def list_misconceptions(
     )
 
 
+def list_learning_scores(
+    context: ProjectContext,
+    *,
+    score_type: str = "all",
+    status: str = "all",
+    threshold: float = 0.7,
+) -> list[LearningScoreSummary]:
+    """List concept mastery and proof-skill scores from learning state."""
+
+    allowed_types = {"all", "concept", "proof_skill"}
+    if score_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(f"Unknown score type {score_type!r}; expected one of: {allowed}")
+    allowed_statuses = {"all", "weak", "ready"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(f"Unknown score status {status!r}; expected one of: {allowed}")
+
+    state = _learning_state_dict(context.learning_state)
+    summaries: list[LearningScoreSummary] = []
+    if score_type in {"all", "concept"}:
+        summaries.extend(
+            _score_summaries(
+                state.get("concept_mastery", {}),
+                score_type="concept",
+                threshold=threshold,
+            )
+        )
+    if score_type in {"all", "proof_skill"}:
+        summaries.extend(
+            _score_summaries(
+                state.get("proof_skills", {}),
+                score_type="proof_skill",
+                threshold=threshold,
+            )
+        )
+    if status != "all":
+        summaries = [item for item in summaries if item.status == status]
+    return sorted(
+        summaries,
+        key=lambda item: (
+            _score_status_order(item.status),
+            _score_type_order(item.score_type),
+            item.item_id,
+        ),
+    )
+
+
 def _learning_state_dict(path: Path) -> dict[str, object]:
     loaded = read_json(path) if path.exists() else {}
     state = loaded if isinstance(loaded, dict) else {}
@@ -365,6 +423,43 @@ def _safe_count(value: object) -> int:
 
 def _misconception_status_order(status: str) -> int:
     return {"active": 0, "resolved": 1}.get(status, 2)
+
+
+def _score_summaries(
+    value: object,
+    *,
+    score_type: str,
+    threshold: float,
+) -> list[LearningScoreSummary]:
+    if not isinstance(value, dict):
+        return []
+    summaries: list[LearningScoreSummary] = []
+    for item_id, raw_score in value.items():
+        score = _safe_score(raw_score)
+        summaries.append(
+            LearningScoreSummary(
+                score_type=score_type,
+                item_id=str(item_id),
+                status="weak" if score < threshold else "ready",
+                score=score,
+            )
+        )
+    return summaries
+
+
+def _safe_score(value: object) -> float:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _score_status_order(status: str) -> int:
+    return {"weak": 0, "ready": 1}.get(status, 2)
+
+
+def _score_type_order(score_type: str) -> int:
+    return {"concept": 0, "proof_skill": 1}.get(score_type, 2)
 
 
 def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:

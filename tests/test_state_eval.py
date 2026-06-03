@@ -302,6 +302,103 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn(resolved_line, resolved_items.stdout)
             self.assertNotIn("cosets_are_subgroups", resolved_items.stdout)
 
+    def test_review_mastery_cli_lists_learning_scores_with_filters(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.42,
+                        "subgroup": 0.82,
+                    },
+                    proof_skills={
+                        "construct_counterexample": 0.35,
+                        "unfold_definition": 0.86,
+                    },
+                ),
+            )
+
+            all_scores = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            weak_concepts = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--kind",
+                    "concept",
+                    "--status",
+                    "weak",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            ready_with_high_cutoff = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "ready",
+                    "--threshold",
+                    "0.85",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            weak_concept = "- concept | normal_subgroup | weak | 0.42"
+            weak_skill = "- proof_skill | construct_counterexample | weak | 0.35"
+            ready_concept = "- concept | subgroup | ready | 0.82"
+            ready_skill = "- proof_skill | unfold_definition | ready | 0.86"
+            self.assertEqual(all_scores.returncode, 0, all_scores.stderr)
+            self.assertIn("# Learning Mastery", all_scores.stdout)
+            self.assertIn(weak_concept, all_scores.stdout)
+            self.assertIn(weak_skill, all_scores.stdout)
+            self.assertIn(ready_concept, all_scores.stdout)
+            self.assertIn(ready_skill, all_scores.stdout)
+            self.assertLess(
+                all_scores.stdout.index(weak_concept),
+                all_scores.stdout.index(ready_concept),
+            )
+
+            self.assertEqual(weak_concepts.returncode, 0, weak_concepts.stderr)
+            self.assertIn(weak_concept, weak_concepts.stdout)
+            self.assertNotIn("subgroup | ready", weak_concepts.stdout)
+            self.assertNotIn("proof_skill", weak_concepts.stdout)
+
+            self.assertEqual(ready_with_high_cutoff.returncode, 0, ready_with_high_cutoff.stderr)
+            self.assertIn(ready_skill, ready_with_high_cutoff.stdout)
+            self.assertNotIn("subgroup", ready_with_high_cutoff.stdout)
+            self.assertNotIn("normal_subgroup", ready_with_high_cutoff.stdout)
+
     def test_build_review_schedule_uses_weak_concepts_and_active_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
