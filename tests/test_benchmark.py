@@ -135,6 +135,25 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(gates[3]["session_id"], "session_0001")
             self.assertEqual(gates[3]["status"], "pass")
 
+            status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Current phase: benchmark_ready", status.stdout)
+            self.assertIn("Benchmark score: 100/100", status.stdout)
+            self.assertIn("Benchmark gates: 4/4", status.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

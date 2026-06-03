@@ -703,6 +703,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     obsidian_export_count = _count_obsidian_exports(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     report_count = _count_learning_reports(context.root)
+    benchmark_status = _read_benchmark_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
     )
@@ -724,6 +725,9 @@ def _handle_status(args: argparse.Namespace) -> int:
         scheduled_reviews=scheduled_review_count,
         learning_reports=report_count,
         learning_plans=_count_learning_plans(context.learning_plan_dir),
+        benchmark_score=(
+            benchmark_status["score"] if benchmark_status is not None else None
+        ),
     )
 
     print(f"Project: {context.root}")
@@ -743,6 +747,15 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     print(f"Learning reports: {report_count}")
+    if benchmark_status is None:
+        print("Benchmark score: none")
+        print("Benchmark gates: none")
+    else:
+        print(f"Benchmark score: {benchmark_status['score']}/100")
+        print(
+            "Benchmark gates: "
+            f"{benchmark_status['passed_gates']}/{benchmark_status['total_gates']}"
+        )
     print(f"Active misconceptions: {active_misconception_count}")
     print(f"Resolved misconceptions: {resolved_misconception_count}")
     return 0
@@ -1345,7 +1358,10 @@ def _current_project_phase(
     scheduled_reviews: int,
     learning_reports: int,
     learning_plans: int,
+    benchmark_score: int | None,
 ) -> str:
+    if benchmark_score is not None:
+        return "benchmark_ready"
     if learning_reports > 0:
         return "report_ready"
     if scheduled_reviews > 0:
@@ -1388,6 +1404,30 @@ def _count_learning_reports(project_root: Path) -> int:
     if not reports_dir.exists():
         return 0
     return len(list(reports_dir.glob("*.md")))
+
+
+def _read_benchmark_status(project_root: Path) -> dict[str, int] | None:
+    manifest_path = project_root / "08_evals" / "benchmark_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(manifest, dict):
+        return None
+    score = manifest.get("score")
+    passed_gates = manifest.get("passed_gates")
+    total_gates = manifest.get("total_gates")
+    if not all(isinstance(value, int) for value in (score, passed_gates, total_gates)):
+        return None
+    if score < 0 or passed_gates < 0 or total_gates <= 0:
+        return None
+    return {
+        "score": score,
+        "passed_gates": passed_gates,
+        "total_gates": total_gates,
+    }
 
 
 def _count_sources(registry_path: Path) -> int:
