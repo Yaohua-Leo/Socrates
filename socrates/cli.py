@@ -77,11 +77,13 @@ from .state import (
 )
 from .tool_verification import (
     check_tool_verification_records,
+    SympyIdentityResult,
     ToolInventoryResult,
     ToolVerificationCheckResult,
     ToolVerificationSummary,
     generate_lean_statement_skeleton,
     list_tool_verification_records,
+    verify_sympy_identity,
     write_tool_inventory,
 )
 from .tutoring import (
@@ -599,6 +601,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     tool_inventory_parser.add_argument("--project", required=True, help="Socrates project directory.")
     tool_inventory_parser.set_defaults(func=_handle_tool_inventory)
+    sympy_identity_parser = tool_subparsers.add_parser(
+        "sympy-identity",
+        help="Use optional SymPy to check whether lhs - rhs simplifies to zero.",
+    )
+    sympy_identity_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    sympy_identity_parser.add_argument("--object-id", required=True, help="Stable object id for this check.")
+    sympy_identity_parser.add_argument("--lhs", required=True, help="Left-hand expression.")
+    sympy_identity_parser.add_argument("--rhs", required=True, help="Right-hand expression.")
+    sympy_identity_parser.add_argument("--title", default=None, help="Optional title for reports.")
+    sympy_identity_parser.set_defaults(func=_handle_tool_sympy_identity)
     tool_list_parser = tool_subparsers.add_parser(
         "list",
         help="List persisted tool-verification records.",
@@ -1283,6 +1295,29 @@ def _tool_inventory_result_text(result: ToolInventoryResult) -> str:
         f"Tool inventory report: {result.report_path}",
         f"Tool inventory manifest: {result.manifest_path}",
         f"Tool verification manifest: {result.registry_manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_tool_sympy_identity(args: argparse.Namespace) -> int:
+    result = verify_sympy_identity(
+        args.project,
+        object_id=args.object_id,
+        lhs=args.lhs,
+        rhs=args.rhs,
+        title=args.title,
+    )
+    print(_tool_sympy_identity_result_text(result), end="")
+    return 0 if result.status == "verified" else 1
+
+
+def _tool_sympy_identity_result_text(result: SympyIdentityResult) -> str:
+    lines = [
+        f"SymPy identity status: {result.status}",
+        f"Passed: {str(result.passed).lower()}",
+        f"Tool verification artifact: {result.artifact_path}",
+        f"Tool verification report: {result.report_path}",
+        f"Tool verification manifest: {result.manifest_path}",
     ]
     return "\n".join(lines) + "\n"
 

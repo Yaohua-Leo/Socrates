@@ -106,6 +106,94 @@ class ToolVerificationTests(unittest.TestCase):
                 check_result.stdout,
             )
 
+    def test_sympy_identity_cli_persists_computation_result_or_unavailable_record(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "sympy-identity",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "square_expansion",
+                    "--lhs",
+                    "(x + 1)^2",
+                    "--rhs",
+                    "x^2 + 2*x + 1",
+                    "--title",
+                    "Square Expansion",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "square_expansion_sympy_identity.json"
+            report_path = verification_dir / "square_expansion_sympy_identity_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            expected_returncode = 0 if artifact["status"] == "verified" else 1
+            self.assertEqual(result.returncode, expected_returncode, result.stderr)
+            self.assertIn("SymPy identity status:", result.stdout)
+            self.assertEqual(artifact["schema_version"], 1)
+            self.assertEqual(artifact["kind"], "sympy_identity_check")
+            self.assertEqual(artifact["object_id"], "square_expansion")
+            self.assertEqual(artifact["input"]["lhs"], "(x + 1)^2")
+            self.assertEqual(artifact["input"]["rhs"], "x^2 + 2*x + 1")
+            self.assertEqual(artifact["subprocess_invoked"], False)
+            self.assertIn(artifact["status"], {"verified", "failed", "unavailable"})
+            if artifact["status"] == "verified":
+                self.assertEqual(artifact["passed"], True)
+                self.assertEqual(artifact["output"]["simplified_difference"], "0")
+            else:
+                self.assertEqual(artifact["passed"], False)
+                self.assertGreaterEqual(len(artifact["issues"]), 1)
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("# Tool Verification: SymPy Identity Check", report_text)
+            self.assertIn("- It is computation evidence, not a formal proof.", report_text)
+            self.assertIn("- No external executable or shell subprocess was invoked.", report_text)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = manifest["records"][0]
+            self.assertEqual(record["kind"], "sympy_identity_check")
+            self.assertEqual(record["object_id"], "square_expansion")
+            self.assertEqual(
+                record["artifact_path"],
+                "08_evals/tool_verification/square_expansion_sympy_identity.json",
+            )
+            self.assertEqual(
+                record["report_path"],
+                "08_evals/tool_verification/square_expansion_sympy_identity_report.md",
+            )
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 0, check_result.stderr)
+            self.assertIn(
+                "Checked 1 tool-verification record: 1 passed, 0 failed",
+                check_result.stdout,
+            )
+
     def test_lean_skeleton_cli_writes_unchecked_tool_verification_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

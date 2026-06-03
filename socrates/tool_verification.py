@@ -59,6 +59,18 @@ class ToolInventoryResult:
     registry_manifest_path: Path
 
 
+@dataclass(frozen=True)
+class SympyIdentityResult:
+    """Persisted result for one optional SymPy identity check."""
+
+    status: str
+    passed: bool
+    artifact_path: Path
+    report_path: Path
+    manifest_path: Path
+    object_id: str
+
+
 def generate_lean_statement_skeleton(
     project_path: Path | str,
     *,
@@ -212,6 +224,61 @@ def write_tool_inventory(project_path: Path | str) -> ToolInventoryResult:
         report_path=report_path,
         manifest_path=manifest_path,
         registry_manifest_path=registry_manifest_path,
+    )
+
+
+def verify_sympy_identity(
+    project_path: Path | str,
+    *,
+    object_id: str,
+    lhs: str,
+    rhs: str,
+    title: str | None = None,
+) -> SympyIdentityResult:
+    """Run an optional SymPy identity check and persist the result."""
+
+    context = load_project(project_path)
+    verification_dir = context.evals_dir / "tool_verification"
+    safe_id = _lean_identifier(f"{object_id}_sympy_identity")
+    artifact_path = verification_dir / f"{safe_id}.json"
+    report_path = verification_dir / f"{safe_id}_report.md"
+    manifest_path = verification_dir / "manifest.json"
+    artifact = _sympy_identity_artifact(
+        object_id=object_id,
+        lhs=lhs,
+        rhs=rhs,
+        title=title,
+    )
+    write_json(artifact_path, artifact)
+    write_text(
+        report_path,
+        _sympy_identity_report(
+            artifact,
+            artifact_path=artifact_path.relative_to(context.root).as_posix(),
+        ),
+    )
+    write_json(
+        manifest_path,
+        _updated_manifest(
+            manifest_path,
+            _sympy_identity_record(
+                context.root,
+                object_id=object_id,
+                title=title or object_id,
+                artifact_path=artifact_path,
+                report_path=report_path,
+                status=str(artifact["status"]),
+            ),
+        ),
+    )
+    append_project_log(context, f"Recorded SymPy identity check for {object_id}.")
+    return SympyIdentityResult(
+        status=str(artifact["status"]),
+        passed=bool(artifact["passed"]),
+        artifact_path=artifact_path,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        object_id=object_id,
     )
 
 
@@ -530,6 +597,151 @@ def _tool_inventory_record(
         "artifact_path": manifest_path.relative_to(project_root).as_posix(),
         "report_path": report_path.relative_to(project_root).as_posix(),
         "source": {"scope": "local_environment"},
+    }
+
+
+def _sympy_identity_artifact(
+    *,
+    object_id: str,
+    lhs: str,
+    rhs: str,
+    title: str | None,
+) -> dict[str, object]:
+    artifact: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "sympy_identity_check",
+        "object_id": object_id,
+        "title": title or object_id,
+        "tool": "sympy",
+        "status": "failed",
+        "passed": False,
+        "input": {
+            "lhs": lhs,
+            "rhs": rhs,
+        },
+        "output": {},
+        "issues": [],
+        "tool_backend_invoked": False,
+        "subprocess_invoked": False,
+    }
+    if importlib.util.find_spec("sympy") is None:
+        artifact["status"] = "unavailable"
+        artifact["issues"] = ["SymPy is not available in this Python environment."]
+        return artifact
+    try:
+        import sympy  # type: ignore[import-not-found]
+
+        left = _parse_sympy_expression(sympy, lhs)
+        right = _parse_sympy_expression(sympy, rhs)
+        difference = sympy.simplify(left - right)
+        passed = bool(difference == 0)
+        artifact["status"] = "verified" if passed else "failed"
+        artifact["passed"] = passed
+        artifact["output"] = {
+            "normalized_lhs": str(left),
+            "normalized_rhs": str(right),
+            "simplified_difference": str(difference),
+        }
+        artifact["tool_backend_invoked"] = True
+        if not passed:
+            artifact["issues"] = ["SymPy did not simplify lhs - rhs to 0."]
+    except Exception as exc:  # pragma: no cover - exact SymPy messages vary.
+        artifact["status"] = "failed"
+        artifact["issues"] = [f"SymPy identity check failed: {exc}"]
+    return artifact
+
+
+def _parse_sympy_expression(sympy_module: object, expression: str) -> object:
+    if not _safe_sympy_expression(expression):
+        raise ValueError(
+            "expression contains unsupported characters; allowed: letters, "
+            "digits, underscores, spaces, + - * / ^ ( ) , ="
+        )
+    normalized = expression.replace("^", "**")
+    return sympy_module.sympify(normalized, evaluate=True)
+
+
+def _safe_sympy_expression(expression: str) -> bool:
+    if not expression.strip():
+        return False
+    if "__" in expression:
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9_+\-*/^(),= ]+", expression))
+
+
+def _sympy_identity_report(
+    artifact: dict[str, object],
+    *,
+    artifact_path: str,
+) -> str:
+    input_data = artifact.get("input", {})
+    output_data = artifact.get("output", {})
+    issues = artifact.get("issues", [])
+    lines = [
+        "# Tool Verification: SymPy Identity Check",
+        "",
+        "## Summary",
+        "",
+        f"- Object: {artifact.get('object_id', '')}",
+        f"- Title: {artifact.get('title', '')}",
+        f"- Status: {artifact.get('status', '')}",
+        f"- Passed: {str(artifact.get('passed', False)).lower()}",
+        f"- Artifact: {artifact_path}",
+        "- Tool: SymPy",
+        f"- Tool backend invoked: {str(artifact.get('tool_backend_invoked', False)).lower()}",
+        f"- Subprocess invoked: {str(artifact.get('subprocess_invoked', False)).lower()}",
+        "",
+        "## Input",
+        "",
+        f"- lhs: {input_data.get('lhs', '') if isinstance(input_data, dict) else ''}",
+        f"- rhs: {input_data.get('rhs', '') if isinstance(input_data, dict) else ''}",
+        "",
+        "## Output",
+        "",
+    ]
+    if isinstance(output_data, dict) and output_data:
+        lines.extend(
+            f"- {key}: {value}" for key, value in sorted(output_data.items())
+        )
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Issues", ""])
+    if isinstance(issues, list) and issues:
+        lines.extend(f"- {issue}" for issue in issues)
+    else:
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- This check only verifies whether SymPy simplified lhs - rhs to 0.",
+            "- It is computation evidence, not a formal proof.",
+            "- No external executable or shell subprocess was invoked.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _sympy_identity_record(
+    project_root: Path,
+    *,
+    object_id: str,
+    title: str,
+    artifact_path: Path,
+    report_path: Path,
+    status: str,
+) -> dict[str, object]:
+    return {
+        "kind": "sympy_identity_check",
+        "object_id": object_id,
+        "object_type": "computed_identity",
+        "title": title,
+        "status": status,
+        "artifact_path": artifact_path.relative_to(project_root).as_posix(),
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "source": {"tool": "sympy"},
     }
 
 
