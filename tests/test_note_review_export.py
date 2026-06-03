@@ -122,6 +122,8 @@ class NoteReviewExportTests(unittest.TestCase):
                     "- What conjugation condition must be checked?\n"
                 ),
                 source_id="df",
+                source_title="Dummit and Foote",
+                source_location="Section 3.1",
             )
             review_atomic_note(project, "normal_subgroup")
 
@@ -137,7 +139,7 @@ class NoteReviewExportTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], 1)
+            self.assertEqual(manifest["version"], 2)
             self.assertEqual(
                 manifest["exported_notes"],
                 [
@@ -146,6 +148,10 @@ class NoteReviewExportTests(unittest.TestCase):
                         "concept": "Normal Subgroup",
                         "type": "definition",
                         "path": "normal_subgroup.md",
+                        "review_status": "approved",
+                        "source_id": "df",
+                        "source_title": "Dummit and Foote",
+                        "source_location": "Section 3.1",
                         "tags": ["definition", "normal-subgroup", "subgroup", "conjugation"],
                         "related": ["[[Subgroup]]", "[[Conjugation]]"],
                     }

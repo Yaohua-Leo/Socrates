@@ -71,6 +71,10 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
                     "concept": _frontmatter_value(text, "concept") or note_path.stem,
                     "type": _frontmatter_value(text, "type") or folder.name.rstrip("s"),
                     "path": destination.relative_to(destination.parent).as_posix(),
+                    "review_status": _frontmatter_value(text, "review_status") or "",
+                    "source_id": _frontmatter_value(text, "source_id") or "",
+                    "source_title": _frontmatter_value(text, "source_title") or "",
+                    "source_location": _frontmatter_value(text, "source_location") or "",
                     "tags": _frontmatter_list(text, "tags"),
                     "related": _frontmatter_list(text, "related"),
                 }
@@ -83,7 +87,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
 
 def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, object]]) -> None:
     manifest = {
-        "version": 1,
+        "version": 2,
         "exported_notes": sorted(exported_notes, key=lambda item: item["note_id"]),
     }
     write_text(
