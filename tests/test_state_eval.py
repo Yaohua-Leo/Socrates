@@ -559,6 +559,101 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("Scheduled reviews: 1", status_result.stdout)
             self.assertIn("Generated exercises: 1", status_result.stdout)
 
+    def test_review_schedule_cli_accepts_threshold_and_as_of_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.62,
+                        "quotient_group": 0.74,
+                        "subgroup": 0.84,
+                    }
+                ),
+            )
+
+            schedule_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--threshold",
+                    "0.8",
+                    "--as-of",
+                    "2026-06-04",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(schedule_result.returncode, 0, schedule_result.stderr)
+            self.assertIn("Scheduled 2 review items:", schedule_result.stdout)
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["review_schedule"],
+                [
+                    {
+                        "concept": "normal_subgroup",
+                        "priority": "medium",
+                        "due": "within_3_days",
+                        "scheduled_for": "2026-06-07",
+                        "reason": "mastery 0.62",
+                    },
+                    {
+                        "concept": "quotient_group",
+                        "priority": "medium",
+                        "due": "within_3_days",
+                        "scheduled_for": "2026-06-07",
+                        "reason": "mastery 0.74",
+                    },
+                ],
+            )
+            schedule_text = (project / "02_learning_plan" / "review_schedule.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## normal_subgroup", schedule_text)
+            self.assertIn("## quotient_group", schedule_text)
+            self.assertNotIn("## subgroup", schedule_text)
+            self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
+
+    def test_review_schedule_cli_rejects_invalid_as_of_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "not-a-date",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn(
+                "error: invalid ISO date 'not-a-date'; expected YYYY-MM-DD",
+                result.stderr,
+            )
+            self.assertNotIn("Traceback", result.stderr)
+
     def test_review_due_cli_lists_items_due_by_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

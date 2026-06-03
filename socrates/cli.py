@@ -316,6 +316,17 @@ def build_parser() -> argparse.ArgumentParser:
         help="Build a review schedule from weak concepts and active misconceptions.",
     )
     review_schedule_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_schedule_parser.add_argument(
+        "--threshold",
+        type=float,
+        default=0.7,
+        help="Mastery score below this value is scheduled for review; defaults to 0.7.",
+    )
+    review_schedule_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used when assigning review dates; defaults to today.",
+    )
     review_schedule_parser.set_defaults(func=_handle_review_schedule)
     review_exercises_parser = review_subparsers.add_parser(
         "exercises",
@@ -902,8 +913,17 @@ def _handle_note_check(args: argparse.Namespace) -> int:
 
 
 def _handle_review_schedule(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else date.today()
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
     context = load_project(args.project)
-    schedule_path = build_review_schedule(context)
+    schedule_path = build_review_schedule(
+        context,
+        mastery_threshold=args.threshold,
+        as_of=as_of,
+    )
     count = _count_scheduled_reviews(context.learning_state)
     noun = "item" if count == 1 else "items"
     print(f"Scheduled {count} review {noun}: {schedule_path}")
