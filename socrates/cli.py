@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import date
 import json
 from pathlib import Path
 import sys
@@ -250,6 +251,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_adjust_plan_parser.add_argument("--project", required=True, help="Socrates project directory.")
     review_adjust_plan_parser.set_defaults(func=_handle_review_adjust_plan)
+    review_due_parser = review_subparsers.add_parser(
+        "due",
+        help="List review items due on or before a date.",
+    )
+    review_due_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_due_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used as the due-review cutoff; defaults to today.",
+    )
+    review_due_parser.set_defaults(func=_handle_review_due)
 
     exercise_parser = subparsers.add_parser(
         "exercise",
@@ -626,6 +638,13 @@ def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_review_due(args: argparse.Namespace) -> int:
+    context = load_project(args.project)
+    as_of = _parse_iso_date(args.as_of) if args.as_of else date.today()
+    print(_due_reviews_text(context.learning_state, as_of), end="")
+    return 0
+
+
 def _handle_exercise_check(args: argparse.Namespace) -> int:
     result = check_generated_exercise_quality(args.project)
     print(
@@ -994,3 +1013,51 @@ def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
         elif status == "active" or "status" not in value:
             active += 1
     return (active, resolved)
+
+
+def _parse_iso_date(value: str) -> date:
+    return date.fromisoformat(value)
+
+
+def _due_reviews_text(learning_state: Path, as_of: date) -> str:
+    lines = ["# Due Reviews", ""]
+    rows = _due_review_rows(learning_state, as_of)
+    if not rows:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        (
+            f"- {row['concept']} | {row['scheduled_for']} | "
+            f"{row['priority']} | {row['reason']}"
+        )
+        for row in rows
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _due_review_rows(learning_state: Path, as_of: date) -> list[dict[str, str]]:
+    if not learning_state.exists():
+        return []
+    state = json.loads(learning_state.read_text(encoding="utf-8"))
+    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    if not isinstance(schedule, list):
+        return []
+
+    rows: list[dict[str, str]] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        scheduled_for = str(item.get("scheduled_for", "")).strip()
+        if not scheduled_for:
+            continue
+        if date.fromisoformat(scheduled_for) > as_of:
+            continue
+        rows.append(
+            {
+                "concept": str(item.get("concept", "review")),
+                "scheduled_for": scheduled_for,
+                "priority": str(item.get("priority", "medium")),
+                "reason": str(item.get("reason", "review scheduled")),
+            }
+        )
+    return sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"]))

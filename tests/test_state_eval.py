@@ -288,6 +288,64 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("Scheduled reviews: 1", status_result.stdout)
             self.assertIn("Generated exercises: 1", status_result.stdout)
 
+    def test_review_due_cli_lists_items_due_by_date(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            today = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            later = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(today.returncode, 0, today.stderr)
+            self.assertIn("# Due Reviews", today.stdout)
+            self.assertIn("- zeta_urgent_review | 2026-06-04 | high | mastery 0.4", today.stdout)
+            self.assertNotIn("alpha_medium_review", today.stdout)
+            self.assertEqual(later.returncode, 0, later.stderr)
+            self.assertIn("- zeta_urgent_review | 2026-06-04 | high | mastery 0.4", later.stdout)
+            self.assertIn("- alpha_medium_review | 2026-06-07 | medium | mastery 0.62", later.stdout)
+
     def test_status_counts_active_and_resolved_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
