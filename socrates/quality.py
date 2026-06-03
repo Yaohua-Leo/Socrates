@@ -1323,6 +1323,8 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
         issues.append("missing concept")
     if _missing_note_source_id(text):
         issues.append("missing source id")
+    if _invalid_reviewed_by_user(text):
+        issues.append("invalid reviewed_by_user")
     if "tags:" in text and not _frontmatter_list(text, "tags"):
         issues.append("missing tags")
     for section in NOTE_REQUIRED_SECTIONS:
@@ -1356,6 +1358,11 @@ def _missing_note_source_id(text: str) -> bool:
 def _missing_note_concept(text: str) -> bool:
     value = _frontmatter_value(text, "concept")
     return value is None or value.casefold() in {"", "null"}
+
+
+def _invalid_reviewed_by_user(text: str) -> bool:
+    value = _frontmatter_value(text, "reviewed_by_user")
+    return value is not None and value.casefold() not in {"true", "false"}
 
 
 def _check_curated_reference(path: Path) -> dict[str, object]:
