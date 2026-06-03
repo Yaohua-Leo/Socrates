@@ -266,16 +266,36 @@ def exercise_quality_issues(path: Path) -> list[str]:
             issues.append(f"missing section {section.removeprefix('## ')}")
     if not _has_hint_ladder(text):
         issues.append("missing hint ladder")
+    if not _has_solution_steps(text):
+        issues.append("missing structured solution steps")
+    if not _has_rubric_points(text):
+        issues.append("missing rubric point values")
     return issues
 
 
 def _has_hint_ladder(text: str) -> bool:
-    _, separator, after_hints = text.partition("## Hints")
-    if not separator:
-        return False
-    next_section_index = after_hints.find("\n## ")
-    hint_section = after_hints if next_section_index < 0 else after_hints[:next_section_index]
+    hint_section = _section_text(text, "## Hints")
     return all(f"Hint {index}" in hint_section for index in range(1, 4))
+
+
+def _has_solution_steps(text: str) -> bool:
+    solution_section = _section_text(text, "## Solution Outline")
+    return all(f"Step {index}:" in solution_section for index in range(1, 4))
+
+
+def _has_rubric_points(text: str) -> bool:
+    rubric_section = _section_text(text, "## Rubric")
+    return "Total: 10 pts" in rubric_section and sum(
+        1 for line in rubric_section.splitlines() if " pts" in line
+    ) >= 4
+
+
+def _section_text(text: str, heading: str) -> str:
+    _, separator, after_heading = text.partition(heading)
+    if not separator:
+        return ""
+    next_section_index = after_heading.find("\n## ")
+    return after_heading if next_section_index < 0 else after_heading[:next_section_index]
 
 
 def _atomic_note_paths(project_root: Path) -> list[Path]:
