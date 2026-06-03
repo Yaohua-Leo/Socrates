@@ -2,10 +2,28 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import json
 from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
+
+
+@dataclass(frozen=True)
+class ReportSummary:
+    """A lifecycle summary for one expected learning report."""
+
+    report_id: str
+    status: str
+    title: str
+    path: str
+
+
+REPORT_SPECS = (
+    ("weekly", "Weekly Learning Report", "weekly_report.md"),
+    ("monthly", "Monthly Learning Report", "monthly_report.md"),
+    ("project-summary", "Project Summary", "project_summary.md"),
+)
 
 
 def generate_weekly_report(project_path: Path | str) -> Path:
@@ -79,6 +97,33 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     )
     append_project_log(context, "Generated monthly learning report.")
     return report_path
+
+
+def list_learning_reports(project_path: Path | str, *, status: str = "all") -> list[ReportSummary]:
+    """List expected learning reports and whether they have been generated."""
+
+    allowed_statuses = {"all", "generated", "missing"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(f"Unknown report status {status!r}; expected one of: {allowed}")
+
+    context = load_project(project_path)
+    reports_dir = context.root / "07_exports" / "reports"
+    summaries: list[ReportSummary] = []
+    for report_id, title, file_name in REPORT_SPECS:
+        report_path = reports_dir / file_name
+        report_status = "generated" if report_path.exists() else "missing"
+        summaries.append(
+            ReportSummary(
+                report_id=report_id,
+                status=report_status,
+                title=title,
+                path=report_path.relative_to(context.root).as_posix(),
+            )
+        )
+    if status != "all":
+        summaries = [summary for summary in summaries if summary.status == status]
+    return summaries
 
 
 def _weekly_report_text(

@@ -24,6 +24,93 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReportTests(unittest.TestCase):
+    def test_report_list_cli_shows_generated_and_missing_reports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            all_reports = subprocess.run(
+                [sys.executable, "-m", "socrates", "report", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            missing_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "missing",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(all_reports.returncode, 0, all_reports.stderr)
+            weekly_line = (
+                "- weekly | generated | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md"
+            )
+            monthly_line = (
+                "- monthly | missing | Monthly Learning Report | "
+                "07_exports/reports/monthly_report.md"
+            )
+            summary_line = (
+                "- project-summary | generated | Project Summary | "
+                "07_exports/reports/project_summary.md"
+            )
+            self.assertIn("# Learning Reports", all_reports.stdout)
+            self.assertIn(weekly_line, all_reports.stdout)
+            self.assertIn(monthly_line, all_reports.stdout)
+            self.assertIn(summary_line, all_reports.stdout)
+            self.assertLess(all_reports.stdout.index(weekly_line), all_reports.stdout.index(monthly_line))
+            self.assertLess(all_reports.stdout.index(monthly_line), all_reports.stdout.index(summary_line))
+
+            self.assertEqual(missing_reports.returncode, 0, missing_reports.stderr)
+            self.assertIn(monthly_line, missing_reports.stdout)
+            self.assertNotIn("weekly_report.md", missing_reports.stdout)
+            self.assertNotIn("project_summary.md", missing_reports.stdout)
+
     def test_weekly_report_cli_summarizes_learning_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

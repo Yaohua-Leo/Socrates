@@ -48,7 +48,13 @@ from .quality import (
     run_project_benchmark,
 )
 from .references import SourceSummary, curate_reference, import_reference, list_source_registry
-from .reports import generate_monthly_report, generate_project_summary, generate_weekly_report
+from .reports import (
+    ReportSummary,
+    generate_monthly_report,
+    generate_project_summary,
+    generate_weekly_report,
+    list_learning_reports,
+)
 from .state import (
     EvalReportUpdate,
     LearningStatePatch,
@@ -410,6 +416,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Generate project learning reports.",
     )
     report_subparsers = report_parser.add_subparsers(dest="report_command", required=True)
+    report_list_parser = report_subparsers.add_parser(
+        "list",
+        help="List expected learning reports and generation status.",
+    )
+    report_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    report_list_parser.add_argument(
+        "--status",
+        choices=("all", "generated", "missing"),
+        default="all",
+        help="Filter reports by generation status; defaults to all.",
+    )
+    report_list_parser.set_defaults(func=_handle_report_list)
     weekly_report_parser = report_subparsers.add_parser(
         "weekly",
         help="Generate a weekly learning report.",
@@ -891,6 +909,24 @@ def _handle_benchmark_run(args: argparse.Namespace) -> int:
     print(f"Benchmark score: {result.score}/100")
     print(f"Benchmark report: {result.report_path}")
     return 0
+
+
+def _handle_report_list(args: argparse.Namespace) -> int:
+    reports = list_learning_reports(args.project, status=args.status)
+    print(_learning_reports_text(reports), end="")
+    return 0
+
+
+def _learning_reports_text(reports: list[ReportSummary]) -> str:
+    lines = ["# Learning Reports", ""]
+    if not reports:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        f"- {report.report_id} | {report.status} | {report.title} | {report.path}"
+        for report in reports
+    )
+    return "\n".join(lines) + "\n"
 
 
 def _handle_report_weekly(args: argparse.Namespace) -> int:
