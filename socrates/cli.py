@@ -888,6 +888,20 @@ def _source_label(source: object) -> str:
     if not isinstance(source, dict):
         return ""
     source_id = str(source.get("source_id", "")).strip()
+    source_title = str(source.get("title", "")).strip()
+    source_role = str(source.get("role", "")).strip()
+    if source_title:
+        label = source_title
+        if source_role:
+            label = f"{label} ({source_role})"
+        if source_id:
+            label = f"{label} [{source_id}]"
+        return f" - {label}"
+    if source_role:
+        label = f"({source_role})"
+        if source_id:
+            label = f"{label} [{source_id}]"
+        return f" {label}"
     return f" [{source_id}]" if source_id else ""
 
 
