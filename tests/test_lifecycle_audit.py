@@ -307,6 +307,7 @@ class LifecycleAuditTests(unittest.TestCase):
                 "topic: Normal Subgroup\n"
                 "question: What must you check to prove normality?\n"
                 "hint: Track conjugation invariance.\n"
+                "hint: Compare normality with centrality.\n"
                 "attempt: Show gNg^-1=N.\n"
                 "next: Prove kernels are normal.\n",
                 encoding="utf-8",

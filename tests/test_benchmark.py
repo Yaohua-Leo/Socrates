@@ -54,6 +54,7 @@ class BenchmarkTests(unittest.TestCase):
                 "goal: Understand normality.\n"
                 "question: What does normality require?\n"
                 "hint: Check conjugation invariance.\n"
+                "hint: Compare gNg^-1=N with elementwise commutativity.\n"
                 "attempt: It requires gNg^-1=N.\n"
                 "next: Prove kernels are normal.\n",
                 encoding="utf-8",

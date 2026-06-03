@@ -205,8 +205,11 @@ def check_tutoring_session_quality(
         issues.append("missing required session artifacts")
     if "Tutor:" not in transcript:
         issues.append("missing tutor question")
-    if "Hint 1:" not in transcript:
+    hint_count = _line_prefix_count(transcript, "Hint ")
+    if hint_count == 0:
         issues.append("missing first hint")
+    elif hint_count < 2:
+        issues.append("incomplete hint ladder")
     student_attempt_count = _line_prefix_count(transcript, "Student attempt:")
     if student_attempt_count == 0:
         issues.append("missing student attempt")
@@ -216,7 +219,7 @@ def check_tutoring_session_quality(
     rubric = _tutoring_rubric(
         missing=missing,
         has_tutor_question="Tutor:" in transcript,
-        has_hint_ladder="Hint 1:" in transcript,
+        has_hint_ladder=hint_count >= 2,
         has_student_attempt=student_attempt_count > 0,
         premature_solution=premature_solution,
     )
