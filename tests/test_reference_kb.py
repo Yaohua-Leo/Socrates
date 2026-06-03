@@ -72,6 +72,38 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(matches[0]["type"], "theorem")
             self.assertIn("kernels.curated.md", matches[0]["source"]["path"])
 
+    def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Normality\n"
+                "### Theorem: Kernel Normality\n"
+                "The kernel of a group homomorphism is normal.\n"
+                "Depends: group_homomorphism, kernel\n\n"
+                "### Exercise: Prove Kernel Normality\n"
+                "Prove that the kernel of a homomorphism is normal.\n"
+                "Depends: kernel, normal_subgroup\n",
+                encoding="utf-8",
+            )
+
+            build_reference_kb(project)
+
+            theorem_index = json.loads(
+                (project / "06_kb" / "theorem_index.json").read_text(encoding="utf-8")
+            )
+            exercise_index = json.loads(
+                (project / "06_kb" / "exercise_index.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(theorem_index["theorems"][0]["title"], "Kernel Normality")
+            self.assertEqual(
+                theorem_index["theorems"][0]["source"]["path"],
+                "01_references/curated/normality.curated.md",
+            )
+            self.assertEqual(exercise_index["exercises"][0]["title"], "Prove Kernel Normality")
+            self.assertIn("normal_subgroup", exercise_index["exercises"][0]["dependencies"])
+
 
 if __name__ == "__main__":
     unittest.main()

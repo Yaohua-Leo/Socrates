@@ -53,6 +53,8 @@ def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
     write_json(index_path, index)
     write_json(context.root / "06_kb" / "concept_graph.json", _concept_graph(objects))
     write_json(context.root / "06_kb" / "dependency_graph.json", _dependency_graph(objects))
+    write_json(context.root / "06_kb" / "theorem_index.json", _theorem_index(objects))
+    write_json(context.root / "06_kb" / "exercise_index.json", _exercise_index(objects))
     _write_ingestion_eval(context.evals_dir / "ingestion_eval.md", len(objects))
 
     return ReferenceKbBuildResult(
@@ -212,6 +214,23 @@ def _dependency_graph(objects: list[dict[str, object]]) -> dict[str, list[dict[s
         "edges": [
             edge for edge in graph["edges"] if edge["relationship"] == "prerequisite"
         ],
+    }
+
+
+def _theorem_index(objects: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    theorem_types = {"theorem", "proposition", "lemma", "corollary"}
+    return {
+        "theorems": [
+            item for item in objects if str(item.get("type", "")) in theorem_types
+        ]
+    }
+
+
+def _exercise_index(objects: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
+    return {
+        "exercises": [
+            item for item in objects if str(item.get("type", "")) == "exercise"
+        ]
     }
 
 
