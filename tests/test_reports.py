@@ -422,6 +422,7 @@ class ReportTests(unittest.TestCase):
             self.assertIn("## Benchmark Snapshot", report_text)
             self.assertIn("- not run", report_text)
             self.assertIn("## Tool Verification Snapshot", report_text)
+            self.assertIn("- Check: not run", report_text)
             self.assertIn(
                 "- kernel_normality: unchecked_skeleton, lean_statement_skeleton -> "
                 "08_evals/tool_verification/kernel_normality_statement.lean",
@@ -451,6 +452,74 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Current phase: report_ready", status.stdout)
             self.assertIn("Learning reports: 1", status.stdout)
+            self.assertIn("Tool verification check: not run", status.stdout)
+
+    def test_report_list_marks_project_summary_stale_after_tool_quality_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            report_path = project / "07_exports" / "reports" / "project_summary.md"
+            quality_manifest = project / "08_evals" / "tool_verification_quality_manifest.json"
+            quality_manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "status": "pass",
+                        "checked": 1,
+                        "passed": 1,
+                        "failed": 0,
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(report_path, (1_000_000, 1_000_000))
+            os.utime(quality_manifest, (1_000_100, 1_000_100))
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- project-summary | stale | Project Summary | "
+                "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("weekly_report.md", stale_reports.stdout)
 
     def test_project_summary_includes_benchmark_snapshot_when_available(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

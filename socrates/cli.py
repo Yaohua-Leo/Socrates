@@ -753,6 +753,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     report_count = _count_learning_reports(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
+    tool_verification_quality = _read_tool_verification_quality_status(context.root)
     benchmark_status = _read_benchmark_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
@@ -798,6 +799,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Scheduled reviews: {scheduled_review_count}")
     print(f"Learning reports: {report_count}")
     print(f"Tool verification records: {tool_verification_count}")
+    print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
     if benchmark_status is None:
         print("Benchmark score: none")
         print("Benchmark gates: none")
@@ -1532,6 +1534,43 @@ def _count_tool_verification_records(project_root: Path) -> int:
         return 0
     records = manifest.get("records", []) if isinstance(manifest, dict) else []
     return len(records) if isinstance(records, list) else 0
+
+
+def _read_tool_verification_quality_status(project_root: Path) -> dict[str, object] | None:
+    manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    status = manifest.get("status")
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not isinstance(status, str):
+        return {"status": "invalid"}
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return {"status": "invalid"}
+    return {
+        "status": status,
+        "checked": checked,
+        "passed": passed,
+        "failed": failed,
+    }
+
+
+def _tool_verification_quality_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return (
+        f"{value['status']} "
+        f"({value['passed']}/{value['checked']} passed, {value['failed']} failed)"
+    )
 
 
 def _read_benchmark_status(project_root: Path) -> dict[str, object] | None:

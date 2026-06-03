@@ -71,6 +71,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             tool_verification_records=list_tool_verification_records(context.root),
+            tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
             benchmark_snapshot=_read_benchmark_snapshot(context.root),
             state=state,
         ),
@@ -183,6 +184,8 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "07_exports" / "obsidian",
             project_root / "08_evals" / "benchmark_manifest.json",
             project_root / "08_evals" / "tool_verification" / "manifest.json",
+            project_root / "08_evals" / "tool_verification_eval.md",
+            project_root / "08_evals" / "tool_verification_quality_manifest.json",
             project_root / "00_meta" / "learning_state.json",
         )
     return ()
@@ -306,6 +309,7 @@ def _project_summary_text(
     attempted_exercises: int,
     graded_exercises: int,
     tool_verification_records: list[ToolVerificationSummary],
+    tool_verification_quality: dict[str, object],
     benchmark_snapshot: dict[str, object],
     state: dict[str, object],
 ) -> str:
@@ -337,7 +341,10 @@ def _project_summary_text(
         "",
         "## Tool Verification Snapshot",
         "",
-        *_tool_verification_snapshot_lines(tool_verification_records),
+        *_tool_verification_snapshot_lines(
+            tool_verification_records,
+            quality=tool_verification_quality,
+        ),
         "",
         "## Reference KB Snapshot",
         "",
@@ -492,6 +499,32 @@ def _read_benchmark_snapshot(project_root: Path) -> dict[str, object]:
     }
 
 
+def _read_tool_verification_quality_snapshot(project_root: Path) -> dict[str, object]:
+    manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
+    if not manifest_path.exists():
+        return {"status": "not_run"}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    status = manifest.get("status")
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not isinstance(status, str):
+        return {"status": "invalid"}
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return {"status": "invalid"}
+    return {
+        "status": status,
+        "checked": checked,
+        "passed": passed,
+        "failed": failed,
+    }
+
+
 def _count_approved_exercises(project_root: Path) -> int:
     generated_root = project_root / "05_exercises" / "generated"
     if not generated_root.exists():
@@ -561,15 +594,36 @@ def _benchmark_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
     ]
 
 
-def _tool_verification_snapshot_lines(records: list[ToolVerificationSummary]) -> list[str]:
+def _tool_verification_snapshot_lines(
+    records: list[ToolVerificationSummary],
+    *,
+    quality: dict[str, object],
+) -> list[str]:
+    lines = _tool_verification_quality_lines(quality)
     if not records:
-        return ["- none recorded"]
-    return [
+        return [*lines, "- Records: none"]
+    lines.extend(
         (
             f"- {record.object_id}: {record.status}, {record.kind}"
             f" -> {record.artifact_path}"
         )
         for record in records
+    )
+    return lines
+
+
+def _tool_verification_quality_lines(snapshot: dict[str, object]) -> list[str]:
+    status = snapshot.get("status")
+    if status == "not_run":
+        return ["- Check: not run"]
+    if status == "invalid":
+        return ["- Check: invalid quality manifest"]
+    return [
+        (
+            f"- Check: {status} "
+            f"({snapshot['passed']}/{snapshot['checked']} passed, {snapshot['failed']} failed)"
+        ),
+        "- Quality manifest: 08_evals/tool_verification_quality_manifest.json",
     ]
 
 

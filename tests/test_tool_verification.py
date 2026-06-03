@@ -184,6 +184,18 @@ class ToolVerificationTests(unittest.TestCase):
                 manifest["verification_boundary"]["external_verifier_invoked"],
                 False,
             )
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn(
+                "Tool verification check: pass (1/1 passed, 0 failed)",
+                status.stdout,
+            )
 
     def test_tool_check_cli_fails_for_missing_persisted_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
