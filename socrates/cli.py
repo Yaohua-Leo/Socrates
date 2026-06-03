@@ -1028,36 +1028,56 @@ def _parse_iso_date(value: str) -> date:
 
 def _due_reviews_text(learning_state: Path, as_of: date) -> str:
     lines = ["# Due Reviews", ""]
-    rows = _due_review_rows(learning_state, as_of)
+    rows, invalid_rows = _due_review_rows(learning_state, as_of)
     if not rows:
         lines.append("- none")
-        return "\n".join(lines) + "\n"
-    lines.extend(
-        (
-            f"- {row['concept']} | {row['scheduled_for']} | "
-            f"{row['priority']} | {row['reason']}"
+    else:
+        lines.extend(
+            (
+                f"- {row['concept']} | {row['scheduled_for']} | "
+                f"{row['priority']} | {row['reason']}"
+            )
+            for row in rows
         )
-        for row in rows
-    )
+    if invalid_rows:
+        lines.extend(["", "## Invalid Review Schedule Items", ""])
+        lines.extend(
+            f"- {row['concept']} | {row['scheduled_for']} | invalid scheduled_for"
+            for row in invalid_rows
+        )
     return "\n".join(lines) + "\n"
 
 
-def _due_review_rows(learning_state: Path, as_of: date) -> list[dict[str, str]]:
+def _due_review_rows(
+    learning_state: Path,
+    as_of: date,
+) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     if not learning_state.exists():
-        return []
+        return ([], [])
     state = json.loads(learning_state.read_text(encoding="utf-8"))
     schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
     if not isinstance(schedule, list):
-        return []
+        return ([], [])
 
     rows: list[dict[str, str]] = []
+    invalid_rows: list[dict[str, str]] = []
     for item in schedule:
         if not isinstance(item, dict):
             continue
         scheduled_for = str(item.get("scheduled_for", "")).strip()
         if not scheduled_for:
             continue
-        if date.fromisoformat(scheduled_for) > as_of:
+        try:
+            scheduled_date = date.fromisoformat(scheduled_for)
+        except ValueError:
+            invalid_rows.append(
+                {
+                    "concept": str(item.get("concept", "review")),
+                    "scheduled_for": scheduled_for,
+                }
+            )
+            continue
+        if scheduled_date > as_of:
             continue
         rows.append(
             {
@@ -1067,4 +1087,7 @@ def _due_review_rows(learning_state: Path, as_of: date) -> list[dict[str, str]]:
                 "reason": str(item.get("reason", "review scheduled")),
             }
         )
-    return sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"]))
+    return (
+        sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"])),
+        sorted(invalid_rows, key=lambda row: (row["concept"], row["scheduled_for"])),
+    )

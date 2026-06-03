@@ -376,6 +376,64 @@ class StateEvalTests(unittest.TestCase):
             )
             self.assertNotIn("Traceback", result.stderr)
 
+    def test_review_due_cli_reports_invalid_persisted_schedule_dates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "2026-06-04",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "broken_review",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "scheduled_for": "not-a-date",
+                                "reason": "corrupt schedule fixture",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("- normal_subgroup | 2026-06-04 | high | mastery 0.4", result.stdout)
+            self.assertIn("## Invalid Review Schedule Items", result.stdout)
+            self.assertIn("- broken_review | not-a-date | invalid scheduled_for", result.stdout)
+            self.assertNotIn("Traceback", result.stderr)
+
     def test_status_counts_active_and_resolved_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
