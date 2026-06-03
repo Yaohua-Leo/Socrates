@@ -103,7 +103,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
 def list_learning_reports(project_path: Path | str, *, status: str = "all") -> list[ReportSummary]:
     """List expected learning reports and whether they have been generated."""
 
-    allowed_statuses = {"all", "generated", "missing"}
+    allowed_statuses = {"all", "generated", "missing", "stale"}
     if status not in allowed_statuses:
         allowed = ", ".join(sorted(allowed_statuses))
         raise ValueError(f"Unknown report status {status!r}; expected one of: {allowed}")
@@ -113,7 +113,7 @@ def list_learning_reports(project_path: Path | str, *, status: str = "all") -> l
     summaries: list[ReportSummary] = []
     for report_id, title, file_name in REPORT_SPECS:
         report_path = reports_dir / file_name
-        report_status = "generated" if report_path.exists() else "missing"
+        report_status = _report_status(context.root, report_id, report_path)
         summaries.append(
             ReportSummary(
                 report_id=report_id,
@@ -125,6 +125,24 @@ def list_learning_reports(project_path: Path | str, *, status: str = "all") -> l
     if status != "all":
         summaries = [summary for summary in summaries if summary.status == status]
     return summaries
+
+
+def _report_status(project_root: Path, report_id: str, report_path: Path) -> str:
+    if not report_path.exists():
+        return "missing"
+    if _is_report_stale(project_root, report_id, report_path):
+        return "stale"
+    return "generated"
+
+
+def _is_report_stale(project_root: Path, report_id: str, report_path: Path) -> bool:
+    if report_id != "project-summary":
+        return False
+    benchmark_manifest = project_root / "08_evals" / "benchmark_manifest.json"
+    return (
+        benchmark_manifest.exists()
+        and benchmark_manifest.stat().st_mtime_ns > report_path.stat().st_mtime_ns
+    )
 
 
 def _weekly_report_text(

@@ -543,9 +543,9 @@ def build_parser() -> argparse.ArgumentParser:
     report_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
     report_list_parser.add_argument(
         "--status",
-        choices=("all", "generated", "missing"),
+        choices=("all", "generated", "missing", "stale"),
         default="all",
-        help="Filter reports by generation status; defaults to all.",
+        help="Filter reports by generation/freshness status; defaults to all.",
     )
     report_list_parser.set_defaults(func=_handle_report_list)
     weekly_report_parser = report_subparsers.add_parser(

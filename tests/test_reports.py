@@ -112,6 +112,68 @@ class ReportTests(unittest.TestCase):
             self.assertNotIn("weekly_report.md", missing_reports.stdout)
             self.assertNotIn("project_summary.md", missing_reports.stdout)
 
+    def test_report_list_marks_project_summary_stale_after_benchmark_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            manifest_path = project / "08_evals" / "benchmark_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "score": 75,
+                        "passed_gates": 3,
+                        "total_gates": 4,
+                        "gates": [{"name": "Tutoring quality", "passed": False}],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- project-summary | stale | Project Summary | "
+                "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("weekly_report.md", stale_reports.stdout)
+
     def test_weekly_report_cli_summarizes_learning_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
