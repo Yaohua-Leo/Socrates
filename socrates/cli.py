@@ -873,6 +873,7 @@ def _handle_kb_check(args: argparse.Namespace) -> int:
         f"{result.passed} passed, {result.failed} failed"
     )
     print(f"Ingestion quality report: {result.report_path}")
+    print(f"Ingestion quality manifest: {result.manifest_path}")
     return 0
 
 

@@ -51,6 +51,7 @@ class IngestionQualityResult:
     failed: int
     object_count: int
     report_path: Path
+    manifest_path: Path
 
 
 @dataclass(frozen=True)
@@ -343,13 +344,26 @@ def check_reference_ingestion_quality(project_path: Path | str) -> IngestionQual
     failed = len(rows) - passed
     object_count = sum(int(row["object_count"]) for row in rows)
     report_path = context.evals_dir / "ingestion_eval.md"
+    manifest_path = context.evals_dir / "ingestion_quality_manifest.json"
     write_text(report_path, _ingestion_quality_report(rows, passed, failed, object_count))
+    write_json(
+        manifest_path,
+        _ingestion_quality_manifest(
+            context.root,
+            curated_paths,
+            rows,
+            passed=passed,
+            failed=failed,
+            object_count=object_count,
+        ),
+    )
     return IngestionQualityResult(
         checked=len(rows),
         passed=passed,
         failed=failed,
         object_count=object_count,
         report_path=report_path,
+        manifest_path=manifest_path,
     )
 
 
@@ -867,6 +881,100 @@ def _check_curated_reference(path: Path) -> dict[str, object]:
         "object_count": object_count,
         "issues": issues,
     }
+
+
+def _ingestion_quality_manifest(
+    project_root: Path,
+    curated_paths: list[Path],
+    rows: list[dict[str, object]],
+    *,
+    passed: int,
+    failed: int,
+    object_count: int,
+) -> dict[str, object]:
+    row_by_file = {str(row["file"]): row for row in rows}
+    return {
+        "schema_version": 1,
+        "checked": len(curated_paths),
+        "passed": passed,
+        "failed": failed,
+        "extractable_objects": object_count,
+        "raw_references_modified": False,
+        "curated_only_policy": "enforced",
+        "curated_references": [
+            _curated_reference_manifest_entry(
+                project_root,
+                curated_path,
+                row_by_file.get(curated_path.name, {}),
+            )
+            for curated_path in curated_paths
+        ],
+    }
+
+
+def _curated_reference_manifest_entry(
+    project_root: Path,
+    curated_path: Path,
+    quality_row: dict[str, object],
+) -> dict[str, object]:
+    text = curated_path.read_text(encoding="utf-8")
+    issues = quality_row.get("issues", [])
+    if not isinstance(issues, list):
+        issues = []
+    objects = _extractable_object_manifest(text)
+    return {
+        "file": curated_path.name,
+        "path": curated_path.relative_to(project_root).as_posix(),
+        "quality_status": quality_row.get("status", "unknown"),
+        "issues": issues,
+        "source_metadata": _curated_source_metadata(text),
+        "extractable_object_count": len(objects),
+        "has_dependency_metadata": "Depends:" in text,
+        "objects": objects,
+    }
+
+
+def _curated_source_metadata(text: str) -> dict[str, str]:
+    metadata: dict[str, str] = {}
+    for line in text.splitlines():
+        stripped = line.strip()
+        key, separator, value = stripped.removeprefix("-").strip().partition(":")
+        if not separator:
+            continue
+        normalized_key = key.strip().casefold()
+        if normalized_key in {"source_id", "title", "role", "raw_path"}:
+            metadata[normalized_key] = value.strip().strip('"')
+    return metadata
+
+
+def _extractable_object_manifest(text: str) -> list[dict[str, object]]:
+    objects: list[dict[str, object]] = []
+    current: dict[str, object] | None = None
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if stripped.startswith("### "):
+            parsed = parse_object_heading(stripped.removeprefix("### ").strip())
+            if parsed is None:
+                current = None
+                continue
+            object_type, title, number = parsed
+            current = {
+                "line": line_number,
+                "type": object_type,
+                "title": title,
+                "dependencies": [],
+            }
+            if number:
+                current["number"] = number
+            objects.append(current)
+            continue
+        if current is not None and stripped.casefold().startswith("depends:"):
+            current["dependencies"] = [
+                item.strip()
+                for item in stripped.split(":", 1)[1].split(",")
+                if item.strip()
+            ]
+    return objects
 
 
 def _extractable_object_count(text: str) -> int:
