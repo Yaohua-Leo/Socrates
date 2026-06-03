@@ -94,6 +94,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     if exported:
         obsidian_dir = context.root / "07_exports" / "obsidian"
         backlinks = _obsidian_backlinks(manifest_notes)
+        _attach_obsidian_backlinks(manifest_notes, backlinks)
         for note in reviewed_notes:
             entry = note["entry"]
             if not isinstance(entry, dict):
@@ -136,7 +137,7 @@ def list_atomic_notes(project_path: Path | str, *, status: str = "all") -> list[
 
 def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, object]]) -> None:
     manifest = {
-        "version": 2,
+        "version": 3,
         "exported_notes": sorted(exported_notes, key=lambda item: item["note_id"]),
     }
     write_text(
@@ -181,6 +182,7 @@ def _obsidian_backlinks(exported_notes: list[dict[str, object]]) -> dict[str, li
     for note in exported_notes:
         source_id = str(note["note_id"])
         source_concept = str(note["concept"])
+        source_path = str(note["path"])
         related = note.get("related", [])
         if not isinstance(related, list):
             continue
@@ -188,11 +190,21 @@ def _obsidian_backlinks(exported_notes: list[dict[str, object]]) -> dict[str, li
             target_id = by_target.get(_obsidian_link_target_id(str(item)))
             if not target_id or target_id == source_id:
                 continue
-            backlinks[target_id].append({"note_id": source_id, "concept": source_concept})
+            backlinks[target_id].append(
+                {"note_id": source_id, "concept": source_concept, "path": source_path}
+            )
     return {
         note_id: sorted(_unique_backlinks(items), key=lambda item: item["concept"])
         for note_id, items in backlinks.items()
     }
+
+
+def _attach_obsidian_backlinks(
+    exported_notes: list[dict[str, object]],
+    backlinks: dict[str, list[dict[str, str]]],
+) -> None:
+    for note in exported_notes:
+        note["backlinks"] = backlinks.get(str(note["note_id"]), [])
 
 
 def _obsidian_link_target_id(value: str) -> str:

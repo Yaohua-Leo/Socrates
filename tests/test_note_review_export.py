@@ -151,7 +151,7 @@ class NoteReviewExportTests(unittest.TestCase):
                     encoding="utf-8"
                 )
             )
-            self.assertEqual(manifest["version"], 2)
+            self.assertEqual(manifest["version"], 3)
             self.assertEqual(
                 manifest["exported_notes"],
                 [
@@ -166,6 +166,7 @@ class NoteReviewExportTests(unittest.TestCase):
                         "source_location": "Section 3.1",
                         "tags": ["definition", "normal-subgroup", "subgroup", "conjugation"],
                         "related": ["[[Subgroup]]", "[[Conjugation]]"],
+                        "backlinks": [],
                     }
                 ],
             )
@@ -219,6 +220,24 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn("## Socrates Backlinks", normal_text)
             self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
             self.assertNotIn("## Socrates Backlinks", quotient_text)
+            manifest = json.loads(
+                (project / "07_exports" / "obsidian" / "export_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            notes_by_id = {item["note_id"]: item for item in manifest["exported_notes"]}
+            self.assertEqual(manifest["version"], 3)
+            self.assertEqual(
+                notes_by_id["normal_subgroup"]["backlinks"],
+                [
+                    {
+                        "note_id": "quotient_group",
+                        "concept": "Quotient Group",
+                        "path": "quotient_group.md",
+                    }
+                ],
+            )
+            self.assertEqual(notes_by_id["quotient_group"]["backlinks"], [])
 
     def test_note_list_cli_shows_pending_reviewed_and_exported_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
