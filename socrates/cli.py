@@ -19,6 +19,7 @@ from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
+from .quality import check_generated_exercise_quality
 from .references import curate_reference, import_reference
 from .state import (
     EvalReportUpdate,
@@ -163,6 +164,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_adjust_plan_parser.add_argument("--project", required=True, help="Socrates project directory.")
     review_adjust_plan_parser.set_defaults(func=_handle_review_adjust_plan)
+
+    exercise_parser = subparsers.add_parser(
+        "exercise",
+        help="Check and manage generated exercises.",
+    )
+    exercise_subparsers = exercise_parser.add_subparsers(dest="exercise_command", required=True)
+    exercise_check_parser = exercise_subparsers.add_parser(
+        "check",
+        help="Run checklist quality checks on generated exercise drafts.",
+    )
+    exercise_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_check_parser.set_defaults(func=_handle_exercise_check)
 
     return parser
 
@@ -334,6 +347,16 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
 def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
     short_term_plan = adjust_short_term_plan_from_review_schedule(args.project)
     print(f"Adjusted short-term plan: {short_term_plan}")
+    return 0
+
+
+def _handle_exercise_check(args: argparse.Namespace) -> int:
+    result = check_generated_exercise_quality(args.project)
+    print(
+        f"Checked {result.checked} exercise drafts: "
+        f"{result.passed} passed, {result.failed} failed"
+    )
+    print(f"Exercise quality report: {result.report_path}")
     return 0
 
 
