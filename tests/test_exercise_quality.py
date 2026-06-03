@@ -122,6 +122,117 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Attempted exercises: 1", status.stdout)
 
+    def test_exercise_list_cli_shows_draft_approved_attempted_and_graded(self) -> None:
+        from socrates.exercises import (
+            approve_exercise_draft,
+            grade_exercise_attempt,
+            record_exercise_attempt,
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "Use conjugation invariance directly.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text("Correct core idea.\n", encoding="utf-8", newline="\n")
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            approve_exercise_draft(project, "normal_subgroup_02")
+            approve_exercise_draft(project, "normal_subgroup_03")
+            record_exercise_attempt(project, "normal_subgroup_02", answer)
+            record_exercise_attempt(project, "normal_subgroup_03", answer)
+            grade_exercise_attempt(project, "normal_subgroup_03_attempt_001", 0.8, feedback)
+
+            all_exercises = subprocess.run(
+                [sys.executable, "-m", "socrates", "exercise", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            attempted_exercises = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "attempted",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            graded_exercises = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "graded",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(all_exercises.returncode, 0, all_exercises.stderr)
+            draft = (
+                "- normal_subgroup_04 | draft | generated_exercise | Normal Subgroup | "
+                "05_exercises/generated/normal_subgroup_04.md"
+            )
+            approved = (
+                "- normal_subgroup_01 | approved | generated_exercise | Normal Subgroup | "
+                "05_exercises/generated/normal_subgroup_01.md"
+            )
+            attempted = (
+                "- normal_subgroup_02 | attempted | generated_exercise | Normal Subgroup | "
+                "05_exercises/generated/normal_subgroup_02.md | attempt normal_subgroup_02_attempt_001"
+            )
+            graded = (
+                "- normal_subgroup_03 | graded | generated_exercise | Normal Subgroup | "
+                "05_exercises/generated/normal_subgroup_03.md | "
+                "normal_subgroup_03_attempt_001, score 0.8"
+            )
+            self.assertIn("# Exercises", all_exercises.stdout)
+            self.assertIn(draft, all_exercises.stdout)
+            self.assertIn(approved, all_exercises.stdout)
+            self.assertIn(attempted, all_exercises.stdout)
+            self.assertIn(graded, all_exercises.stdout)
+            self.assertLess(all_exercises.stdout.index(draft), all_exercises.stdout.index(approved))
+            self.assertLess(all_exercises.stdout.index(approved), all_exercises.stdout.index(attempted))
+            self.assertLess(all_exercises.stdout.index(attempted), all_exercises.stdout.index(graded))
+
+            self.assertEqual(attempted_exercises.returncode, 0, attempted_exercises.stderr)
+            self.assertIn(attempted, attempted_exercises.stdout)
+            self.assertNotIn("normal_subgroup_01", attempted_exercises.stdout)
+            self.assertNotIn("normal_subgroup_03", attempted_exercises.stdout)
+
+            self.assertEqual(graded_exercises.returncode, 0, graded_exercises.stderr)
+            self.assertIn(graded, graded_exercises.stdout)
+            self.assertNotIn("normal_subgroup_01", graded_exercises.stdout)
+            self.assertNotIn("normal_subgroup_02", graded_exercises.stdout)
+
     def test_record_exercise_attempt_rejects_unapproved_exercise(self) -> None:
         from socrates.exercises import record_exercise_attempt
 

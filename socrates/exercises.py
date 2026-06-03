@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from .context import append_project_log, load_project, read_json, write_text
@@ -16,6 +17,18 @@ from .state import (
 
 
 REVIEW_MASTERY_THRESHOLD = 0.7
+
+
+@dataclass(frozen=True)
+class ExerciseSummary:
+    """A lifecycle summary for one generated exercise."""
+
+    exercise_id: str
+    status: str
+    exercise_type: str
+    concept: str
+    path: str
+    detail: str = ""
 
 
 def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
@@ -45,6 +58,41 @@ def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
     write_text(exercise_path, approved_text)
     append_project_log(context, f"Approved exercise draft {exercise_id}.")
     return exercise_path
+
+
+def list_exercises(project_path: Path | str, *, status: str = "all") -> list[ExerciseSummary]:
+    """List generated exercises by their current learner/reviewer state."""
+
+    allowed_statuses = {"all", "draft", "approved", "attempted", "graded"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(f"Unknown exercise status {status!r}; expected one of: {allowed}")
+
+    context = load_project(project_path)
+    attempts_by_exercise = _attempts_by_exercise(context.root)
+    graded_attempts = _graded_attempts(context.root)
+    summaries: list[ExerciseSummary] = []
+    for exercise_path in sorted(context.generated_exercises_dir.glob("*.md"), key=lambda path: path.stem):
+        exercise_id = exercise_path.stem
+        text = exercise_path.read_text(encoding="utf-8")
+        summary_status, detail = _exercise_lifecycle_status(
+            text=text,
+            attempts=attempts_by_exercise.get(exercise_id, []),
+            graded_attempts=graded_attempts,
+        )
+        summaries.append(
+            ExerciseSummary(
+                exercise_id=exercise_id,
+                status=summary_status,
+                exercise_type=_frontmatter_value(text, "type") or "generated_exercise",
+                concept=_frontmatter_value(text, "concept") or exercise_id,
+                path=exercise_path.relative_to(context.root).as_posix(),
+                detail=detail,
+            )
+        )
+    if status != "all":
+        summaries = [summary for summary in summaries if summary.status == status]
+    return sorted(summaries, key=lambda summary: (_exercise_status_order(summary.status), summary.exercise_id))
 
 
 def record_exercise_attempt(
@@ -141,6 +189,53 @@ def _has_review_schedule(learning_state_path: Path) -> bool:
         return False
     schedule = state.get("review_schedule", [])
     return isinstance(schedule, list) and bool(schedule)
+
+
+def _attempts_by_exercise(project_root: Path) -> dict[str, list[str]]:
+    attempted_dir = project_root / "05_exercises" / "attempted"
+    attempts: dict[str, list[str]] = {}
+    if not attempted_dir.exists():
+        return attempts
+    for attempt_path in sorted(attempted_dir.glob("*.md"), key=lambda path: path.stem):
+        text = attempt_path.read_text(encoding="utf-8")
+        exercise_id = _frontmatter_value(text, "exercise_id") or _exercise_id_from_attempt(attempt_path.stem)
+        attempts.setdefault(exercise_id, []).append(attempt_path.stem)
+    return attempts
+
+
+def _graded_attempts(project_root: Path) -> dict[str, str]:
+    graded_dir = project_root / "05_exercises" / "graded"
+    graded: dict[str, str] = {}
+    if not graded_dir.exists():
+        return graded
+    for grade_path in sorted(graded_dir.glob("*.md"), key=lambda path: path.stem):
+        text = grade_path.read_text(encoding="utf-8")
+        attempt_id = _frontmatter_value(text, "attempt_id") or grade_path.stem.removesuffix("_grade")
+        score = _frontmatter_value(text, "score")
+        graded[attempt_id] = f"score {score}" if score else "graded"
+    return graded
+
+
+def _exercise_lifecycle_status(
+    *,
+    text: str,
+    attempts: list[str],
+    graded_attempts: dict[str, str],
+) -> tuple[str, str]:
+    ungraded_attempts = [attempt_id for attempt_id in attempts if attempt_id not in graded_attempts]
+    if ungraded_attempts:
+        return ("attempted", f"attempt {ungraded_attempts[-1]}")
+    graded = [attempt_id for attempt_id in attempts if attempt_id in graded_attempts]
+    if graded:
+        attempt_id = graded[-1]
+        return ("graded", f"{attempt_id}, {graded_attempts[attempt_id]}")
+    if _is_approved_exercise(text):
+        return ("approved", "")
+    return ("draft", "")
+
+
+def _exercise_status_order(status: str) -> int:
+    return {"draft": 0, "approved": 1, "attempted": 2, "graded": 3}.get(status, 4)
 
 
 def _next_attempt_path(project_root: Path, exercise_id: str) -> Path:

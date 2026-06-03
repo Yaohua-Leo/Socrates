@@ -15,7 +15,13 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
 )
 from .context import load_project
-from .exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
+from .exercises import (
+    ExerciseSummary,
+    approve_exercise_draft,
+    grade_exercise_attempt,
+    list_exercises,
+    record_exercise_attempt,
+)
 from .kb import build_reference_kb, find_counterexamples, search_reference_kb
 from .learning_queue import collect_learning_queue, format_learning_queue
 from .notes import (
@@ -314,6 +320,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check and manage generated exercises.",
     )
     exercise_subparsers = exercise_parser.add_subparsers(dest="exercise_command", required=True)
+    exercise_list_parser = exercise_subparsers.add_parser(
+        "list",
+        help="List generated exercises by learner/reviewer status.",
+    )
+    exercise_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_list_parser.add_argument(
+        "--status",
+        choices=("all", "draft", "approved", "attempted", "graded"),
+        default="all",
+        help="Filter exercises by lifecycle status; defaults to all.",
+    )
+    exercise_list_parser.set_defaults(func=_handle_exercise_list)
     exercise_check_parser = exercise_subparsers.add_parser(
         "check",
         help="Run checklist quality checks on generated exercise drafts.",
@@ -772,6 +790,28 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
     noun = "item" if repaired_count == 1 else "items"
     print(f"Repaired {repaired_count} review schedule {noun}: {schedule_path}")
     return 0
+
+
+def _handle_exercise_list(args: argparse.Namespace) -> int:
+    exercises = list_exercises(args.project, status=args.status)
+    print(_exercises_text(exercises), end="")
+    return 0
+
+
+def _exercises_text(exercises: list[ExerciseSummary]) -> str:
+    lines = ["# Exercises", ""]
+    if not exercises:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    for exercise in exercises:
+        line = (
+            f"- {exercise.exercise_id} | {exercise.status} | {exercise.exercise_type} | "
+            f"{exercise.concept} | {exercise.path}"
+        )
+        if exercise.detail:
+            line = f"{line} | {exercise.detail}"
+        lines.append(line)
+    return "\n".join(lines) + "\n"
 
 
 def _handle_exercise_check(args: argparse.Namespace) -> int:
