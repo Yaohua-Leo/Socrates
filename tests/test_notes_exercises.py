@@ -165,6 +165,43 @@ class NotesExercisesTests(unittest.TestCase):
                 self.assertIn("- group", text)
                 self.assertIn("- set", text)
 
+    def test_generate_exercise_drafts_uses_kb_reference_context(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+
+            exercises = artifacts.generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="normality_notes",
+                count=5,
+            )
+
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn("## Reference Context", text)
+            self.assertIn("- Object: definition 3.1 Normal Subgroup", text)
+            self.assertIn("- Source: 01_references/curated/normality.curated.md", text)
+            self.assertIn("- Line: 3", text)
+            self.assertIn("- Page: 82", text)
+            self.assertIn(
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.",
+                text,
+            )
+            self.assertIn("- subgroup", text)
+            self.assertIn("- conjugation", text)
+
     def test_generate_targeted_review_exercises_uses_review_schedule(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:

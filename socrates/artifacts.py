@@ -76,7 +76,8 @@ def generate_exercise_drafts(
 
     context = load_project(project_path)
     base_id = slugify_topic(concept)
-    prerequisite_list = list(prerequisites)
+    reference_object = _kb_reference_object(context.root, concept)
+    prerequisite_list = list(prerequisites) or _kb_related_concepts(reference_object)
     exercise_count = max(5, count)
     drafts: list[ExerciseDraft] = []
 
@@ -90,6 +91,7 @@ def generate_exercise_drafts(
                 concept=concept,
                 source_id=source_id,
                 prerequisites=prerequisite_list,
+                reference_object=reference_object,
                 index=index,
                 difficulty=difficulty,
             ),
@@ -152,10 +154,12 @@ def _exercise_text(
     concept: str,
     source_id: str,
     prerequisites: list[str],
+    reference_object: dict[str, object] | None,
     index: int,
     difficulty: int,
 ) -> str:
     prerequisites_block = _bullet_list(prerequisites)
+    reference_context = _reference_context_section(reference_object)
     return (
         _frontmatter(
             {
@@ -176,6 +180,7 @@ def _exercise_text(
         + _bullet_list([concept])
         + "\n## Prerequisites\n\n"
         + prerequisites_block
+        + ("\n" + reference_context if reference_context else "")
         + "\n## Hints\n\n"
         + "- Identify the definitions that apply directly.\n"
         + "- Check each required condition separately.\n\n"
