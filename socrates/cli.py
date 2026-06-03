@@ -451,7 +451,7 @@ def _handle_lifecycle_audit(args: argparse.Namespace) -> int:
         f"Lifecycle audit passed {result.passed_checks}/{result.total_checks} checks: "
         f"{result.report_path}"
     )
-    return 0
+    return 0 if result.passed_checks == result.total_checks else 1
 
 
 def _handle_projects_scan(args: argparse.Namespace) -> int:

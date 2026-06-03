@@ -30,6 +30,34 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class LifecycleAuditTests(unittest.TestCase):
+    def test_lifecycle_audit_cli_fails_when_required_artifacts_are_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Lifecycle audit passed 1/12 checks", result.stdout)
+            report = project / "08_evals" / "lifecycle_eval.md"
+            report_text = report.read_text(encoding="utf-8")
+            self.assertIn("- Project metadata: pass", report_text)
+            self.assertIn("- Learning plans: fail", report_text)
+            self.assertIn("- Obsidian export: fail", report_text)
+
     def test_lifecycle_audit_cli_reports_complete_learning_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
