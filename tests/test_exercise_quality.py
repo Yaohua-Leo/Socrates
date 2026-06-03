@@ -1234,6 +1234,98 @@ class ExerciseQualityTests(unittest.TestCase):
                 "tool-verification artifact fingerprint changed",
             )
 
+    def test_exercise_check_cli_reports_all_tool_record_drift_reasons(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            _write_linked_sage_tool_record(project)
+            _write_sage_tool_quality_manifest(project)
+            artifact_path = (
+                project
+                / "08_evals"
+                / "tool_verification"
+                / "normal_subgroup_01_sage_order.json"
+            )
+            artifact_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "sage_group_order_check",
+                        "object_id": "normal_subgroup_01",
+                        "status": "verified",
+                        "passed": False,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            report_path = (
+                project
+                / "08_evals"
+                / "tool_verification"
+                / "normal_subgroup_01_sage_order_report.md"
+            )
+            report_path.write_text(
+                "# Tool Verification: Mutated Report\n\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (project / "08_evals" / "exercise_quality_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                (
+                    "- normal_subgroup_01.md | linked | records: 1 | quality: stale "
+                    "(tool-verification artifact fingerprint changed; "
+                    "tool-verification report fingerprint changed)"
+                ),
+                report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            first_exercise = manifest["exercises"][0]
+            self.assertEqual(
+                first_exercise["tool_verification"]["quality_reasons"],
+                [
+                    "tool-verification artifact fingerprint changed",
+                    "tool-verification report fingerprint changed",
+                ],
+            )
+            self.assertEqual(
+                first_exercise["tool_verification"]["quality_reason"],
+                "tool-verification artifact fingerprint changed",
+            )
+
 
 def _write_linked_sage_tool_record(project: Path) -> None:
     verification_dir = project / "08_evals" / "tool_verification"

@@ -622,20 +622,22 @@ def _exercise_tool_verification_quality(
         if isinstance(record, dict)
         and str(record.get("object_id", "")).strip() == exercise_id
     ]
-    staleness_reason = _tool_verification_quality_staleness_reason(
+    staleness_reasons = _tool_verification_quality_staleness_reasons(
         manifest,
         manifest_path,
         source_manifest_path,
     )
-    if not staleness_reason:
-        staleness_reason = _tool_verification_record_staleness_reason(
+    staleness_reasons.extend(
+        _tool_verification_record_staleness_reasons(
             project_root,
             linked_quality_records,
         )
-    if staleness_reason:
+    )
+    if staleness_reasons:
         return {
             "status": "stale",
-            "reason": staleness_reason,
+            "reason": staleness_reasons[0],
+            "reasons": staleness_reasons,
             "records": linked_quality_records,
         }
     if not linked_quality_records:
@@ -659,10 +661,11 @@ def _exercise_tool_verification_quality(
     return {"status": status, "reason": "", "records": linked_quality_records}
 
 
-def _tool_verification_record_staleness_reason(
+def _tool_verification_record_staleness_reasons(
     project_root: Path,
     records: list[object],
-) -> str:
+) -> list[str]:
+    reasons: list[str] = []
     for record in records:
         if not isinstance(record, dict):
             continue
@@ -671,14 +674,14 @@ def _tool_verification_record_staleness_reason(
             record.get("artifact_path"),
             record.get("artifact_fingerprint"),
         ):
-            return "tool-verification artifact fingerprint changed"
+            reasons.append("tool-verification artifact fingerprint changed")
         if _record_fingerprint_changed(
             project_root,
             record.get("report_path"),
             record.get("report_fingerprint"),
         ):
-            return "tool-verification report fingerprint changed"
-    return ""
+            reasons.append("tool-verification report fingerprint changed")
+    return _dedupe_preserving_order(reasons)
 
 
 def _record_fingerprint_changed(
@@ -703,27 +706,35 @@ def _record_fingerprint_changed(
     return hashlib.sha256(resolved.read_bytes()).hexdigest() != value
 
 
-def _tool_verification_quality_staleness_reason(
+def _tool_verification_quality_staleness_reasons(
     manifest: dict[str, object],
     manifest_path: Path,
     source_manifest_path: Path,
-) -> str:
+) -> list[str]:
     fingerprint = manifest.get("source_manifest_fingerprint")
     if isinstance(fingerprint, dict):
         algorithm = str(fingerprint.get("algorithm", "")).strip()
         value = str(fingerprint.get("value", "")).strip()
         if algorithm == "sha256" and value:
             if not source_manifest_path.exists():
-                return ""
+                return []
             current_value = hashlib.sha256(source_manifest_path.read_bytes()).hexdigest()
             if current_value != value:
-                return "tool-verification source manifest fingerprint changed"
-            return ""
+                return ["tool-verification source manifest fingerprint changed"]
+            return []
     if not source_manifest_path.exists():
-        return ""
+        return []
     if source_manifest_path.stat().st_mtime > manifest_path.stat().st_mtime:
-        return "tool-verification check is older than source manifest"
-    return ""
+        return ["tool-verification check is older than source manifest"]
+    return []
+
+
+def _dedupe_preserving_order(values: list[str]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        if value and value not in result:
+            result.append(value)
+    return result
 
 
 def _exercise_quality_manifest(
@@ -875,6 +886,9 @@ def _tool_verification_evidence_manifest(row: dict[str, object]) -> dict[str, ob
         result["reason"] = row["reason"]
     if quality.get("reason"):
         result["quality_reason"] = quality["reason"]
+    reasons = quality.get("reasons", [])
+    if isinstance(reasons, list) and reasons:
+        result["quality_reasons"] = [str(reason) for reason in reasons]
     return result
 
 
@@ -1410,9 +1424,13 @@ def _tool_verification_quality_suffix(row: dict[str, object]) -> str:
     if not status or status == "not_applicable":
         return ""
     suffix = f" | quality: {status}"
-    reason = str(quality.get("reason", "")).strip()
-    if reason:
-        suffix = f"{suffix} ({reason})"
+    reasons = quality.get("reasons", [])
+    if isinstance(reasons, list) and reasons:
+        reason_text = "; ".join(str(reason) for reason in reasons if str(reason).strip())
+    else:
+        reason_text = str(quality.get("reason", "")).strip()
+    if reason_text:
+        suffix = f"{suffix} ({reason_text})"
     return suffix
 
 
