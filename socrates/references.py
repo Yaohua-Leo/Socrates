@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 import re
 import shutil
@@ -18,6 +19,22 @@ REFERENCE_TYPES = {
     ".tex": ("latex", "latex"),
     ".txt": ("text", "text"),
 }
+
+
+@dataclass(frozen=True)
+class SourceSummary:
+    """A source registry entry prepared for CLI display."""
+
+    id: str
+    type: str
+    title: str
+    role: str
+    priority: str
+    status: str
+    local_path: str
+    markdown_path: str
+    curated_path: str
+    notes: str
 
 
 def import_reference(
@@ -59,6 +76,17 @@ def import_reference(
     _append_source_record(context.source_registry, record)
     append_project_log(context, f"Imported reference {record.id} from {source.name}.")
     return record
+
+
+def list_source_registry(project_path: Path | str, *, status: str = "all") -> list[SourceSummary]:
+    """List imported sources from ``source_registry.yaml``."""
+
+    context = load_project(project_path)
+    records = _registry_records(context.source_registry.read_text(encoding="utf-8"))
+    summaries = [_source_summary(record) for record in records]
+    if status == "all":
+        return summaries
+    return [summary for summary in summaries if summary.status == status]
 
 
 def curate_reference(project_path: Path | str, source_id: str) -> Path:
@@ -136,12 +164,20 @@ def _append_source_record(registry_path: Path, record: SourceRecord) -> None:
 
 
 def _find_registry_record(registry_text: str, source_id: str) -> dict[str, str] | None:
+    for record in _registry_records(registry_text):
+        if record.get("id") == source_id:
+            return record
+    return None
+
+
+def _registry_records(registry_text: str) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
     current: dict[str, str] | None = None
     in_processed_paths = False
     for line in registry_text.splitlines():
         if line.startswith("  - id: "):
-            if current and current.get("id") == source_id:
-                return current
+            if current:
+                records.append(current)
             current = {"id": line.removeprefix("  - id: ").strip()}
             in_processed_paths = False
             continue
@@ -161,9 +197,24 @@ def _find_registry_record(registry_text: str, source_id: str) -> dict[str, str] 
             key, separator, value = stripped.partition(":")
             if separator:
                 current[key] = _registry_value(value.strip())
-    if current and current.get("id") == source_id:
-        return current
-    return None
+    if current:
+        records.append(current)
+    return records
+
+
+def _source_summary(record: dict[str, str]) -> SourceSummary:
+    return SourceSummary(
+        id=record.get("id", ""),
+        type=record.get("type", ""),
+        title=record.get("title", ""),
+        role=record.get("role", ""),
+        priority=record.get("priority", ""),
+        status=record.get("status", ""),
+        local_path=record.get("local_path", ""),
+        markdown_path=record.get("processed_paths.markdown", ""),
+        curated_path=record.get("processed_paths.curated", ""),
+        notes=record.get("notes", ""),
+    )
 
 
 def _registry_value(value: str) -> str:

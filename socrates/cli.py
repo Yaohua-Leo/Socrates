@@ -41,7 +41,7 @@ from .quality import (
     check_tutoring_session_quality,
     run_project_benchmark,
 )
-from .references import curate_reference, import_reference
+from .references import SourceSummary, curate_reference, import_reference, list_source_registry
 from .reports import generate_monthly_report, generate_project_summary, generate_weekly_report
 from .state import (
     EvalReportUpdate,
@@ -101,6 +101,23 @@ def build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument("--priority", type=int, default=1, help="Source priority.")
     import_parser.add_argument("--notes", default="", help="Optional source notes.")
     import_parser.set_defaults(func=_handle_import)
+
+    sources_parser = subparsers.add_parser(
+        "sources",
+        help="Inspect imported source registry entries.",
+    )
+    sources_subparsers = sources_parser.add_subparsers(dest="sources_command", required=True)
+    sources_list_parser = sources_subparsers.add_parser(
+        "list",
+        help="List imported references and processing status.",
+    )
+    sources_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    sources_list_parser.add_argument(
+        "--status",
+        default="all",
+        help="Filter by exact source status; defaults to all.",
+    )
+    sources_list_parser.set_defaults(func=_handle_sources_list)
 
     curate_parser = subparsers.add_parser(
         "curate",
@@ -406,6 +423,37 @@ def _handle_import(args: argparse.Namespace) -> int:
     )
     print(f"Imported reference {record.id} at {record.local_path}")
     return 0
+
+
+def _handle_sources_list(args: argparse.Namespace) -> int:
+    sources = list_source_registry(args.project, status=args.status)
+    print(_source_registry_text(sources), end="")
+    return 0
+
+
+def _source_registry_text(sources: list[SourceSummary]) -> str:
+    lines = ["# Source Registry", ""]
+    if not sources:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+
+    for source in sources:
+        lines.append(
+            (
+                f"- {source.id} | {source.status} | {source.type} | "
+                f"{source.role} | priority {source.priority} | {source.title}"
+            )
+        )
+        lines.append(f"  - raw: {_display_path(source.local_path)}")
+        lines.append(f"  - markdown: {_display_path(source.markdown_path)}")
+        lines.append(f"  - curated: {_display_path(source.curated_path)}")
+        if source.notes:
+            lines.append(f"  - notes: {source.notes}")
+    return "\n".join(lines) + "\n"
+
+
+def _display_path(value: str) -> str:
+    return value if value else "none"
 
 
 def _handle_curate(args: argparse.Namespace) -> int:

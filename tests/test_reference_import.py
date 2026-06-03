@@ -142,6 +142,92 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Conversion pending references: 1", result.stdout)
 
+    def test_sources_list_cli_shows_registry_status_and_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            notes = root / "normal_subgroups.md"
+            book = root / "abstract_algebra.pdf"
+            notes.write_text(
+                "### Definition: Normal Subgroup\nStable under conjugation.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            book.write_bytes(b"%PDF placeholder")
+            notes_record = import_reference(
+                project,
+                notes,
+                role="lecture_notes",
+                title="Normal Subgroups Notes",
+                priority=2,
+                notes="Local notes for the first session.",
+            )
+            book_record = import_reference(
+                project,
+                book,
+                role="main_textbook",
+                title="Abstract Algebra",
+            )
+            curate_reference(project, notes_record.id)
+            curate_reference(project, book_record.id)
+
+            all_sources = subprocess.run(
+                [sys.executable, "-m", "socrates", "sources", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            pending_sources = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "sources",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "conversion_pending",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(all_sources.returncode, 0, all_sources.stderr)
+            curated_line = (
+                "- normal_subgroups_notes | curated_draft | markdown | "
+                "lecture_notes | priority 2 | Normal Subgroups Notes"
+            )
+            pending_line = (
+                "- abstract_algebra | conversion_pending | pdf | "
+                "main_textbook | priority 1 | Abstract Algebra"
+            )
+            self.assertIn("# Source Registry", all_sources.stdout)
+            self.assertIn(curated_line, all_sources.stdout)
+            self.assertIn("  - raw: 01_references/raw/markdown/normal_subgroups.md", all_sources.stdout)
+            self.assertIn(
+                "  - markdown: 01_references/converted/markdown/normal_subgroups_notes.md",
+                all_sources.stdout,
+            )
+            self.assertIn(
+                "  - curated: 01_references/curated/normal_subgroups_notes.curated.md",
+                all_sources.stdout,
+            )
+            self.assertIn("  - notes: Local notes for the first session.", all_sources.stdout)
+            self.assertIn(pending_line, all_sources.stdout)
+            self.assertIn(
+                "  - markdown: 01_references/converted/markdown/abstract_algebra.conversion_pending.md",
+                all_sources.stdout,
+            )
+            self.assertIn("  - curated: none", all_sources.stdout)
+
+            self.assertEqual(pending_sources.returncode, 0, pending_sources.stderr)
+            self.assertIn(pending_line, pending_sources.stdout)
+            self.assertNotIn("normal_subgroups_notes", pending_sources.stdout)
+
     def test_curate_markdown_reference_creates_curated_draft_and_updates_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
