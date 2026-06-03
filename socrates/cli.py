@@ -430,6 +430,10 @@ def _handle_status(args: argparse.Namespace) -> int:
     draft_count = len(collect_learning_queue(context.root).notes_to_review)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     converted_count = _count_converted_references(context.references_dir)
+    conversion_pending_count = _count_sources_with_status(
+        context.source_registry,
+        "conversion_pending",
+    )
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_object_count = _count_kb_objects(context.root)
     reviewed_count = _count_reviewed_notes(context.root)
@@ -447,6 +451,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Current phase: {phase}")
     print(f"Imported sources: {source_count}")
     print(f"Converted references: {converted_count}")
+    print(f"Conversion pending references: {conversion_pending_count}")
     print(f"Curated references: {curated_count}")
     print(f"KB objects: {kb_object_count}")
     print(f"Latest session: {latest_session}")
@@ -826,6 +831,16 @@ def _count_sources(registry_path: Path) -> int:
     if not registry_path.exists():
         return 0
     return sum(1 for line in registry_path.read_text(encoding="utf-8").splitlines() if line.strip().startswith("- id:"))
+
+
+def _count_sources_with_status(registry_path: Path, status: str) -> int:
+    if not registry_path.exists():
+        return 0
+    return sum(
+        1
+        for line in registry_path.read_text(encoding="utf-8").splitlines()
+        if line.strip() == f"status: {status}"
+    )
 
 
 def _count_converted_references(references_dir: Path) -> int:

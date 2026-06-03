@@ -110,6 +110,38 @@ class ReferenceImportTests(unittest.TestCase):
             )
             self.assertIn("curated: null", registry)
 
+    def test_status_reports_conversion_pending_references(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "abstract_algebra.pdf"
+            source.write_bytes(b"%PDF placeholder")
+            record = import_reference(
+                project,
+                source,
+                role="main_textbook",
+                title="Abstract Algebra",
+            )
+            curate_reference(project, record.id)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Conversion pending references: 1", result.stdout)
+
     def test_curate_markdown_reference_creates_curated_draft_and_updates_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
