@@ -1005,10 +1005,26 @@ def _handle_projects_graph(args: argparse.Namespace) -> int:
 
 def _handle_kb_build(args: argparse.Namespace) -> int:
     result = build_reference_kb(args.project)
+    kb_dir = result.index_path.parent.parent
+    concept_nodes, concept_edges = _graph_counts(kb_dir / "concept_graph.json")
+    dependency_nodes, dependency_edges = _graph_counts(kb_dir / "dependency_graph.json")
     noun = "object" if result.object_count == 1 else "objects"
     print(f"Indexed {result.object_count} reference {noun}")
+    print(f"Concept graph: {concept_nodes} nodes, {concept_edges} edges")
+    print(f"Dependency graph: {dependency_nodes} nodes, {dependency_edges} edges")
     print(f"Reference index: {result.index_path}")
     return 0
+
+
+def _graph_counts(graph_path: Path) -> tuple[int, int]:
+    if not graph_path.exists():
+        return (0, 0)
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    nodes = graph.get("nodes", []) if isinstance(graph, dict) else []
+    edges = graph.get("edges", []) if isinstance(graph, dict) else []
+    node_count = len(nodes) if isinstance(nodes, list) else 0
+    edge_count = len(edges) if isinstance(edges, list) else 0
+    return (node_count, edge_count)
 
 
 def _handle_kb_list(args: argparse.Namespace) -> int:

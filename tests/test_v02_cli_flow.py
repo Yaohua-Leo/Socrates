@@ -56,6 +56,8 @@ class V02CliFlowTests(unittest.TestCase):
             export_result = self._run_cli("note", "export-obsidian", "--project", str(project))
 
             self.assertIn("Indexed 1 reference object", build_result.stdout)
+            self.assertIn("Concept graph: 3 nodes, 2 edges", build_result.stdout)
+            self.assertIn("Dependency graph: 3 nodes, 2 edges", build_result.stdout)
             self.assertIn("Normal Subgroup", search_result.stdout)
             self.assertIn("definition", search_result.stdout)
             self.assertIn("normal_subgroups.curated.md:1", search_result.stdout)
