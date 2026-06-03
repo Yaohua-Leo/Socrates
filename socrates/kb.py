@@ -217,16 +217,19 @@ def _metadata_value(line: str) -> str:
 
 
 def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
+    metadata = {
+        "type": item["type"],
+        "title": item["title"],
+        "source": item["source"],
+        "dependencies": item.get("dependencies", []),
+    }
+    if item.get("number"):
+        metadata["number"] = item["number"]
     return {
         "id": f"{item['id']}_chunk",
         "object_id": item["id"],
         "text": item.get("statement", ""),
-        "metadata": {
-            "type": item["type"],
-            "title": item["title"],
-            "source": item["source"],
-            "dependencies": item.get("dependencies", []),
-        },
+        "metadata": metadata,
     }
 
 
@@ -300,15 +303,20 @@ def _chapter_index(objects: list[dict[str, object]]) -> dict[str, object]:
 
         section_objects = section["objects"]
         if isinstance(section_objects, list):
-            section_objects.append(
-                {
-                    "id": str(item.get("id", "")),
-                    "type": str(item.get("type", "")),
-                    "title": str(item.get("title", "")),
-                }
-            )
+            section_objects.append(_chapter_index_object(item))
 
     return {"schema_version": 1, "chapters": chapters}
+
+
+def _chapter_index_object(item: dict[str, object]) -> dict[str, object]:
+    indexed_object = {
+        "id": str(item.get("id", "")),
+        "type": str(item.get("type", "")),
+        "title": str(item.get("title", "")),
+    }
+    if item.get("number"):
+        indexed_object["number"] = str(item["number"])
+    return indexed_object
 
 
 def _theorem_index(objects: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
