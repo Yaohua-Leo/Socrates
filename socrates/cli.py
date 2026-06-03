@@ -64,8 +64,10 @@ from .reports import (
 from .state import (
     EvalReportUpdate,
     LearningStatePatch,
+    MisconceptionSummary,
     MistakeRecord,
     build_review_schedule,
+    list_misconceptions,
     repair_review_schedule,
     resolve_active_misconceptions_for_concept,
     update_eval_report,
@@ -362,6 +364,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Concept whose misconceptions were repaired.",
     )
     review_resolve_parser.set_defaults(func=_handle_review_resolve)
+    review_misconceptions_parser = review_subparsers.add_parser(
+        "misconceptions",
+        help="List active and resolved misconceptions from learning state.",
+    )
+    review_misconceptions_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    review_misconceptions_parser.add_argument(
+        "--status",
+        choices=("all", "active", "resolved"),
+        default="all",
+        help="Filter misconceptions by status; defaults to all.",
+    )
+    review_misconceptions_parser.set_defaults(func=_handle_review_misconceptions)
 
     exercise_parser = subparsers.add_parser(
         "exercise",
@@ -905,6 +923,28 @@ def _handle_review_resolve(args: argparse.Namespace) -> int:
     noun = "misconception" if resolved_count == 1 else "misconceptions"
     print(f"Resolved {resolved_count} active {noun} for {args.concept}")
     return 0
+
+
+def _handle_review_misconceptions(args: argparse.Namespace) -> int:
+    context = load_project(args.project)
+    misconceptions = list_misconceptions(context, status=args.status)
+    print(_misconceptions_text(misconceptions), end="")
+    return 0
+
+
+def _misconceptions_text(misconceptions: list[MisconceptionSummary]) -> str:
+    lines = ["# Misconceptions", ""]
+    if not misconceptions:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        (
+            f"- {item.misconception_id} | {item.status} | "
+            f"{item.concept} | x{item.count}"
+        )
+        for item in misconceptions
+    )
+    return "\n".join(lines) + "\n"
 
 
 def _handle_exercise_list(args: argparse.Namespace) -> int:

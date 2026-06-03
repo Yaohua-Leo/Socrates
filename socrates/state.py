@@ -56,6 +56,16 @@ class ReviewScheduleItem:
     reason: str
 
 
+@dataclass(frozen=True)
+class MisconceptionSummary:
+    """One persisted misconception state summary."""
+
+    misconception_id: str
+    status: str
+    concept: str
+    count: int
+
+
 EVAL_REPORTS = {
     "tutoring": ("tutoring_eval.md", "Tutoring Eval"),
     "exercise": ("exercise_eval.md", "Exercise Eval"),
@@ -184,6 +194,50 @@ def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: 
     return len(resolved_ids)
 
 
+def list_misconceptions(
+    context: ProjectContext,
+    *,
+    status: str = "all",
+) -> list[MisconceptionSummary]:
+    """List persisted misconception states from the learning model."""
+
+    allowed_statuses = {"all", "active", "resolved"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(
+            f"Unknown misconception status {status!r}; expected one of: {allowed}"
+        )
+
+    state = _learning_state_dict(context.learning_state)
+    misconceptions = state.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return []
+
+    summaries: list[MisconceptionSummary] = []
+    for misconception_id, value in misconceptions.items():
+        if not isinstance(value, dict):
+            continue
+        item_status = str(value.get("status", "active"))
+        if status != "all" and item_status != status:
+            continue
+        summaries.append(
+            MisconceptionSummary(
+                misconception_id=str(misconception_id),
+                status=item_status,
+                concept=str(value.get("concept", "general")),
+                count=_safe_count(value.get("count", 0)),
+            )
+        )
+    return sorted(
+        summaries,
+        key=lambda item: (
+            _misconception_status_order(item.status),
+            item.concept,
+            item.misconception_id,
+        ),
+    )
+
+
 def _learning_state_dict(path: Path) -> dict[str, object]:
     loaded = read_json(path) if path.exists() else {}
     state = loaded if isinstance(loaded, dict) else {}
@@ -300,6 +354,17 @@ def _is_iso_date(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _safe_count(value: object) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _misconception_status_order(status: str) -> int:
+    return {"active": 0, "resolved": 1}.get(status, 2)
 
 
 def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:
