@@ -80,9 +80,13 @@ class BenchmarkTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Benchmark passed 4/4 gates", result.stdout)
+            self.assertIn("Benchmark score: 100/100", result.stdout)
             report = project / "08_evals" / "benchmark_report.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Benchmark Report", report_text)
+            self.assertIn("## Summary", report_text)
+            self.assertIn("- Gates passed: 4/4", report_text)
+            self.assertIn("- Benchmark score: 100/100", report_text)
             self.assertIn("- Ingestion: pass", report_text)
             self.assertIn("- Note quality: pass", report_text)
             self.assertIn("- Exercise quality: pass", report_text)

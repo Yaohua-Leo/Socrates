@@ -664,6 +664,7 @@ def _handle_session_check(args: argparse.Namespace) -> int:
 def _handle_benchmark_run(args: argparse.Namespace) -> int:
     result = run_project_benchmark(args.project, session_id=args.session_id)
     print(f"Benchmark passed {result.passed_gates}/{result.total_gates} gates")
+    print(f"Benchmark score: {result.score}/100")
     print(f"Benchmark report: {result.report_path}")
     return 0
 

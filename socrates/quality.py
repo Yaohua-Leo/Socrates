@@ -56,6 +56,7 @@ class BenchmarkResult:
 
     total_gates: int
     passed_gates: int
+    score: int
     report_path: Path
 
 
@@ -219,11 +220,14 @@ def run_project_benchmark(
         "Exercise quality": exercise.failed == 0 and exercise.checked > 0,
         "Tutoring quality": tutoring.status == "pass",
     }
+    passed_gates = sum(1 for passed in gates.values() if passed)
+    score = _benchmark_score(passed_gates, len(gates))
     report_path = context.evals_dir / "benchmark_report.md"
-    write_text(report_path, _benchmark_report(gates))
+    write_text(report_path, _benchmark_report(gates, score=score))
     return BenchmarkResult(
         total_gates=len(gates),
-        passed_gates=sum(1 for passed in gates.values() if passed),
+        passed_gates=passed_gates,
+        score=score,
         report_path=report_path,
     )
 
@@ -520,9 +524,21 @@ def _tutoring_rubric(
     }
 
 
-def _benchmark_report(gates: dict[str, bool]) -> str:
+def _benchmark_score(passed_gates: int, total_gates: int) -> int:
+    if total_gates == 0:
+        return 0
+    return round((passed_gates / total_gates) * 100)
+
+
+def _benchmark_report(gates: dict[str, bool], *, score: int) -> str:
+    passed_gates = sum(1 for passed in gates.values() if passed)
     lines = [
         "# Benchmark Report",
+        "",
+        "## Summary",
+        "",
+        f"- Gates passed: {passed_gates}/{len(gates)}",
+        f"- Benchmark score: {score}/100",
         "",
         "## Quality Gates",
         "",
