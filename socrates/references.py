@@ -5,8 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 import shutil
 
-from .context import append_project_log, load_project
-from .contracts import SourceRecord
+from .context import append_project_log, load_project, write_text
+from .contracts import SourceRecord, yaml_scalar
 from .project import slugify_topic
 
 
@@ -60,6 +60,36 @@ def import_reference(
     return record
 
 
+def curate_reference(project_path: Path | str, source_id: str) -> Path:
+    """Create a curated Markdown draft for an imported text-like reference."""
+
+    context = load_project(project_path)
+    registry_text = context.source_registry.read_text(encoding="utf-8")
+    record = _find_registry_record(registry_text, source_id)
+    if record is None:
+        raise ValueError(f"Unknown source id: {source_id}")
+
+    source_type = record.get("type", "")
+    if source_type not in {"markdown", "text", "latex"}:
+        raise ValueError(f"Curated draft passthrough is not supported for {source_type} sources")
+
+    raw_path = context.root / str(record["local_path"])
+    if not raw_path.exists():
+        raise FileNotFoundError(f"Imported source file is missing: {raw_path}")
+
+    curated_path = context.references_dir / "curated" / f"{source_id}.curated.md"
+    write_text(curated_path, _curated_markdown(record, raw_path.read_text(encoding="utf-8")))
+    relative_curated_path = _relative_project_path(context.root, curated_path)
+    _update_registry_source(
+        context.source_registry,
+        source_id,
+        status="curated_draft",
+        curated_path=relative_curated_path,
+    )
+    append_project_log(context, f"Created curated draft for reference {source_id}.")
+    return curated_path
+
+
 def _reference_type(source: Path) -> tuple[str, str]:
     return REFERENCE_TYPES.get(source.suffix.lower(), ("file", "files"))
 
@@ -94,6 +124,108 @@ def _append_source_record(registry_path: Path, record: SourceRecord) -> None:
     else:
         updated = current + "\n" + item_yaml
     registry_path.write_text(updated.rstrip() + "\n", encoding="utf-8", newline="\n")
+
+
+def _find_registry_record(registry_text: str, source_id: str) -> dict[str, str] | None:
+    current: dict[str, str] | None = None
+    in_processed_paths = False
+    for line in registry_text.splitlines():
+        if line.startswith("  - id: "):
+            if current and current.get("id") == source_id:
+                return current
+            current = {"id": line.removeprefix("  - id: ").strip()}
+            in_processed_paths = False
+            continue
+        if current is None:
+            continue
+        stripped = line.strip()
+        if stripped == "processed_paths:":
+            in_processed_paths = True
+            continue
+        if line.startswith("      ") and in_processed_paths:
+            key, separator, value = stripped.partition(":")
+            if separator:
+                current[f"processed_paths.{key}"] = _registry_value(value.strip())
+            continue
+        if line.startswith("    ") and not line.startswith("      "):
+            in_processed_paths = False
+            key, separator, value = stripped.partition(":")
+            if separator:
+                current[key] = _registry_value(value.strip())
+    if current and current.get("id") == source_id:
+        return current
+    return None
+
+
+def _registry_value(value: str) -> str:
+    if value == "null":
+        return ""
+    if value.startswith('"') and value.endswith('"'):
+        return value[1:-1]
+    return value
+
+
+def _curated_markdown(record: dict[str, str], source_text: str) -> str:
+    return (
+        f"# Curated Reference: {record.get('title', record['id'])}\n\n"
+        "<!-- socrates-curated-draft: review before building the reference KB -->\n\n"
+        "## Source Metadata\n\n"
+        f"- source_id: {record['id']}\n"
+        f"- title: {record.get('title', '')}\n"
+        f"- role: {record.get('role', '')}\n"
+        f"- raw_path: {record.get('local_path', '')}\n\n"
+        "## Curated Content\n\n"
+        f"{source_text.rstrip()}\n"
+    )
+
+
+def _update_registry_source(
+    registry_path: Path,
+    source_id: str,
+    *,
+    status: str,
+    curated_path: str,
+) -> None:
+    lines = registry_path.read_text(encoding="utf-8").splitlines()
+    updated: list[str] = []
+    in_target = False
+    in_processed_paths = False
+    processed_updated = False
+    for line in lines:
+        if line.startswith("  - id: "):
+            if in_target and in_processed_paths and not processed_updated:
+                updated.append(f"      curated: {yaml_scalar(curated_path)}")
+            in_target = line.removeprefix("  - id: ").strip() == source_id
+            in_processed_paths = False
+            processed_updated = False
+            updated.append(line)
+            continue
+
+        if in_target and line.startswith("    status: "):
+            updated.append(f"    status: {status}")
+            continue
+
+        if in_target and line.strip() == "processed_paths:":
+            in_processed_paths = True
+            updated.append(line)
+            continue
+
+        if in_target and in_processed_paths:
+            if line.startswith("      curated: "):
+                updated.append(f"      curated: {yaml_scalar(curated_path)}")
+                processed_updated = True
+                continue
+            if line.startswith("    ") and not line.startswith("      "):
+                if not processed_updated:
+                    updated.append(f"      curated: {yaml_scalar(curated_path)}")
+                    processed_updated = True
+                in_processed_paths = False
+
+        updated.append(line)
+
+    if in_target and in_processed_paths and not processed_updated:
+        updated.append(f"      curated: {yaml_scalar(curated_path)}")
+    registry_path.write_text("\n".join(updated).rstrip() + "\n", encoding="utf-8", newline="\n")
 
 
 def _indent_registry_item(item_yaml: str) -> str:

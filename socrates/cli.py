@@ -14,7 +14,7 @@ from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
-from .references import import_reference
+from .references import curate_reference, import_reference
 from .state import (
     EvalReportUpdate,
     LearningStatePatch,
@@ -71,6 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
     import_parser.add_argument("--priority", type=int, default=1, help="Source priority.")
     import_parser.add_argument("--notes", default="", help="Optional source notes.")
     import_parser.set_defaults(func=_handle_import)
+
+    curate_parser = subparsers.add_parser(
+        "curate",
+        help="Create a curated Markdown draft from an imported text reference.",
+    )
+    curate_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    curate_parser.add_argument("--source-id", required=True, help="Source id from source_registry.yaml.")
+    curate_parser.set_defaults(func=_handle_curate)
 
     plan_parser = subparsers.add_parser(
         "plan",
@@ -153,6 +161,12 @@ def _handle_import(args: argparse.Namespace) -> int:
         notes=args.notes,
     )
     print(f"Imported reference {record.id} at {record.local_path}")
+    return 0
+
+
+def _handle_curate(args: argparse.Namespace) -> int:
+    curated = curate_reference(args.project, args.source_id)
+    print(f"Curated reference {args.source_id}: {curated}")
     return 0
 
 

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
 from socrates.project import ProjectSpec, create_project
-from socrates.references import import_reference
+from socrates.references import curate_reference, import_reference
+
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReferenceImportTests(unittest.TestCase):
@@ -66,6 +71,77 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertTrue((project / "01_references" / "raw" / "books" / "abstract_algebra.pdf").exists())
             self.assertTrue(
                 (project / "01_references" / "raw" / "books" / "abstract_algebra_copy.pdf").exists()
+            )
+
+    def test_curate_markdown_reference_creates_curated_draft_and_updates_registry(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.md"
+            source.write_text("### Definition: Normal Subgroup\nStable under conjugation.\n", encoding="utf-8")
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normal Subgroups Notes",
+            )
+
+            curated = curate_reference(project, record.id)
+
+            self.assertEqual(
+                curated.relative_to(project).as_posix(),
+                "01_references/curated/normal_subgroups_notes.curated.md",
+            )
+            curated_text = curated.read_text(encoding="utf-8")
+            self.assertIn("# Curated Reference: Normal Subgroups Notes", curated_text)
+            self.assertIn("source_id: normal_subgroups_notes", curated_text)
+            self.assertIn("### Definition: Normal Subgroup", curated_text)
+
+            registry = (project / "01_references" / "source_registry.yaml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("status: curated_draft", registry)
+            self.assertIn(
+                'curated: "01_references/curated/normal_subgroups_notes.curated.md"',
+                registry,
+            )
+            project_log = (project / "00_meta" / "project_log.md").read_text(encoding="utf-8")
+            self.assertIn("Created curated draft for reference normal_subgroups_notes", project_log)
+
+    def test_curate_command_creates_curated_reference_from_cli(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.txt"
+            source.write_text("### Definition: Normal Subgroup\nStable under conjugation.\n", encoding="utf-8")
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normal Subgroups Notes",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "curate",
+                    "--project",
+                    str(project),
+                    "--source-id",
+                    record.id,
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Curated reference normal_subgroups_notes", result.stdout)
+            self.assertTrue(
+                (project / "01_references" / "curated" / "normal_subgroups_notes.curated.md").exists()
             )
 
 
