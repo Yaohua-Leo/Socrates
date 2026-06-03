@@ -1303,7 +1303,7 @@ def _note_frontmatter(text: str) -> dict[str, object]:
 
 def _note_section_manifest(text: str) -> dict[str, object]:
     return {
-        "has_title": "# " in text,
+        "has_title": _has_title_heading(text),
         "has_key_examples": "## Key Examples" in text,
         "has_non_examples": (
             "## Non-Examples" in text or "## Counterexamples" in text
@@ -1329,7 +1329,7 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
     for field in NOTE_REQUIRED_FRONTMATTER:
         if field not in text:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
-    if "# " not in text:
+    if not _has_title_heading(text):
         issues.append("missing title heading")
     if _invalid_note_status(text):
         issues.append("invalid status")
@@ -1366,6 +1366,13 @@ def _has_related_concept_link(text: str) -> bool:
         for line in _section_text(text, "## Related Concepts").splitlines()
         if line.strip().startswith("- ")
     )
+
+
+def _has_title_heading(text: str) -> bool:
+    for line in text.splitlines():
+        if line.startswith("# ") and line.removeprefix("# ").strip():
+            return True
+    return False
 
 
 def _missing_note_source_id(text: str) -> bool:

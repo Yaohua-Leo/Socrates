@@ -16,6 +16,43 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class NoteQualityTests(unittest.TestCase):
+    def test_note_quality_requires_nonempty_title_heading(self) -> None:
+        from socrates.quality import atomic_note_quality_issues
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            note = project / "04_atomic_notes" / "drafts" / "empty_title.md"
+            note.write_text(
+                "---\n"
+                "status: draft\n"
+                "review_status: needs_review\n"
+                "reviewed_by_user: false\n"
+                "type: definition\n"
+                "concept: Normal Subgroup\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - normal-subgroup\n"
+                "related:\n"
+                "  - \"[[Subgroup]]\"\n"
+                "---\n\n"
+                "# \n\n"
+                "A normal subgroup is stable under conjugation.\n\n"
+                "## Key Examples\n\n"
+                "- Kernels of homomorphisms.\n\n"
+                "## Non-Examples\n\n"
+                "- A non-normal subgroup of S3.\n\n"
+                "## Common Mistakes\n\n"
+                "- Confusing normality with centrality.\n\n"
+                "## Review Questions\n\n"
+                "- How is normality different from commutativity?\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            issues = atomic_note_quality_issues(note, project)
+
+            self.assertIn("missing title heading", issues)
+
     def test_note_quality_requires_example_non_example_and_mistake_sections(self) -> None:
         from socrates.quality import atomic_note_quality_issues
 
