@@ -502,6 +502,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
         issues.append("missing concept tags")
     if "## Prerequisites" in text and not _has_prerequisites(text):
         issues.append("missing prerequisites")
+    if "## Common Mistakes" in text and not _has_common_mistakes(text):
+        issues.append("missing common mistakes")
     if not _has_hint_ladder(text):
         issues.append("missing hint ladder")
     elif not _has_progressive_hint_ladder(text):
@@ -1073,6 +1075,10 @@ def _has_concept_tags(text: str) -> bool:
 
 def _has_prerequisites(text: str) -> bool:
     return _has_real_bullet(_section_text(text, "## Prerequisites"))
+
+
+def _has_common_mistakes(text: str) -> bool:
+    return _has_real_bullet(_section_text(text, "## Common Mistakes"))
 
 
 def _has_real_bullet(section: str) -> bool:
