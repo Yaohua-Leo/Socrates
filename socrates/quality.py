@@ -1319,7 +1319,7 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
     if "# " not in text:
         issues.append("missing title heading")
-    if "source_id: null" in text or 'source_id: ""' in text:
+    if _missing_note_source_id(text):
         issues.append("missing source id")
     if "tags:" in text and not _frontmatter_list(text, "tags"):
         issues.append("missing tags")
@@ -1344,6 +1344,11 @@ def _has_related_concept_link(text: str) -> bool:
         for line in _section_text(text, "## Related Concepts").splitlines()
         if line.strip().startswith("- ")
     )
+
+
+def _missing_note_source_id(text: str) -> bool:
+    value = _frontmatter_value(text, "source_id")
+    return value is None or value.casefold() in {"", "null"}
 
 
 def _check_curated_reference(path: Path) -> dict[str, object]:
