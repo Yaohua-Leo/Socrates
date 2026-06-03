@@ -146,6 +146,38 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Obsidian export: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
 
+    def test_lifecycle_audit_accepts_completed_empty_review_schedule(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.82}),
+            )
+            build_review_schedule(context)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Review schedule: pass", report_text)
+
 
 if __name__ == "__main__":
     unittest.main()

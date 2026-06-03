@@ -525,7 +525,6 @@ def _has_review_schedule(project_root: Path, state: dict[str, object]) -> bool:
     schedule = state.get("review_schedule", [])
     return (
         isinstance(schedule, list)
-        and bool(schedule)
         and (project_root / "02_learning_plan" / "review_schedule.md").exists()
     )
 
