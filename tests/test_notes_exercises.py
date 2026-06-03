@@ -74,6 +74,44 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("related:\n  - \"[[Subgroup]]\"\n  - \"[[Conjugation]]\"", text)
             self.assertIn("## Related Concepts\n\n- [[Subgroup]]\n- [[Conjugation]]", text)
 
+    def test_atomic_note_draft_includes_kb_reference_context(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+
+            note = artifacts.generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "Normality is conjugation invariance.\n\n"
+                    "## Review Questions\n\n"
+                    "- How does this differ from commutativity?\n"
+                ),
+                source_id="df-1",
+            )
+
+            text = (project / note.path).read_text(encoding="utf-8")
+            self.assertIn("## Reference Context", text)
+            self.assertIn("- Object: definition Normal Subgroup", text)
+            self.assertIn("- Source: 01_references/curated/normal_subgroups.curated.md", text)
+            self.assertIn("- Line: 3", text)
+            self.assertIn(
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.",
+                text,
+            )
+
     def test_generate_exercise_drafts_writes_required_sections(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:

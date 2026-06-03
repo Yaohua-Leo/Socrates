@@ -27,9 +27,13 @@ def generate_atomic_note_draft(
     note_id = slugify_topic(concept)
     relative_path = Path("04_atomic_notes") / "drafts" / f"{note_id}.md"
     note_path = context.root / relative_path
-    related_concepts = _kb_related_concepts(context.root, concept)
+    reference_object = _kb_reference_object(context.root, concept)
+    related_concepts = _kb_related_concepts(reference_object)
     related_links = [f"[[{_concept_title(item)}]]" for item in related_concepts]
     note_body = body.rstrip()
+    reference_context = _reference_context_section(reference_object)
+    if reference_context:
+        note_body += "\n\n" + reference_context.rstrip()
     if related_links:
         note_body += "\n\n## Related Concepts\n\n" + _bullet_list(related_links).rstrip()
 
@@ -248,18 +252,53 @@ def _bullet_list(items: Iterable[str]) -> str:
     return "".join(f"- {item}\n" for item in values)
 
 
-def _kb_related_concepts(project_root: Path, concept: str) -> list[str]:
+def _kb_reference_object(project_root: Path, concept: str) -> dict[str, object] | None:
     index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
     if not index_path.exists():
-        return []
+        return None
     index = json.loads(index_path.read_text(encoding="utf-8"))
     concept_id = slugify_topic(concept)
     for item in index.get("objects", []):
         if not isinstance(item, dict):
             continue
         if item.get("id") == concept_id or str(item.get("title", "")).casefold() == concept.casefold():
-            return [str(value) for value in item.get("dependencies", [])]
-    return []
+            return item
+    return None
+
+
+def _kb_related_concepts(reference_object: dict[str, object] | None) -> list[str]:
+    if reference_object is None:
+        return []
+    return [str(value) for value in reference_object.get("dependencies", [])]
+
+
+def _reference_context_section(reference_object: dict[str, object] | None) -> str:
+    if reference_object is None:
+        return ""
+
+    source = reference_object.get("source", {})
+    if not isinstance(source, dict):
+        source = {}
+
+    object_type = str(reference_object.get("type", "object"))
+    title = str(reference_object.get("title", "Untitled"))
+    lines = [
+        "## Reference Context",
+        "",
+        f"- Object: {object_type} {title}",
+        f"- Source: {source.get('path', 'unknown')}",
+    ]
+    if source.get("line"):
+        lines.append(f"- Line: {source['line']}")
+    if source.get("chapter"):
+        lines.append(f"- Chapter: {source['chapter']}")
+    if source.get("section"):
+        lines.append(f"- Section: {source['section']}")
+
+    statement = str(reference_object.get("statement", "")).strip()
+    if statement:
+        lines.extend(["", statement])
+    return "\n".join(lines) + "\n"
 
 
 def _note_tags(note_type: str, concept: str, related_concepts: list[str]) -> list[str]:
