@@ -78,6 +78,7 @@ from .state import (
 from .tool_verification import (
     check_tool_verification_records,
     check_lean_file,
+    GapGroupOrderResult,
     LeanDependencyMapResult,
     LeanCheckResult,
     map_lean_dependencies,
@@ -89,6 +90,7 @@ from .tool_verification import (
     ToolVerificationSummary,
     generate_lean_statement_skeleton,
     list_tool_verification_records,
+    verify_gap_group_order,
     verify_sympy_identity,
     write_tool_inventory,
 )
@@ -654,6 +656,27 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sympy_counterexample_parser.add_argument("--title", default=None, help="Optional title for reports.")
     sympy_counterexample_parser.set_defaults(func=_handle_tool_sympy_counterexample)
+    gap_order_parser = tool_subparsers.add_parser(
+        "gap-order",
+        help="Use optional GAP to check the order of a finite group expression.",
+    )
+    gap_order_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    gap_order_parser.add_argument("--object-id", required=True, help="Stable object id for this check.")
+    gap_order_parser.add_argument("--group", required=True, help="GAP group expression, for example Group((1,2,3)).")
+    gap_order_parser.add_argument(
+        "--expected-order",
+        type=int,
+        required=True,
+        help="Expected finite group order.",
+    )
+    gap_order_parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=10,
+        help="Maximum seconds to wait for GAP; defaults to 10.",
+    )
+    gap_order_parser.add_argument("--title", default=None, help="Optional title for reports.")
+    gap_order_parser.set_defaults(func=_handle_tool_gap_order)
     tool_list_parser = tool_subparsers.add_parser(
         "list",
         help="List persisted tool-verification records.",
@@ -1453,6 +1476,36 @@ def _tool_sympy_counterexample_result_text(result: SympyCounterexampleResult) ->
     lines = [
         f"SymPy counterexample status: {result.status}",
         f"Counterexample found: {str(result.counterexample_found).lower()}",
+        f"Tool verification artifact: {result.artifact_path}",
+        f"Tool verification report: {result.report_path}",
+        f"Tool verification manifest: {result.manifest_path}",
+    ]
+    return "\n".join(lines) + "\n"
+
+
+def _handle_tool_gap_order(args: argparse.Namespace) -> int:
+    if args.expected_order <= 0:
+        print("error: expected-order must be positive", file=sys.stderr)
+        return 1
+    if args.timeout_seconds <= 0:
+        print("error: timeout-seconds must be positive", file=sys.stderr)
+        return 1
+    result = verify_gap_group_order(
+        args.project,
+        object_id=args.object_id,
+        group_expression=args.group,
+        expected_order=args.expected_order,
+        title=args.title,
+        timeout_seconds=args.timeout_seconds,
+    )
+    print(_tool_gap_order_result_text(result), end="")
+    return 0 if result.status == "verified" else 1
+
+
+def _tool_gap_order_result_text(result: GapGroupOrderResult) -> str:
+    lines = [
+        f"GAP group order status: {result.status}",
+        f"Passed: {str(result.passed).lower()}",
         f"Tool verification artifact: {result.artifact_path}",
         f"Tool verification report: {result.report_path}",
         f"Tool verification manifest: {result.manifest_path}",

@@ -111,6 +111,18 @@ class SympyCounterexampleResult:
     object_id: str
 
 
+@dataclass(frozen=True)
+class GapGroupOrderResult:
+    """Persisted result for one optional GAP group order check."""
+
+    status: str
+    passed: bool
+    artifact_path: Path
+    report_path: Path
+    manifest_path: Path
+    object_id: str
+
+
 def generate_lean_statement_skeleton(
     project_path: Path | str,
     *,
@@ -482,6 +494,63 @@ def search_sympy_counterexample(
     return SympyCounterexampleResult(
         status=str(artifact["status"]),
         counterexample_found=bool(artifact["counterexample_found"]),
+        artifact_path=artifact_path,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        object_id=object_id,
+    )
+
+
+def verify_gap_group_order(
+    project_path: Path | str,
+    *,
+    object_id: str,
+    group_expression: str,
+    expected_order: int,
+    title: str | None = None,
+    timeout_seconds: int = 10,
+) -> GapGroupOrderResult:
+    """Use optional GAP to check the order of one finite group expression."""
+
+    context = load_project(project_path)
+    verification_dir = context.evals_dir / "tool_verification"
+    safe_id = _lean_identifier(f"{object_id}_gap_order")
+    artifact_path = verification_dir / f"{safe_id}.json"
+    report_path = verification_dir / f"{safe_id}_report.md"
+    manifest_path = verification_dir / "manifest.json"
+    artifact = _gap_group_order_artifact(
+        object_id=object_id,
+        group_expression=group_expression,
+        expected_order=expected_order,
+        title=title,
+        timeout_seconds=timeout_seconds,
+    )
+    write_json(artifact_path, artifact)
+    write_text(
+        report_path,
+        _gap_group_order_report(
+            artifact,
+            artifact_path=artifact_path.relative_to(context.root).as_posix(),
+        ),
+    )
+    write_json(
+        manifest_path,
+        _updated_manifest(
+            manifest_path,
+            _gap_group_order_record(
+                context.root,
+                object_id=object_id,
+                title=title or object_id,
+                artifact_path=artifact_path,
+                report_path=report_path,
+                status=str(artifact["status"]),
+            ),
+        ),
+    )
+    append_project_log(context, f"Recorded GAP group order check for {object_id}.")
+    return GapGroupOrderResult(
+        status=str(artifact["status"]),
+        passed=bool(artifact["passed"]),
         artifact_path=artifact_path,
         report_path=report_path,
         manifest_path=manifest_path,
@@ -1461,6 +1530,188 @@ def _sympy_counterexample_record(
         "artifact_path": artifact_path.relative_to(project_root).as_posix(),
         "report_path": report_path.relative_to(project_root).as_posix(),
         "source": {"tool": "sympy"},
+    }
+
+
+def _gap_group_order_artifact(
+    *,
+    object_id: str,
+    group_expression: str,
+    expected_order: int,
+    title: str | None,
+    timeout_seconds: int,
+) -> dict[str, object]:
+    artifact: dict[str, object] = {
+        "schema_version": 1,
+        "kind": "gap_group_order_check",
+        "object_id": object_id,
+        "title": title or object_id,
+        "tool": "gap",
+        "status": "failed",
+        "passed": False,
+        "input": {
+            "group_expression": group_expression,
+            "expected_order": expected_order,
+            "timeout_seconds": timeout_seconds,
+        },
+        "output": {},
+        "issues": [],
+        "external_executable_invoked": False,
+    }
+    if expected_order <= 0:
+        artifact["issues"] = ["Expected order must be a positive integer."]
+        return artifact
+    if not _safe_gap_expression(group_expression):
+        artifact["issues"] = ["GAP group expression contains unsupported characters."]
+        return artifact
+    gap_executable = shutil.which("gap")
+    if not gap_executable:
+        artifact["status"] = "unavailable"
+        artifact["issues"] = ["GAP executable is not available on PATH."]
+        return artifact
+
+    script = f'Print(Size({group_expression}), "\\n");\nQUIT;\n'
+    command = [gap_executable, "-q"]
+    artifact["external_executable_invoked"] = True
+    try:
+        completed = subprocess.run(
+            command,
+            input=script,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        artifact["issues"] = [f"GAP group order check timed out after {timeout_seconds} seconds."]
+        artifact["output"] = {
+            "command": command,
+            "stdout": exc.stdout or "",
+            "stderr": exc.stderr or "",
+        }
+        return artifact
+
+    actual_order = _parse_gap_integer_output(completed.stdout)
+    artifact["output"] = {
+        "command": command,
+        "exit_code": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+    if actual_order is not None:
+        output = artifact["output"]
+        if isinstance(output, dict):
+            output["actual_order"] = actual_order
+    if completed.returncode != 0:
+        artifact["issues"] = [f"GAP exited with code {completed.returncode}."]
+        return artifact
+    if actual_order is None:
+        artifact["issues"] = ["Could not parse an integer group order from GAP output."]
+        return artifact
+    artifact["passed"] = actual_order == expected_order
+    artifact["status"] = "verified" if artifact["passed"] else "failed"
+    if not artifact["passed"]:
+        artifact["issues"] = [
+            f"Expected group order {expected_order}, but GAP returned {actual_order}."
+        ]
+    return artifact
+
+
+def _safe_gap_expression(expression: str) -> bool:
+    if not expression.strip():
+        return False
+    if any(token in expression for token in ("\n", "\r", ";", '"', "'", "\\")):
+        return False
+    return bool(re.fullmatch(r"[A-Za-z0-9_(),\[\] ]+", expression))
+
+
+def _parse_gap_integer_output(stdout: str) -> int | None:
+    matches = re.findall(r"(?m)^\s*(\d+)\s*$", stdout)
+    if not matches:
+        return None
+    return int(matches[-1])
+
+
+def _gap_group_order_report(
+    artifact: dict[str, object],
+    *,
+    artifact_path: str,
+) -> str:
+    input_data = artifact.get("input", {})
+    output_data = artifact.get("output", {})
+    issues = artifact.get("issues", [])
+    lines = [
+        "# Tool Verification: GAP Group Order Check",
+        "",
+        "## Summary",
+        "",
+        f"- Object: {artifact.get('object_id', '')}",
+        f"- Title: {artifact.get('title', '')}",
+        f"- Status: {artifact.get('status', '')}",
+        f"- Passed: {str(artifact.get('passed', False)).lower()}",
+        f"- Artifact: {artifact_path}",
+        "- Tool: GAP",
+        (
+            "- External executable invoked: "
+            f"{str(artifact.get('external_executable_invoked', False)).lower()}"
+        ),
+        "",
+        "## Input",
+        "",
+        (
+            "- group_expression: "
+            f"{input_data.get('group_expression', '') if isinstance(input_data, dict) else ''}"
+        ),
+        (
+            "- expected_order: "
+            f"{input_data.get('expected_order', '') if isinstance(input_data, dict) else ''}"
+        ),
+        "",
+        "## Output",
+        "",
+    ]
+    if isinstance(output_data, dict) and output_data:
+        for key, value in sorted(output_data.items()):
+            lines.append(f"- {key}: {value!r}")
+    else:
+        lines.append("- none")
+    lines.extend(["", "## Issues", ""])
+    if isinstance(issues, list) and issues:
+        lines.extend(f"- {issue}" for issue in issues)
+    else:
+        lines.append("- none")
+    lines.extend(
+        [
+            "",
+            "## Verification Boundary",
+            "",
+            "- It is computation evidence for one finite-structure expression.",
+            "- It is not a formal proof.",
+            "- GAP availability and library behavior are environment-dependent.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _gap_group_order_record(
+    project_root: Path,
+    *,
+    object_id: str,
+    title: str,
+    artifact_path: Path,
+    report_path: Path,
+    status: str,
+) -> dict[str, object]:
+    return {
+        "kind": "gap_group_order_check",
+        "object_id": object_id,
+        "object_type": "finite_group_order",
+        "title": title,
+        "status": status,
+        "artifact_path": artifact_path.relative_to(project_root).as_posix(),
+        "report_path": report_path.relative_to(project_root).as_posix(),
+        "source": {"tool": "gap"},
     }
 
 
