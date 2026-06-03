@@ -145,6 +145,72 @@ class ProjectIndexTests(unittest.TestCase):
             )
             self.assertNotIn("representation_theory.group_representation", result.stdout)
 
+    def test_projects_graph_writes_cross_project_reference_edges(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            group_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            representation_project = create_project(
+                ProjectSpec(topic="Representation Theory", path=root / "representation_theory")
+            )
+            generate_atomic_note_draft(
+                group_project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "Normal subgroups often appear before [[Group Representation]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            generate_atomic_note_draft(
+                representation_project,
+                concept="Group Representation",
+                note_type="definition",
+                body=(
+                    "A group representation is a homomorphism into linear automorphisms.\n\n"
+                    "## Review Questions\n\n"
+                    "- Which vector space is carrying the action?\n"
+                ),
+                source_id="serre",
+            )
+            review_atomic_note(group_project, "normal_subgroup")
+            review_atomic_note(representation_project, "group_representation")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "graph",
+                    "--root",
+                    str(root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Wrote cross-project graph with 1 edge", result.stdout)
+            graph_path = root / "cross_project_references.json"
+            graph = json.loads(graph_path.read_text(encoding="utf-8"))
+            self.assertEqual(graph["version"], 1)
+            self.assertEqual(
+                graph["edges"],
+                [
+                    {
+                        "source": "group_theory.normal_subgroup",
+                        "target": "representation_theory.group_representation",
+                        "label": "Group Representation",
+                    }
+                ],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

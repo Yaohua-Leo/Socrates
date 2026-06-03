@@ -20,7 +20,12 @@ from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
-from .project_index import find_project_references, list_projects, scan_project_root
+from .project_index import (
+    build_cross_project_reference_graph,
+    find_project_references,
+    list_projects,
+    scan_project_root,
+)
 from .quality import (
     check_atomic_note_quality,
     check_generated_exercise_quality,
@@ -144,6 +149,12 @@ def build_parser() -> argparse.ArgumentParser:
     projects_refs_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
     projects_refs_parser.add_argument("--query", default="", help="Optional text filter.")
     projects_refs_parser.set_defaults(func=_handle_projects_refs)
+    projects_graph_parser = projects_subparsers.add_parser(
+        "graph",
+        help="Build the reviewed-note cross-project reference graph.",
+    )
+    projects_graph_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
+    projects_graph_parser.set_defaults(func=_handle_projects_graph)
 
     kb_parser = subparsers.add_parser(
         "kb",
@@ -452,6 +463,16 @@ def _handle_projects_refs(args: argparse.Namespace) -> int:
             f"{reference['ref']} | {reference['concept']} | "
             f"{reference['type']} | {reference['path']}"
         )
+    return 0
+
+
+def _handle_projects_graph(args: argparse.Namespace) -> int:
+    graph_path = build_cross_project_reference_graph(args.root)
+    graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    edges = graph.get("edges", []) if isinstance(graph, dict) else []
+    edge_count = len(edges) if isinstance(edges, list) else 0
+    noun = "edge" if edge_count == 1 else "edges"
+    print(f"Wrote cross-project graph with {edge_count} {noun}: {graph_path}")
     return 0
 
 
