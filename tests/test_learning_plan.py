@@ -94,6 +94,7 @@ class LearningPlanTests(unittest.TestCase):
                 "# Group Theory\n"
                 "## Subgroups\n"
                 "### Definition: Normal Subgroup\n"
+                "Page: 82\n"
                 "A subgroup N of G is normal when it is stable under conjugation.\n"
                 "Depends: subgroup, conjugation\n",
                 encoding="utf-8",
@@ -112,6 +113,7 @@ class LearningPlanTests(unittest.TestCase):
                 "Source: 01_references/curated/normal_subgroups.curated.md",
                 session_plan,
             )
+            self.assertIn("Page: 82", session_plan)
             self.assertIn("Depends: subgroup, conjugation", session_plan)
 
     def test_review_adjust_plan_command_updates_short_term_plan_from_schedule(self) -> None:

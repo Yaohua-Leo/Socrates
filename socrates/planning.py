@@ -142,6 +142,8 @@ def _reference_context_section(reference_context: list[dict[str, object]]) -> st
         dependencies = [str(dep) for dep in item.get("dependencies", [])]
         lines.append(f"  - {str(item.get('type', '')).title()}: {item.get('title', '')}")
         lines.append(f"    Source: {source_path}")
+        if isinstance(source, dict) and source.get("page"):
+            lines.append(f"    Page: {source['page']}")
         if dependencies:
             lines.append(f"    Depends: {', '.join(dependencies)}")
     return "\n".join(lines) + "\n"

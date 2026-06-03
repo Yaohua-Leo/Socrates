@@ -87,6 +87,7 @@ class NotesExercisesTests(unittest.TestCase):
                 "# Chapter 3: Quotient Groups\n"
                 "## Section 3.1 Normal Subgroups\n"
                 "### Definition: Normal Subgroup\n"
+                "Page: 82\n"
                 "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
                 "Depends: subgroup, conjugation\n",
                 encoding="utf-8",
@@ -111,6 +112,7 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("- Object: definition Normal Subgroup", text)
             self.assertIn("- Source: 01_references/curated/normal_subgroups.curated.md", text)
             self.assertIn("- Line: 3", text)
+            self.assertIn("- Page: 82", text)
             self.assertIn(
                 "A subgroup N of G is normal if gNg^{-1}=N for every g in G.",
                 text,

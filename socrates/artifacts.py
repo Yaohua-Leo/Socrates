@@ -302,6 +302,8 @@ def _reference_context_section(reference_object: dict[str, object] | None) -> st
     ]
     if source.get("line"):
         lines.append(f"- Line: {source['line']}")
+    if source.get("page"):
+        lines.append(f"- Page: {source['page']}")
     if source.get("chapter"):
         lines.append(f"- Chapter: {source['chapter']}")
     if source.get("section"):
