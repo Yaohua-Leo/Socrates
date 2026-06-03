@@ -19,7 +19,7 @@ from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
-from .quality import check_generated_exercise_quality
+from .quality import check_atomic_note_quality, check_generated_exercise_quality
 from .references import curate_reference, import_reference
 from .state import (
     EvalReportUpdate,
@@ -140,6 +140,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     note_export_parser.add_argument("--project", required=True, help="Socrates project directory.")
     note_export_parser.set_defaults(func=_handle_note_export_obsidian)
+    note_check_parser = note_subparsers.add_parser(
+        "check",
+        help="Run checklist quality checks on atomic notes.",
+    )
+    note_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    note_check_parser.set_defaults(func=_handle_note_check)
 
     review_parser = subparsers.add_parser(
         "review",
@@ -325,6 +331,16 @@ def _handle_note_export_obsidian(args: argparse.Namespace) -> int:
     exported = export_reviewed_notes_to_obsidian(args.project)
     noun = "note" if len(exported) == 1 else "notes"
     print(f"Exported {len(exported)} reviewed {noun}")
+    return 0
+
+
+def _handle_note_check(args: argparse.Namespace) -> int:
+    result = check_atomic_note_quality(args.project)
+    print(
+        f"Checked {result.checked} atomic note"
+        f"{'' if result.checked == 1 else 's'}: {result.passed} passed, {result.failed} failed"
+    )
+    print(f"Note quality report: {result.report_path}")
     return 0
 
 
