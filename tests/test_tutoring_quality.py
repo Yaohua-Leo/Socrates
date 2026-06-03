@@ -57,6 +57,12 @@ class TutoringQualityTests(unittest.TestCase):
             self.assertIn("- Status: pass", report_text)
             self.assertIn("- Missing artifacts: none", report_text)
             self.assertIn("- Premature solution: no", report_text)
+            self.assertIn("### Rubric", report_text)
+            self.assertIn("- Required artifacts: 25/25", report_text)
+            self.assertIn("- Tutor question: 25/25", report_text)
+            self.assertIn("- Hint ladder: 25/25", report_text)
+            self.assertIn("- Attempt before solution: 25/25", report_text)
+            self.assertIn("- Total score: 100/100", report_text)
 
 
 if __name__ == "__main__":

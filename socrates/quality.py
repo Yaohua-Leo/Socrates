@@ -158,10 +158,26 @@ def check_tutoring_session_quality(
     premature_solution = _has_premature_solution(transcript)
     if premature_solution:
         issues.append("premature full solution")
+    rubric = _tutoring_rubric(
+        missing=missing,
+        has_tutor_question="Tutor:" in transcript,
+        has_hint_ladder="Hint 1:" in transcript,
+        premature_solution=premature_solution,
+    )
 
     status = "fail" if issues else "pass"
     report_path = context.evals_dir / "tutoring_eval.md"
-    _append_report(report_path, _tutoring_quality_report(session_id, status, missing, premature_solution, issues))
+    _append_report(
+        report_path,
+        _tutoring_quality_report(
+            session_id,
+            status,
+            missing,
+            premature_solution,
+            issues,
+            rubric,
+        ),
+    )
     return TutoringQualityResult(session_id=session_id, status=status, report_path=report_path)
 
 
@@ -464,7 +480,9 @@ def _tutoring_quality_report(
     missing: list[str],
     premature_solution: bool,
     issues: list[str],
+    rubric: dict[str, int],
 ) -> str:
+    total_score = sum(rubric.values())
     lines = [
         f"## Session Quality Check: {session_id}",
         "",
@@ -472,12 +490,34 @@ def _tutoring_quality_report(
         f"- Missing artifacts: {', '.join(missing) if missing else 'none'}",
         f"- Premature solution: {'yes' if premature_solution else 'no'}",
         "",
+        "### Rubric",
+        f"- Required artifacts: {rubric['Required artifacts']}/25",
+        f"- Tutor question: {rubric['Tutor question']}/25",
+        f"- Hint ladder: {rubric['Hint ladder']}/25",
+        f"- Attempt before solution: {rubric['Attempt before solution']}/25",
+        f"- Total score: {total_score}/100",
+        "",
         "### Issues",
     ]
     lines.extend(f"- {issue}" for issue in issues)
     if not issues:
         lines.append("- none recorded")
     return "\n".join(lines) + "\n"
+
+
+def _tutoring_rubric(
+    *,
+    missing: list[str],
+    has_tutor_question: bool,
+    has_hint_ladder: bool,
+    premature_solution: bool,
+) -> dict[str, int]:
+    return {
+        "Required artifacts": 0 if missing else 25,
+        "Tutor question": 25 if has_tutor_question else 0,
+        "Hint ladder": 25 if has_hint_ladder else 0,
+        "Attempt before solution": 0 if premature_solution else 25,
+    }
 
 
 def _benchmark_report(gates: dict[str, bool]) -> str:
