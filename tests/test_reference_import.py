@@ -92,6 +92,11 @@ class ReferenceImportTests(unittest.TestCase):
                 curated.relative_to(project).as_posix(),
                 "01_references/curated/normal_subgroups_notes.curated.md",
             )
+            converted = project / "01_references" / "converted" / "markdown" / "normal_subgroups_notes.md"
+            self.assertTrue(converted.exists())
+            converted_text = converted.read_text(encoding="utf-8")
+            self.assertIn("# Converted Reference: Normal Subgroups Notes", converted_text)
+            self.assertIn("### Definition: Normal Subgroup", converted_text)
             curated_text = curated.read_text(encoding="utf-8")
             self.assertIn("# Curated Reference: Normal Subgroups Notes", curated_text)
             self.assertIn("source_id: normal_subgroups_notes", curated_text)
@@ -101,6 +106,10 @@ class ReferenceImportTests(unittest.TestCase):
                 encoding="utf-8"
             )
             self.assertIn("status: curated_draft", registry)
+            self.assertIn(
+                'markdown: "01_references/converted/markdown/normal_subgroups_notes.md"',
+                registry,
+            )
             self.assertIn(
                 'curated: "01_references/curated/normal_subgroups_notes.curated.md"',
                 registry,

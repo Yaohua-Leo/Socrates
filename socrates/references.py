@@ -77,13 +77,19 @@ def curate_reference(project_path: Path | str, source_id: str) -> Path:
     if not raw_path.exists():
         raise FileNotFoundError(f"Imported source file is missing: {raw_path}")
 
+    converted_path = context.references_dir / "converted" / "markdown" / f"{source_id}.md"
+    converted_text = _converted_markdown(record, raw_path.read_text(encoding="utf-8"))
+    write_text(converted_path, converted_text)
+
     curated_path = context.references_dir / "curated" / f"{source_id}.curated.md"
-    write_text(curated_path, _curated_markdown(record, raw_path.read_text(encoding="utf-8")))
+    write_text(curated_path, _curated_markdown(record, converted_text))
+    relative_markdown_path = _relative_project_path(context.root, converted_path)
     relative_curated_path = _relative_project_path(context.root, curated_path)
     _update_registry_source(
         context.source_registry,
         source_id,
         status="curated_draft",
+        markdown_path=relative_markdown_path,
         curated_path=relative_curated_path,
     )
     append_project_log(context, f"Created curated draft for reference {source_id}.")
@@ -179,11 +185,24 @@ def _curated_markdown(record: dict[str, str], source_text: str) -> str:
     )
 
 
+def _converted_markdown(record: dict[str, str], source_text: str) -> str:
+    return (
+        f"# Converted Reference: {record.get('title', record['id'])}\n\n"
+        "<!-- socrates-converted-reference: generated from imported raw source -->\n\n"
+        "## Source Metadata\n\n"
+        f"- source_id: {record['id']}\n"
+        f"- raw_path: {record.get('local_path', '')}\n\n"
+        "## Converted Content\n\n"
+        f"{source_text.rstrip()}\n"
+    )
+
+
 def _update_registry_source(
     registry_path: Path,
     source_id: str,
     *,
     status: str,
+    markdown_path: str,
     curated_path: str,
 ) -> None:
     lines = registry_path.read_text(encoding="utf-8").splitlines()
@@ -211,6 +230,9 @@ def _update_registry_source(
             continue
 
         if in_target and in_processed_paths:
+            if line.startswith("      markdown: "):
+                updated.append(f"      markdown: {yaml_scalar(markdown_path)}")
+                continue
             if line.startswith("      curated: "):
                 updated.append(f"      curated: {yaml_scalar(curated_path)}")
                 processed_updated = True
