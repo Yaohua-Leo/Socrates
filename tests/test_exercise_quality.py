@@ -896,6 +896,125 @@ class ExerciseQualityTests(unittest.TestCase):
                 },
             )
 
+    def test_exercise_check_cli_reports_linked_tool_verification_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "normal_subgroup_01_sage_order.json"
+            report_path = verification_dir / "normal_subgroup_01_sage_order_report.md"
+            artifact_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "kind": "sage_group_order_check",
+                        "object_id": "normal_subgroup_01",
+                        "status": "verified",
+                        "passed": True,
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            report_path.write_text(
+                "# Tool Verification: Sage Group Order Check\n\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (verification_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "records": [
+                            {
+                                "kind": "sage_group_order_check",
+                                "object_id": "normal_subgroup_01",
+                                "object_type": "finite_group_order",
+                                "title": "Normal Subgroup Exercise 01",
+                                "status": "verified",
+                                "artifact_path": (
+                                    "08_evals/tool_verification/"
+                                    "normal_subgroup_01_sage_order.json"
+                                ),
+                                "report_path": (
+                                    "08_evals/tool_verification/"
+                                    "normal_subgroup_01_sage_order_report.md"
+                                ),
+                                "source": {"tool": "sage"},
+                            }
+                        ],
+                    },
+                    ensure_ascii=False,
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (project / "08_evals" / "exercise_quality_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## Tool Verification Evidence", report_text)
+            self.assertIn(
+                "- normal_subgroup_01.md | linked | records: 1",
+                report_text,
+            )
+            self.assertIn(
+                "sage_group_order_check | verified | 08_evals/tool_verification/"
+                "normal_subgroup_01_sage_order.json",
+                report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            first_exercise = manifest["exercises"][0]
+            self.assertEqual(first_exercise["id"], "normal_subgroup_01")
+            self.assertEqual(first_exercise["tool_verification"]["status"], "linked")
+            self.assertEqual(first_exercise["tool_verification"]["record_count"], 1)
+            self.assertEqual(
+                first_exercise["tool_verification"]["records"][0],
+                {
+                    "kind": "sage_group_order_check",
+                    "status": "verified",
+                    "artifact_path": (
+                        "08_evals/tool_verification/normal_subgroup_01_sage_order.json"
+                    ),
+                    "report_path": (
+                        "08_evals/tool_verification/"
+                        "normal_subgroup_01_sage_order_report.md"
+                    ),
+                },
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

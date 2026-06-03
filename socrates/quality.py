@@ -116,13 +116,23 @@ def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualit
         _exercise_counterexample_search(context.root, path)
         for path in exercise_paths
     ]
+    tool_verification_rows = [
+        _exercise_tool_verification_evidence(context.root, path)
+        for path in exercise_paths
+    ]
     passed = sum(1 for row in rows if row["status"] == "pass")
     failed = len(rows) - passed
     report_path = context.evals_dir / "exercise_quality_eval.md"
     manifest_path = context.evals_dir / "exercise_quality_manifest.json"
     write_text(
         report_path,
-        _exercise_quality_report(rows, passed, failed, counterexample_rows),
+        _exercise_quality_report(
+            rows,
+            passed,
+            failed,
+            counterexample_rows,
+            tool_verification_rows,
+        ),
     )
     write_json(
         manifest_path,
@@ -131,6 +141,7 @@ def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualit
             exercise_paths,
             rows,
             counterexample_rows,
+            tool_verification_rows,
             passed=passed,
             failed=failed,
         ),
@@ -518,11 +529,59 @@ def _exercise_counterexample_search(project_root: Path, exercise_path: Path) -> 
     }
 
 
+def _exercise_tool_verification_evidence(
+    project_root: Path,
+    exercise_path: Path,
+) -> dict[str, object]:
+    manifest_path = project_root / "08_evals" / "tool_verification" / "manifest.json"
+    if not manifest_path.exists():
+        return {
+            "file": exercise_path.name,
+            "exercise_id": exercise_path.stem,
+            "status": "not_run",
+            "reason": "tool-verification manifest missing",
+            "records": [],
+        }
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "file": exercise_path.name,
+            "exercise_id": exercise_path.stem,
+            "status": "not_run",
+            "reason": "tool-verification manifest unreadable",
+            "records": [],
+        }
+    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    if not isinstance(records, list):
+        return {
+            "file": exercise_path.name,
+            "exercise_id": exercise_path.stem,
+            "status": "not_run",
+            "reason": "tool-verification manifest has invalid records",
+            "records": [],
+        }
+    linked_records = [
+        record
+        for record in records
+        if isinstance(record, dict)
+        and str(record.get("object_id", "")).strip() == exercise_path.stem
+    ]
+    return {
+        "file": exercise_path.name,
+        "exercise_id": exercise_path.stem,
+        "status": "linked" if linked_records else "not_linked",
+        "reason": "" if linked_records else "no matching tool-verification record",
+        "records": linked_records,
+    }
+
+
 def _exercise_quality_manifest(
     project_root: Path,
     exercise_paths: list[Path],
     rows: list[dict[str, object]],
     counterexample_rows: list[dict[str, object]],
+    tool_verification_rows: list[dict[str, object]],
     *,
     passed: int,
     failed: int,
@@ -530,6 +589,9 @@ def _exercise_quality_manifest(
     row_by_file = {str(row["file"]): row for row in rows}
     counterexample_by_file = {
         str(row["file"]): row for row in counterexample_rows
+    }
+    tool_verification_by_file = {
+        str(row["file"]): row for row in tool_verification_rows
     }
     return {
         "schema_version": 1,
@@ -542,6 +604,7 @@ def _exercise_quality_manifest(
                 exercise_path,
                 row_by_file.get(exercise_path.name, {}),
                 counterexample_by_file.get(exercise_path.name, {}),
+                tool_verification_by_file.get(exercise_path.name, {}),
             )
             for exercise_path in exercise_paths
         ],
@@ -553,6 +616,7 @@ def _exercise_manifest_entry(
     exercise_path: Path,
     quality_row: dict[str, object],
     counterexample_row: dict[str, object],
+    tool_verification_row: dict[str, object],
 ) -> dict[str, object]:
     text = exercise_path.read_text(encoding="utf-8")
     issues = quality_row.get("issues", [])
@@ -566,6 +630,7 @@ def _exercise_manifest_entry(
         "frontmatter": _exercise_frontmatter(text),
         "sections": _exercise_section_manifest(text),
         "counterexample_search": _counterexample_search_manifest(counterexample_row),
+        "tool_verification": _tool_verification_evidence_manifest(tool_verification_row),
     }
 
 
@@ -634,6 +699,36 @@ def _counterexample_manifest_match(match: dict[str, object]) -> dict[str, object
     if source.get("page"):
         result["page"] = source["page"]
     return result
+
+
+def _tool_verification_evidence_manifest(row: dict[str, object]) -> dict[str, object]:
+    records = row.get("records", [])
+    if not isinstance(records, list):
+        records = []
+    result: dict[str, object] = {
+        "status": row.get("status", "unknown"),
+        "record_count": len(records),
+        "records": [_tool_verification_manifest_record(record) for record in records],
+    }
+    if row.get("reason"):
+        result["reason"] = row["reason"]
+    return result
+
+
+def _tool_verification_manifest_record(record: object) -> dict[str, object]:
+    if not isinstance(record, dict):
+        return {"kind": "", "status": "", "artifact_path": "", "report_path": ""}
+    return {
+        "kind": str(record.get("kind", "")),
+        "status": str(record.get("status", "")),
+        "artifact_path": str(
+            record.get("skeleton_path")
+            or record.get("artifact_path")
+            or record.get("output_path")
+            or ""
+        ),
+        "report_path": str(record.get("report_path", "")),
+    }
 
 
 def _int_if_possible(value: str) -> object:
@@ -1018,6 +1113,7 @@ def _exercise_quality_report(
     passed: int,
     failed: int,
     counterexample_rows: list[dict[str, object]],
+    tool_verification_rows: list[dict[str, object]],
 ) -> str:
     lines = [
         "# Exercise Quality Eval",
@@ -1041,6 +1137,8 @@ def _exercise_quality_report(
             lines.extend(f"  - {issue}" for issue in issues)
     lines.extend(["", "## Counterexample Search", ""])
     lines.extend(_counterexample_search_report(counterexample_rows))
+    lines.extend(["", "## Tool Verification Evidence", ""])
+    lines.extend(_tool_verification_evidence_report(tool_verification_rows))
     return "\n".join(lines) + "\n"
 
 
@@ -1083,6 +1181,40 @@ def _counterexample_source_location(source: dict[str, object]) -> str:
     if source.get("page"):
         return f"{path}:p{source['page']}"
     return path
+
+
+def _tool_verification_evidence_report(rows: list[dict[str, object]]) -> list[str]:
+    if not rows:
+        return ["- No exercise drafts found."]
+
+    lines: list[str] = []
+    for row in rows:
+        records = row.get("records", [])
+        if not isinstance(records, list):
+            records = []
+        line = f"- {row['file']} | {row['status']}"
+        if row["status"] == "linked":
+            line = f"{line} | records: {len(records)}"
+        elif row.get("reason"):
+            line = f"{line} | {row['reason']}"
+        lines.append(line)
+        lines.extend(f"  - {_tool_verification_record_line(record)}" for record in records)
+    return lines
+
+
+def _tool_verification_record_line(record: object) -> str:
+    if not isinstance(record, dict):
+        return "invalid record"
+    artifact_path = str(
+        record.get("skeleton_path")
+        or record.get("artifact_path")
+        or record.get("output_path")
+        or ""
+    )
+    return (
+        f"{record.get('kind', '')} | {record.get('status', '')} | "
+        f"{artifact_path}"
+    )
 
 
 def _note_quality_report(
