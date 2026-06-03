@@ -24,6 +24,7 @@ from .quality import (
     check_generated_exercise_quality,
     check_reference_ingestion_quality,
     check_tutoring_session_quality,
+    run_project_benchmark,
 )
 from .references import curate_reference, import_reference
 from .state import (
@@ -206,6 +207,19 @@ def build_parser() -> argparse.ArgumentParser:
     session_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     session_check_parser.add_argument("--session-id", required=True, help="Session identifier.")
     session_check_parser.set_defaults(func=_handle_session_check)
+
+    benchmark_parser = subparsers.add_parser(
+        "benchmark",
+        help="Run project-level quality benchmark suites.",
+    )
+    benchmark_subparsers = benchmark_parser.add_subparsers(dest="benchmark_command", required=True)
+    benchmark_run_parser = benchmark_subparsers.add_parser(
+        "run",
+        help="Run the deterministic project quality benchmark.",
+    )
+    benchmark_run_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    benchmark_run_parser.add_argument("--session-id", required=True, help="Session identifier to check.")
+    benchmark_run_parser.set_defaults(func=_handle_benchmark_run)
 
     return parser
 
@@ -415,6 +429,13 @@ def _handle_session_check(args: argparse.Namespace) -> int:
     result = check_tutoring_session_quality(args.project, session_id=args.session_id)
     print(f"Checked session {result.session_id}: {result.status}")
     print(f"Tutoring quality report: {result.report_path}")
+    return 0
+
+
+def _handle_benchmark_run(args: argparse.Namespace) -> int:
+    result = run_project_benchmark(args.project, session_id=args.session_id)
+    print(f"Benchmark passed {result.passed_gates}/{result.total_gates} gates")
+    print(f"Benchmark report: {result.report_path}")
     return 0
 
 

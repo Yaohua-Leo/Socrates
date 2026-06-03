@@ -48,6 +48,15 @@ class IngestionQualityResult:
     report_path: Path
 
 
+@dataclass(frozen=True)
+class BenchmarkResult:
+    """Summary of a project-level quality benchmark run."""
+
+    total_gates: int
+    passed_gates: int
+    report_path: Path
+
+
 REQUIRED_FRONTMATTER = ("status:", "review_status:", "type:", "concept:")
 REQUIRED_SECTIONS = ("## Hints", "## Solution Outline", "## Rubric")
 NOTE_REQUIRED_FRONTMATTER = (
@@ -163,6 +172,33 @@ def check_reference_ingestion_quality(project_path: Path | str) -> IngestionQual
         passed=passed,
         failed=failed,
         object_count=object_count,
+        report_path=report_path,
+    )
+
+
+def run_project_benchmark(
+    project_path: Path | str,
+    *,
+    session_id: str,
+) -> BenchmarkResult:
+    """Run the deterministic project-quality benchmark suite."""
+
+    context = load_project(project_path)
+    ingestion = check_reference_ingestion_quality(context.root)
+    note = check_atomic_note_quality(context.root)
+    exercise = check_generated_exercise_quality(context.root)
+    tutoring = check_tutoring_session_quality(context.root, session_id=session_id)
+    gates = {
+        "Ingestion": ingestion.failed == 0 and ingestion.checked > 0,
+        "Note quality": note.failed == 0 and note.checked > 0,
+        "Exercise quality": exercise.failed == 0 and exercise.checked > 0,
+        "Tutoring quality": tutoring.status == "pass",
+    }
+    report_path = context.evals_dir / "benchmark_report.md"
+    write_text(report_path, _benchmark_report(gates))
+    return BenchmarkResult(
+        total_gates=len(gates),
+        passed_gates=sum(1 for passed in gates.values() if passed),
         report_path=report_path,
     )
 
@@ -359,6 +395,20 @@ def _tutoring_quality_report(
     lines.extend(f"- {issue}" for issue in issues)
     if not issues:
         lines.append("- none recorded")
+    return "\n".join(lines) + "\n"
+
+
+def _benchmark_report(gates: dict[str, bool]) -> str:
+    lines = [
+        "# Benchmark Report",
+        "",
+        "## Quality Gates",
+        "",
+    ]
+    lines.extend(
+        f"- {name}: {'pass' if passed else 'fail'}"
+        for name, passed in gates.items()
+    )
     return "\n".join(lines) + "\n"
 
 
