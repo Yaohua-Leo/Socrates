@@ -243,6 +243,57 @@ class TutoringQualityTests(unittest.TestCase):
                 ],
             )
 
+    def test_session_check_requires_student_attempt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            script = Path(temp_dir) / "session.script"
+            script.write_text(
+                "topic: Normal Subgroup\n"
+                "goal: Distinguish normality from commutativity.\n"
+                "question: What must be checked for normality?\n"
+                "hint: Use conjugation invariance.\n"
+                "next: Try proving kernels are normal.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            run_scripted_tutoring_session(project, script, session_id="session_0001")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "session",
+                    "check",
+                    "--project",
+                    str(project),
+                    "--session-id",
+                    "session_0001",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Checked session session_0001: fail", result.stdout)
+            report_text = (project / "08_evals" / "tutoring_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- missing student attempt", report_text)
+            self.assertIn("- Attempt before solution: 0/25", report_text)
+            manifest = json.loads(
+                (project / "08_evals" / "tutoring_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            session = manifest["sessions"][0]
+            self.assertEqual(session["status"], "fail")
+            self.assertEqual(session["transcript_checks"]["student_attempt_count"], 0)
+            self.assertIn("missing student attempt", session["issues"])
+            self.assertEqual(session["rubric"]["Attempt before solution"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

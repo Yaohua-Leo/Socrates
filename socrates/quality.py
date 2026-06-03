@@ -207,6 +207,9 @@ def check_tutoring_session_quality(
         issues.append("missing tutor question")
     if "Hint 1:" not in transcript:
         issues.append("missing first hint")
+    student_attempt_count = _line_prefix_count(transcript, "Student attempt:")
+    if student_attempt_count == 0:
+        issues.append("missing student attempt")
     premature_solution = _has_premature_solution(transcript)
     if premature_solution:
         issues.append("premature full solution")
@@ -214,6 +217,7 @@ def check_tutoring_session_quality(
         missing=missing,
         has_tutor_question="Tutor:" in transcript,
         has_hint_ladder="Hint 1:" in transcript,
+        has_student_attempt=student_attempt_count > 0,
         premature_solution=premature_solution,
     )
 
@@ -1574,13 +1578,14 @@ def _tutoring_rubric(
     missing: list[str],
     has_tutor_question: bool,
     has_hint_ladder: bool,
+    has_student_attempt: bool,
     premature_solution: bool,
 ) -> dict[str, int]:
     return {
         "Required artifacts": 0 if missing else 25,
         "Tutor question": 25 if has_tutor_question else 0,
         "Hint ladder": 25 if has_hint_ladder else 0,
-        "Attempt before solution": 0 if premature_solution else 25,
+        "Attempt before solution": 25 if has_student_attempt and not premature_solution else 0,
     }
 
 
