@@ -23,6 +23,11 @@ class BenchmarkTests(unittest.TestCase):
             project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
             curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
             curated.write_text(
+                "# Group Theory\n"
+                "## Source Metadata\n"
+                "- source_id: df-1\n"
+                "- title: Normal Subgroups\n"
+                "- role: lecture_notes\n"
                 "### Definition: Normal Subgroup\n"
                 "A normal subgroup is stable under conjugation.\n"
                 "Depends: subgroup, conjugation\n",

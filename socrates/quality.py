@@ -1414,11 +1414,14 @@ def _invalid_note_frontmatter_choice(
 def _check_curated_reference(path: Path) -> dict[str, object]:
     text = path.read_text(encoding="utf-8")
     object_count = _extractable_object_count(text)
+    source_metadata = _curated_source_metadata(text)
     issues: list[str] = []
     if object_count == 0:
         issues.append("no extractable mathematical object headings")
     if "Depends:" not in text:
         issues.append("no dependency metadata")
+    if not source_metadata.get("source_id"):
+        issues.append("missing source id metadata")
     return {
         "file": path.name,
         "status": "fail" if issues else "pass",

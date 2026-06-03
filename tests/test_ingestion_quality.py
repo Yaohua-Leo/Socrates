@@ -98,6 +98,10 @@ class IngestionQualityTests(unittest.TestCase):
             curated = project / "01_references" / "curated" / "numbered.curated.md"
             curated.write_text(
                 "# Group Theory\n"
+                "## Source Metadata\n"
+                "- source_id: numbered_notes\n"
+                "- title: Numbered Notes\n"
+                "- role: lecture_notes\n"
                 "## Normal Subgroups\n"
                 "### Definition 3.1: Normal Subgroup\n"
                 "A normal subgroup is stable under conjugation.\n"
@@ -138,6 +142,52 @@ class IngestionQualityTests(unittest.TestCase):
                 manifest["curated_references"][0]["objects"][0]["number"],
                 "3.1",
             )
+
+    def test_kb_check_requires_source_id_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "missing_source.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Normal Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Checked 1 curated reference: 0 passed, 1 failed", result.stdout)
+            report_text = (project / "08_evals" / "ingestion_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("missing_source.curated.md: fail", report_text)
+            self.assertIn("missing source id metadata", report_text)
+            manifest = json.loads(
+                (project / "08_evals" / "ingestion_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            reference = manifest["curated_references"][0]
+            self.assertEqual(reference["quality_status"], "fail")
+            self.assertIn("missing source id metadata", reference["issues"])
 
 
 if __name__ == "__main__":
