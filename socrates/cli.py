@@ -15,7 +15,7 @@ from .artifacts import (
 )
 from .context import load_project
 from .exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
-from .kb import build_reference_kb, search_reference_kb
+from .kb import build_reference_kb, find_counterexamples, search_reference_kb
 from .learning_queue import collect_learning_queue, format_learning_queue
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
@@ -190,6 +190,14 @@ def build_parser() -> argparse.ArgumentParser:
     kb_search_parser.add_argument("--query", required=True, help="Search query.")
     kb_search_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
     kb_search_parser.set_defaults(func=_handle_kb_search)
+    kb_counterexamples_parser = kb_subparsers.add_parser(
+        "counterexamples",
+        help="Find counterexamples related to a concept.",
+    )
+    kb_counterexamples_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_counterexamples_parser.add_argument("--concept", required=True, help="Concept to search counterexamples for.")
+    kb_counterexamples_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
+    kb_counterexamples_parser.set_defaults(func=_handle_kb_counterexamples)
     kb_check_parser = kb_subparsers.add_parser(
         "check",
         help="Run checklist quality checks on curated references.",
@@ -538,6 +546,20 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
     matches = search_reference_kb(args.project, args.query, limit=args.limit)
     if not matches:
         print("No reference matches")
+        return 0
+    for match in matches:
+        source = match.get("source", {})
+        location = _source_location(source)
+        source_label = _source_label(source)
+        object_label = _object_label(match)
+        print(f"{object_label}{source_label} ({location})")
+    return 0
+
+
+def _handle_kb_counterexamples(args: argparse.Namespace) -> int:
+    matches = find_counterexamples(args.project, args.concept, limit=args.limit)
+    if not matches:
+        print("No counterexamples found")
         return 0
     for match in matches:
         source = match.get("source", {})

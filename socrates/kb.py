@@ -72,12 +72,37 @@ def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
 def search_reference_kb(project_path: Path | str, query: str, *, limit: int = 10) -> list[dict[str, object]]:
     """Return source-grounded reference objects matching a query."""
 
+    return _search_reference_objects(project_path, query, limit=limit)
+
+
+def find_counterexamples(project_path: Path | str, concept: str, *, limit: int = 10) -> list[dict[str, object]]:
+    """Return matching counterexample objects from the reference KB."""
+
+    return _search_reference_objects(
+        project_path,
+        concept,
+        limit=limit,
+        object_type="counterexample",
+    )
+
+
+def _search_reference_objects(
+    project_path: Path | str,
+    query: str,
+    *,
+    limit: int,
+    object_type: str | None = None,
+) -> list[dict[str, object]]:
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
     index = json.loads(index_path.read_text(encoding="utf-8"))
     query_text = query.casefold()
     matches = []
     for item in index.get("objects", []):
+        if not isinstance(item, dict):
+            continue
+        if object_type is not None and str(item.get("type", "")).casefold() != object_type:
+            continue
         haystack = _search_haystack(item)
         if query_text in haystack:
             matches.append(item)
