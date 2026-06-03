@@ -155,6 +155,63 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIn("Benchmark gates: 4/4", status.stdout)
             self.assertIn("Benchmark failed gates: none", status.stdout)
 
+            benchmark_status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "benchmark",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(benchmark_status.returncode, 0, benchmark_status.stderr)
+            self.assertIn("# Benchmark Status", benchmark_status.stdout)
+            self.assertIn("- Score: 100/100", benchmark_status.stdout)
+            self.assertIn("- Gates passed: 4/4", benchmark_status.stdout)
+            self.assertIn("- Failed gates: none", benchmark_status.stdout)
+            self.assertIn(
+                "- Ingestion: pass | checked 1 | failed 0",
+                benchmark_status.stdout,
+            )
+            self.assertIn("  - report: 08_evals/ingestion_eval.md", benchmark_status.stdout)
+            self.assertIn(
+                "  - manifest: 08_evals/ingestion_quality_manifest.json",
+                benchmark_status.stdout,
+            )
+
+    def test_benchmark_status_cli_reports_not_run(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p")
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "benchmark",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("# Benchmark Status", result.stdout)
+            self.assertIn("- not run", result.stdout)
+            self.assertIn("- manifest: 08_evals/benchmark_manifest.json", result.stdout)
+
     def test_status_lists_failed_benchmark_gates_from_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(
@@ -201,6 +258,31 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIn("Benchmark score: 75/100", status.stdout)
             self.assertIn("Benchmark gates: 3/4", status.stdout)
             self.assertIn("Benchmark failed gates: Tutoring quality", status.stdout)
+
+            benchmark_status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "benchmark",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(benchmark_status.returncode, 0, benchmark_status.stderr)
+            self.assertIn("- Score: 75/100", benchmark_status.stdout)
+            self.assertIn("- Gates passed: 3/4", benchmark_status.stdout)
+            self.assertIn("- Failed gates: Tutoring quality", benchmark_status.stdout)
+            self.assertIn(
+                "- Tutoring quality: fail | checked unknown | failed unknown",
+                benchmark_status.stdout,
+            )
 
 
 if __name__ == "__main__":

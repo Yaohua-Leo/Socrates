@@ -524,6 +524,12 @@ def build_parser() -> argparse.ArgumentParser:
     benchmark_run_parser.add_argument("--project", required=True, help="Socrates project directory.")
     benchmark_run_parser.add_argument("--session-id", required=True, help="Session identifier to check.")
     benchmark_run_parser.set_defaults(func=_handle_benchmark_run)
+    benchmark_status_parser = benchmark_subparsers.add_parser(
+        "status",
+        help="Show the latest persisted benchmark manifest.",
+    )
+    benchmark_status_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    benchmark_status_parser.set_defaults(func=_handle_benchmark_status)
 
     report_parser = subparsers.add_parser(
         "report",
@@ -1146,6 +1152,12 @@ def _handle_benchmark_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_benchmark_status(args: argparse.Namespace) -> int:
+    context = load_project(args.project)
+    print(_benchmark_status_text(context.root), end="")
+    return 0
+
+
 def _handle_report_list(args: argparse.Namespace) -> int:
     reports = list_learning_reports(args.project, status=args.status)
     print(_learning_reports_text(reports), end="")
@@ -1463,6 +1475,72 @@ def _benchmark_failed_gates_text(benchmark_status: dict[str, object]) -> str:
     ):
         return "unknown"
     return "none"
+
+
+def _benchmark_status_text(project_root: Path) -> str:
+    manifest_path = project_root / "08_evals" / "benchmark_manifest.json"
+    lines = ["# Benchmark Status", ""]
+    if not manifest_path.exists():
+        lines.append("- not run")
+        lines.append(f"- manifest: {manifest_path.relative_to(project_root).as_posix()}")
+        return "\n".join(lines) + "\n"
+
+    manifest = _read_json_object(manifest_path)
+    benchmark_status = _read_benchmark_status(project_root)
+    if manifest is None or benchmark_status is None:
+        lines.append("- invalid manifest")
+        lines.append(f"- manifest: {manifest_path.relative_to(project_root).as_posix()}")
+        return "\n".join(lines) + "\n"
+
+    lines.extend(
+        [
+            f"- Score: {benchmark_status['score']}/100",
+            (
+                "- Gates passed: "
+                f"{benchmark_status['passed_gates']}/{benchmark_status['total_gates']}"
+            ),
+            f"- Failed gates: {_benchmark_failed_gates_text(benchmark_status)}",
+            "- Report: 08_evals/benchmark_report.md",
+            "- Manifest: 08_evals/benchmark_manifest.json",
+            "",
+            "## Gates",
+            "",
+        ]
+    )
+    gates = manifest.get("gates", [])
+    if not isinstance(gates, list) or not gates:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    for gate in gates:
+        lines.extend(_benchmark_gate_status_lines(gate))
+    return "\n".join(lines) + "\n"
+
+
+def _read_json_object(path: Path) -> dict[str, object] | None:
+    if not path.exists():
+        return None
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def _benchmark_gate_status_lines(gate: object) -> list[str]:
+    if not isinstance(gate, dict):
+        return ["- invalid gate"]
+    name = str(gate.get("name", "Unnamed gate"))
+    status = "pass" if gate.get("passed") is True else "fail"
+    checked = gate.get("checked", "unknown")
+    failed = gate.get("failed", "unknown")
+    lines = [f"- {name}: {status} | checked {checked} | failed {failed}"]
+    report_path = gate.get("report_path")
+    manifest_path = gate.get("manifest_path")
+    if isinstance(report_path, str) and report_path:
+        lines.append(f"  - report: {report_path}")
+    if isinstance(manifest_path, str) and manifest_path:
+        lines.append(f"  - manifest: {manifest_path}")
+    return lines
 
 
 def _count_sources(registry_path: Path) -> int:
