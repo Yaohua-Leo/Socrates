@@ -489,6 +489,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
     for field in REQUIRED_FRONTMATTER:
         if field not in text:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
+    if "difficulty:" in text and not _has_valid_exercise_difficulty(text):
+        issues.append("invalid difficulty")
     if "## Statement" not in text and "## Review Prompt" not in text:
         issues.append("missing statement or review prompt")
     for section in REQUIRED_SECTIONS:
@@ -1046,6 +1048,17 @@ def _has_progressive_hint_ladder(text: str) -> bool:
         return False
     normalized = {_normalize_hint_text(hint) for hint in hints[:3]}
     return len(normalized) == 3
+
+
+def _has_valid_exercise_difficulty(text: str) -> bool:
+    value = _frontmatter_value(text, "difficulty")
+    if value is None:
+        return False
+    try:
+        difficulty = int(value)
+    except ValueError:
+        return False
+    return 1 <= difficulty <= 5
 
 
 def _hint_ladder_lines(text: str) -> list[str]:
