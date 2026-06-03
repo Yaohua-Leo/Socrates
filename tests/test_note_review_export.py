@@ -170,6 +170,56 @@ class NoteReviewExportTests(unittest.TestCase):
                 ],
             )
 
+    def test_export_reviewed_notes_to_obsidian_adds_backlink_section(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "quotients.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup\n\n"
+                "### Definition: Quotient Group\n"
+                "A quotient group uses cosets of a normal subgroup.\n"
+                "Depends: normal_subgroup\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a normal subgroup.\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            review_atomic_note(project, "quotient_group")
+
+            export_reviewed_notes_to_obsidian(project)
+
+            normal_note = project / "07_exports" / "obsidian" / "normal_subgroup.md"
+            quotient_note = project / "07_exports" / "obsidian" / "quotient_group.md"
+            normal_text = normal_note.read_text(encoding="utf-8")
+            quotient_text = quotient_note.read_text(encoding="utf-8")
+            self.assertIn("## Socrates Backlinks", normal_text)
+            self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
+            self.assertNotIn("## Socrates Backlinks", quotient_text)
+
     def test_note_list_cli_shows_pending_reviewed_and_exported_notes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

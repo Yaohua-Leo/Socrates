@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
-import shutil
 
 from .context import append_project_log, load_project, write_text
+from .project import slugify_topic
 from .quality import atomic_note_quality_issues, check_atomic_note_quality
 
 
@@ -65,6 +65,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     context = load_project(project_path)
     exported: list[Path] = []
     manifest_notes: list[dict[str, object]] = []
+    reviewed_notes: list[dict[str, object]] = []
     for folder in sorted((context.root / "04_atomic_notes").iterdir()):
         if not folder.is_dir() or folder.name == "drafts":
             continue
@@ -75,24 +76,39 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
             _require_note_quality(context.root, note_path, f"Reviewed note {note_path.stem}")
             destination = context.root / "07_exports" / "obsidian" / note_path.name
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(note_path, destination)
             exported.append(destination)
-            manifest_notes.append(
-                {
-                    "note_id": note_path.stem,
-                    "concept": _frontmatter_value(text, "concept") or note_path.stem,
-                    "type": _frontmatter_value(text, "type") or folder.name.rstrip("s"),
-                    "path": destination.relative_to(destination.parent).as_posix(),
-                    "review_status": _frontmatter_value(text, "review_status") or "",
-                    "source_id": _frontmatter_value(text, "source_id") or "",
-                    "source_title": _frontmatter_value(text, "source_title") or "",
-                    "source_location": _frontmatter_value(text, "source_location") or "",
-                    "tags": _frontmatter_list(text, "tags"),
-                    "related": _frontmatter_list(text, "related"),
-                }
-            )
+            note_entry = {
+                "note_id": note_path.stem,
+                "concept": _frontmatter_value(text, "concept") or note_path.stem,
+                "type": _frontmatter_value(text, "type") or folder.name.rstrip("s"),
+                "path": destination.relative_to(destination.parent).as_posix(),
+                "review_status": _frontmatter_value(text, "review_status") or "",
+                "source_id": _frontmatter_value(text, "source_id") or "",
+                "source_title": _frontmatter_value(text, "source_title") or "",
+                "source_location": _frontmatter_value(text, "source_location") or "",
+                "tags": _frontmatter_list(text, "tags"),
+                "related": _frontmatter_list(text, "related"),
+            }
+            manifest_notes.append(note_entry)
+            reviewed_notes.append({"text": text, "destination": destination, "entry": note_entry})
     if exported:
         obsidian_dir = context.root / "07_exports" / "obsidian"
+        backlinks = _obsidian_backlinks(manifest_notes)
+        for note in reviewed_notes:
+            entry = note["entry"]
+            if not isinstance(entry, dict):
+                continue
+            destination = note["destination"]
+            if not isinstance(destination, Path):
+                continue
+            write_text(
+                destination,
+                _with_obsidian_backlinks(
+                    str(note["text"]),
+                    str(entry["note_id"]),
+                    backlinks,
+                ),
+            )
         _write_export_manifest(obsidian_dir, manifest_notes)
         _write_export_index(obsidian_dir, manifest_notes)
         append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
@@ -151,6 +167,65 @@ def _write_export_index(obsidian_dir: Path, exported_notes: list[dict[str, objec
         if related:
             lines.append(f"  - Related: {', '.join(related)}")
     write_text(obsidian_dir / "_socrates_index.md", "\n".join(lines).rstrip() + "\n")
+
+
+def _obsidian_backlinks(exported_notes: list[dict[str, object]]) -> dict[str, list[dict[str, str]]]:
+    by_target: dict[str, str] = {}
+    for note in exported_notes:
+        note_id = str(note["note_id"])
+        concept = str(note["concept"])
+        by_target[note_id] = note_id
+        by_target[slugify_topic(concept)] = note_id
+
+    backlinks: dict[str, list[dict[str, str]]] = {str(note["note_id"]): [] for note in exported_notes}
+    for note in exported_notes:
+        source_id = str(note["note_id"])
+        source_concept = str(note["concept"])
+        related = note.get("related", [])
+        if not isinstance(related, list):
+            continue
+        for item in related:
+            target_id = by_target.get(_obsidian_link_target_id(str(item)))
+            if not target_id or target_id == source_id:
+                continue
+            backlinks[target_id].append({"note_id": source_id, "concept": source_concept})
+    return {
+        note_id: sorted(_unique_backlinks(items), key=lambda item: item["concept"])
+        for note_id, items in backlinks.items()
+    }
+
+
+def _obsidian_link_target_id(value: str) -> str:
+    text = value.strip().strip('"')
+    if text.startswith("[[") and text.endswith("]]"):
+        text = text[2:-2]
+    target = text.split("|", 1)[0].strip()
+    return slugify_topic(target)
+
+
+def _unique_backlinks(items: list[dict[str, str]]) -> list[dict[str, str]]:
+    seen: set[str] = set()
+    unique: list[dict[str, str]] = []
+    for item in items:
+        note_id = item["note_id"]
+        if note_id in seen:
+            continue
+        seen.add(note_id)
+        unique.append(item)
+    return unique
+
+
+def _with_obsidian_backlinks(
+    text: str,
+    note_id: str,
+    backlinks: dict[str, list[dict[str, str]]],
+) -> str:
+    links = backlinks.get(note_id, [])
+    if not links:
+        return text
+    lines = ["## Socrates Backlinks", ""]
+    lines.extend(f"- [[{item['note_id']}|{item['concept']}]]" for item in links)
+    return text.rstrip() + "\n\n" + "\n".join(lines) + "\n"
 
 
 def _pending_note_summaries(
