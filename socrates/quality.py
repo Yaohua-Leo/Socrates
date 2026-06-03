@@ -489,6 +489,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
     for field in REQUIRED_FRONTMATTER:
         if field not in text:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
+    if _is_generated_exercise(text) and _missing_source_id(text):
+        issues.append("missing source id")
     if "difficulty:" in text and not _has_valid_exercise_difficulty(text):
         issues.append("invalid difficulty")
     if "## Statement" not in text and "## Review Prompt" not in text:
@@ -1059,6 +1061,15 @@ def _has_valid_exercise_difficulty(text: str) -> bool:
     except ValueError:
         return False
     return 1 <= difficulty <= 5
+
+
+def _is_generated_exercise(text: str) -> bool:
+    return _frontmatter_value(text, "type") == "generated_exercise"
+
+
+def _missing_source_id(text: str) -> bool:
+    value = _frontmatter_value(text, "source_id")
+    return value is None or value in {"", "null"}
 
 
 def _hint_ladder_lines(text: str) -> list[str]:
