@@ -226,18 +226,13 @@ def _handle_teach(args: argparse.Namespace) -> int:
         count=5,
     )
 
-    mistakes = [
-        MistakeRecord(
-            session_id=session_id,
-            concept=concept_id,
-            misconception_id=slugify_topic(misconception),
-            user_answer=_first(script, "attempt") or "No attempt recorded.",
-            analysis="Detected during scripted tutoring session.",
-            repair_suggestion=_first(script, "next") or f"Review the definition of {concept}.",
-            follow_up_exercises=[exercise.id for exercise in exercises[:2]],
-        )
-        for misconception in script.get("misconception", ())
-    ]
+    mistakes = _mistake_records_from_script(
+        script=script,
+        session_id=session_id,
+        concept=concept,
+        concept_id=concept_id,
+        follow_up_exercises=[exercise.id for exercise in exercises[:2]],
+    )
     update_learning_state(
         context,
         LearningStatePatch(
@@ -357,6 +352,61 @@ def _first(fields: dict[str, tuple[str, ...]], key: str) -> str | None:
     if not values:
         return None
     return values[0]
+
+
+def _mistake_records_from_script(
+    *,
+    script: dict[str, tuple[str, ...]],
+    session_id: str,
+    concept: str,
+    concept_id: str,
+    follow_up_exercises: list[str],
+) -> list[MistakeRecord]:
+    explicit = [
+        (
+            slugify_topic(misconception),
+            "Detected during scripted tutoring session.",
+        )
+        for misconception in script.get("misconception", ())
+    ]
+    detected = _detect_common_misconceptions(concept, script.get("attempt", ()))
+    seen = {misconception_id for misconception_id, _ in explicit}
+    misconceptions = explicit + [
+        item for item in detected if item[0] not in seen
+    ]
+    return [
+        MistakeRecord(
+            session_id=session_id,
+            concept=concept_id,
+            misconception_id=misconception_id,
+            user_answer=_first(script, "attempt") or "No attempt recorded.",
+            analysis=analysis,
+            repair_suggestion=_first(script, "next") or f"Review the definition of {concept}.",
+            follow_up_exercises=follow_up_exercises,
+        )
+        for misconception_id, analysis in misconceptions
+    ]
+
+
+def _detect_common_misconceptions(
+    concept: str,
+    attempts: tuple[str, ...],
+) -> list[tuple[str, str]]:
+    concept_text = concept.casefold()
+    attempt_text = " ".join(attempts).casefold()
+    if "normal" in concept_text and (
+        "commut" in attempt_text
+        or "central" in attempt_text
+        or "center" in attempt_text
+        or "abelian" in attempt_text
+    ):
+        return [
+            (
+                "normal_equals_central",
+                "Confuses normality with commutativity or centrality.",
+            )
+        ]
+    return []
 
 
 def _first_source(registry_path: Path) -> tuple[str, str | None]:

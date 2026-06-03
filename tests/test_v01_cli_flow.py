@@ -88,6 +88,56 @@ class V01CliFlowTests(unittest.TestCase):
                 1,
             )
 
+    def test_teach_detects_common_misconception_without_script_label(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "group_theory"
+            script = root / "session_script.md"
+            script.write_text(
+                "\n".join(
+                    [
+                        "topic: Normal Subgroup",
+                        "goal: Distinguish normality from centrality.",
+                        "question: What does normality require?",
+                        "hint: Compare conjugation invariance with commutativity.",
+                        "attempt: A normal subgroup means every element commutes with everything.",
+                        "next: Contrast gNg^-1=N with gn=ng.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+
+            self._run_cli(
+                "init",
+                "--topic",
+                "Group Theory",
+                "--path",
+                str(project),
+            )
+            self._run_cli(
+                "teach",
+                "--project",
+                str(project),
+                "--session-id",
+                "session_0001",
+                "--script",
+                str(script),
+            )
+
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["count"],
+                1,
+            )
+            mistake_bank = (project / "05_exercises" / "mistake_bank.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Misconception: normal_equals_central", mistake_bank)
+            self.assertIn("Confuses normality with commutativity or centrality.", mistake_bank)
+
     def _run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
             [sys.executable, "-m", "socrates", *args],
