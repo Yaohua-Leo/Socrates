@@ -80,7 +80,9 @@ class ReferenceKbTests(unittest.TestCase):
                 "# Curated Reference: Normality Notes\n\n"
                 "## Source Metadata\n\n"
                 "- source_id: normality_notes\n"
-                "- title: Normality Notes\n\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "- raw_path: 01_references/raw/markdown/normality.md\n\n"
                 "## Curated Content\n\n"
                 "### Definition: Normal Subgroup\n"
                 "A subgroup N is normal if gNg^{-1}=N.\n"
@@ -91,10 +93,18 @@ class ReferenceKbTests(unittest.TestCase):
             result = build_reference_kb(project)
 
             index = json.loads(result.index_path.read_text(encoding="utf-8"))
-            self.assertEqual(index["objects"][0]["source"]["source_id"], "normality_notes")
+            source = index["objects"][0]["source"]
+            chunk_source = index["chunks"][0]["metadata"]["source"]
+            self.assertEqual(source["source_id"], "normality_notes")
+            self.assertEqual(source["title"], "Normality Notes")
+            self.assertEqual(source["role"], "lecture_notes")
+            self.assertEqual(source["raw_path"], "01_references/raw/markdown/normality.md")
+            self.assertEqual(chunk_source["source_id"], "normality_notes")
+            self.assertEqual(chunk_source["title"], "Normality Notes")
+            self.assertEqual(chunk_source["role"], "lecture_notes")
             self.assertEqual(
-                index["chunks"][0]["metadata"]["source"]["source_id"],
-                "normality_notes",
+                chunk_source["raw_path"],
+                "01_references/raw/markdown/normality.md",
             )
 
     def test_build_reference_kb_extracts_numbered_math_object_headings(self) -> None:
@@ -197,7 +207,10 @@ class ReferenceKbTests(unittest.TestCase):
             curated.write_text(
                 "# Group Theory\n\n"
                 "## Source Metadata\n\n"
-                "- source_id: normality_notes\n\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "- raw_path: 01_references/raw/markdown/normality.md\n\n"
                 "# Chapter 3: Quotient Groups\n"
                 "## Section 3.1 Normal Subgroups\n"
                 "### Definition 3.1: Normal Subgroup\n"
@@ -209,10 +222,16 @@ class ReferenceKbTests(unittest.TestCase):
             build_reference_kb(project)
 
             by_source_id = search_reference_kb(project, "normality_notes")
+            by_source_title = search_reference_kb(project, "Normality Notes")
+            by_source_role = search_reference_kb(project, "lecture_notes")
+            by_raw_path = search_reference_kb(project, "raw/markdown/normality.md")
             by_section = search_reference_kb(project, "Section 3.1")
             by_page = search_reference_kb(project, "p82")
 
             self.assertEqual(by_source_id[0]["title"], "Normal Subgroup")
+            self.assertEqual(by_source_title[0]["title"], "Normal Subgroup")
+            self.assertEqual(by_source_role[0]["title"], "Normal Subgroup")
+            self.assertEqual(by_raw_path[0]["title"], "Normal Subgroup")
             self.assertEqual(by_section[0]["title"], "Normal Subgroup")
             self.assertEqual(by_page[0]["title"], "Normal Subgroup")
 
@@ -223,7 +242,10 @@ class ReferenceKbTests(unittest.TestCase):
             curated.write_text(
                 "# Curated Reference: Normality Notes\n\n"
                 "## Source Metadata\n\n"
-                "- source_id: normality_notes\n\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "- raw_path: 01_references/raw/markdown/normality.md\n\n"
                 "# Chapter 3: Quotient Groups\n"
                 "## Section 3.1 Normal Subgroups\n"
                 "### Definition 3.1: Normal Subgroup\n"
@@ -242,8 +264,11 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertEqual(chapter_index["schema_version"], 2)
             self.assertEqual(indexed_object["number"], "3.1")
             self.assertEqual(indexed_object["source_id"], "normality_notes")
+            self.assertEqual(indexed_object["source_title"], "Normality Notes")
+            self.assertEqual(indexed_object["source_role"], "lecture_notes")
+            self.assertEqual(indexed_object["raw_path"], "01_references/raw/markdown/normality.md")
             self.assertEqual(indexed_object["source_path"], "01_references/curated/normality.curated.md")
-            self.assertEqual(indexed_object["line"], 9)
+            self.assertEqual(indexed_object["line"], 12)
             self.assertEqual(indexed_object["page"], "82")
 
     def test_build_reference_kb_writes_theorem_and_exercise_indexes(self) -> None:

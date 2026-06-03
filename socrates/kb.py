@@ -35,6 +35,7 @@ OBJECT_TYPES = {
 }
 
 OBJECT_NUMBER_PATTERN = re.compile(r"^[A-Za-z]?\d+(?:\.\d+)*(?:[a-z])?$")
+SOURCE_METADATA_KEYS = {"source_id", "title", "role", "raw_path"}
 
 
 def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
@@ -108,7 +109,7 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
     lines = markdown_path.read_text(encoding="utf-8").splitlines()
     chapter = ""
     section = ""
-    source_id = ""
+    source_metadata: dict[str, str] = {"source_id": ""}
     objects: list[dict[str, object]] = []
     current: dict[str, object] | None = None
     body: list[str] = []
@@ -130,10 +131,12 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
 
     for line_number, line in enumerate(lines, start=1):
         stripped = line.strip()
-        if stripped.startswith("- source_id:"):
-            source_id = stripped.removeprefix("- source_id:").strip().strip('"')
+        metadata_key = _metadata_key(stripped)
+        if metadata_key in SOURCE_METADATA_KEYS:
             if current is not None:
                 body.append(line)
+            else:
+                source_metadata[metadata_key] = _metadata_value(stripped)
             continue
 
         if line.startswith("### "):
@@ -149,13 +152,14 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
                 "id": object_id,
                 "type": object_type,
                 "title": title,
-                "source": {
-                    "source_id": source_id,
-                    "path": markdown_path.relative_to(project_root).as_posix(),
-                    "chapter": chapter,
-                    "section": section,
-                    "line": line_number,
-                },
+                "source": _source_for_object(
+                    project_root,
+                    markdown_path,
+                    source_metadata,
+                    chapter=chapter,
+                    section=section,
+                    line=line_number,
+                ),
             }
             if number:
                 current["number"] = number
@@ -171,6 +175,29 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
 
     flush()
     return objects
+
+
+def _source_for_object(
+    project_root: Path,
+    markdown_path: Path,
+    source_metadata: dict[str, str],
+    *,
+    chapter: str,
+    section: str,
+    line: int,
+) -> dict[str, object]:
+    source: dict[str, object] = {
+        "source_id": source_metadata.get("source_id", ""),
+        "path": markdown_path.relative_to(project_root).as_posix(),
+        "chapter": chapter,
+        "section": section,
+        "line": line,
+    }
+    for key in ("title", "role", "raw_path"):
+        value = source_metadata.get(key, "")
+        if value:
+            source[key] = value
+    return source
 
 
 def parse_object_heading(heading: str) -> tuple[str, str, str | None] | None:
@@ -322,6 +349,12 @@ def _chapter_index_object(item: dict[str, object]) -> dict[str, object]:
         indexed_object["line"] = source["line"]
     if source.get("source_id"):
         indexed_object["source_id"] = str(source["source_id"])
+    if source.get("title"):
+        indexed_object["source_title"] = str(source["title"])
+    if source.get("role"):
+        indexed_object["source_role"] = str(source["role"])
+    if source.get("raw_path"):
+        indexed_object["raw_path"] = str(source["raw_path"])
     if source.get("page"):
         indexed_object["page"] = str(source["page"])
     if item.get("number"):
