@@ -134,6 +134,18 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn('status: "reviewed"', export_text)
             self.assertIn("reviewed_by_user: true", export_text)
             self.assertIn("# Normal Subgroup", export_text)
+            export_index = project / "07_exports" / "obsidian" / "_socrates_index.md"
+            self.assertTrue(export_index.exists())
+            export_index_text = export_index.read_text(encoding="utf-8")
+            self.assertIn("# Socrates Obsidian Export", export_index_text)
+            self.assertIn("## Definition", export_index_text)
+            self.assertIn("- [[normal_subgroup|Normal Subgroup]]", export_index_text)
+            self.assertIn("  - Source: Dummit and Foote, Section 3.1", export_index_text)
+            self.assertIn(
+                "  - Tags: #definition #normal-subgroup #subgroup #conjugation",
+                export_index_text,
+            )
+            self.assertIn("  - Related: [[Subgroup]], [[Conjugation]]", export_index_text)
             manifest = json.loads(
                 (project / "07_exports" / "obsidian" / "export_manifest.json").read_text(
                     encoding="utf-8"

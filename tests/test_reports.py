@@ -9,7 +9,7 @@ import unittest
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
 from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
-from socrates.notes import review_atomic_note
+from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
     LearningStatePatch,
@@ -88,6 +88,7 @@ class ReportTests(unittest.TestCase):
             self.assertIn("## Artifact Inventory", report_text)
             self.assertIn("- Sessions completed: 1", report_text)
             self.assertIn("- Reviewed notes: 1", report_text)
+            self.assertIn("- Obsidian exports: 1", report_text)
             self.assertIn("- Generated exercises: 5", report_text)
             self.assertIn("- Approved exercises: 1", report_text)
             self.assertIn("- Attempted exercises: 1", report_text)
@@ -145,6 +146,7 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- quotient_group: 0.42", report_text)
             self.assertIn("## Notes And Exercises", report_text)
             self.assertIn("- Reviewed notes: 1", report_text)
+            self.assertIn("- Obsidian exports: 1", report_text)
             self.assertIn("- Generated exercises: 5", report_text)
             self.assertIn("- Graded exercises: 1", report_text)
             self.assertIn("## Misconceptions", report_text)
@@ -175,6 +177,7 @@ class ReportTests(unittest.TestCase):
             source_id="df-1",
         )
         review_atomic_note(project, "normal_subgroup")
+        export_reviewed_notes_to_obsidian(project)
         generate_exercise_drafts(
             project,
             concept="Normal Subgroup",

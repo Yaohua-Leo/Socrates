@@ -45,7 +45,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             kb_objects=_count_kb_objects(context.root),
             sessions_completed=_count_dirs(context.sessions_dir),
             reviewed_notes=_count_reviewed_notes(context.root),
-            obsidian_exports=_count_markdown(context.root / "07_exports" / "obsidian"),
+            obsidian_exports=_count_obsidian_exports(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
@@ -68,7 +68,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
         _monthly_report_text(
             reviewed_notes=_count_reviewed_notes(context.root),
             draft_notes=_count_markdown(context.atomic_note_drafts_dir),
-            obsidian_exports=_count_markdown(context.root / "07_exports" / "obsidian"),
+            obsidian_exports=_count_obsidian_exports(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
@@ -242,6 +242,22 @@ def _count_markdown(path: Path) -> int:
     if not path.exists():
         return 0
     return len(list(path.glob("*.md")))
+
+
+def _count_obsidian_exports(project_root: Path) -> int:
+    obsidian_dir = project_root / "07_exports" / "obsidian"
+    manifest_path = obsidian_dir / "export_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
+        return len(exported_notes) if isinstance(exported_notes, list) else 0
+    return len(
+        [
+            path
+            for path in obsidian_dir.glob("*.md")
+            if path.name != "_socrates_index.md"
+        ]
+    )
 
 
 def _count_reviewed_notes(project_root: Path) -> int:

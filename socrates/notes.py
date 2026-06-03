@@ -80,7 +80,9 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
                 }
             )
     if exported:
-        _write_export_manifest(context.root / "07_exports" / "obsidian", manifest_notes)
+        obsidian_dir = context.root / "07_exports" / "obsidian"
+        _write_export_manifest(obsidian_dir, manifest_notes)
+        _write_export_index(obsidian_dir, manifest_notes)
         append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
     return exported
 
@@ -94,6 +96,40 @@ def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, ob
         obsidian_dir / "export_manifest.json",
         json.dumps(manifest, ensure_ascii=False, indent=2) + "\n",
     )
+
+
+def _write_export_index(obsidian_dir: Path, exported_notes: list[dict[str, object]]) -> None:
+    notes = sorted(exported_notes, key=lambda item: (str(item["type"]), str(item["concept"])))
+    lines = ["# Socrates Obsidian Export", ""]
+    current_type = ""
+    for note in notes:
+        note_type = str(note["type"])
+        if note_type != current_type:
+            current_type = note_type
+            lines.extend([f"## {note_type.replace('_', ' ').title()}", ""])
+        note_id = str(note["note_id"])
+        concept = str(note["concept"])
+        lines.append(f"- [[{note_id}|{concept}]]")
+        source_line = _index_source_line(note)
+        if source_line:
+            lines.append(f"  - Source: {source_line}")
+        tags = [f"#{tag}" for tag in note.get("tags", []) if str(tag).strip()]
+        if tags:
+            lines.append(f"  - Tags: {' '.join(tags)}")
+        related = [str(item) for item in note.get("related", []) if str(item).strip()]
+        if related:
+            lines.append(f"  - Related: {', '.join(related)}")
+    write_text(obsidian_dir / "_socrates_index.md", "\n".join(lines).rstrip() + "\n")
+
+
+def _index_source_line(note: dict[str, object]) -> str:
+    source_title = str(note.get("source_title") or "").strip()
+    source_location = str(note.get("source_location") or "").strip()
+    source_id = str(note.get("source_id") or "").strip()
+    parts = [value for value in (source_title, source_location) if value]
+    if parts:
+        return ", ".join(parts)
+    return source_id
 
 
 def _require_note_quality(project_root: Path, note_path: Path, label: str) -> None:

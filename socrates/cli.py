@@ -437,7 +437,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_object_count = _count_kb_objects(context.root)
     reviewed_count = _count_reviewed_notes(context.root)
-    obsidian_export_count = len(list((context.root / "07_exports" / "obsidian").glob("*.md")))
+    obsidian_export_count = _count_obsidian_exports(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
@@ -912,6 +912,22 @@ def _count_approved_exercises(project_root: Path) -> int:
         if 'status: "approved"' in text and "reviewed_by_user: true" in text:
             approved += 1
     return approved
+
+
+def _count_obsidian_exports(project_root: Path) -> int:
+    obsidian_dir = project_root / "07_exports" / "obsidian"
+    manifest_path = obsidian_dir / "export_manifest.json"
+    if manifest_path.exists():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
+        return len(exported_notes) if isinstance(exported_notes, list) else 0
+    return len(
+        [
+            path
+            for path in obsidian_dir.glob("*.md")
+            if path.name != "_socrates_index.md"
+        ]
+    )
 
 
 def _count_scheduled_reviews(learning_state: Path) -> int:
