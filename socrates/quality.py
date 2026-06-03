@@ -493,7 +493,7 @@ def exercise_quality_issues(path: Path) -> list[str]:
         issues.append("missing source id")
     if "difficulty:" in text and not _has_valid_exercise_difficulty(text):
         issues.append("invalid difficulty")
-    if "## Statement" not in text and "## Review Prompt" not in text:
+    if not _has_statement_or_review_prompt(text):
         issues.append("missing statement or review prompt")
     for section in REQUIRED_SECTIONS:
         if section not in text:
@@ -1085,6 +1085,12 @@ def _has_common_mistakes(text: str) -> bool:
 
 def _has_target_training_point(text: str) -> bool:
     return _has_section_content(_section_text(text, "## Target Training Point"))
+
+
+def _has_statement_or_review_prompt(text: str) -> bool:
+    return _has_section_content(_section_text(text, "## Statement")) or _has_section_content(
+        _section_text(text, "## Review Prompt")
+    )
 
 
 def _has_real_bullet(section: str) -> bool:
