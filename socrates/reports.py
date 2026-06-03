@@ -43,6 +43,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             imported_sources=_count_sources(context.source_registry),
             curated_references=_count_markdown(context.references_dir / "curated"),
             kb_objects=_count_kb_objects(context.root),
+            kb_snapshot=_read_kb_snapshot(context.root),
             sessions_completed=_count_dirs(context.sessions_dir),
             reviewed_notes=_count_reviewed_notes(context.root),
             obsidian_exports=_count_obsidian_exports(context.root),
@@ -166,6 +167,7 @@ def _project_summary_text(
     imported_sources: int,
     curated_references: int,
     kb_objects: int,
+    kb_snapshot: list[dict[str, str]],
     sessions_completed: int,
     reviewed_notes: int,
     obsidian_exports: int,
@@ -195,6 +197,10 @@ def _project_summary_text(
         f"- Approved exercises: {approved_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
+        "",
+        "## Reference KB Snapshot",
+        "",
+        *_kb_snapshot_lines(kb_snapshot),
         "",
         "## Current Learning State",
         "",
@@ -293,6 +299,33 @@ def _count_kb_objects(project_root: Path) -> int:
     return len(objects) if isinstance(objects, list) else 0
 
 
+def _read_kb_snapshot(project_root: Path, *, limit: int = 10) -> list[dict[str, str]]:
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    if not index_path.exists():
+        return []
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    objects = index.get("objects", []) if isinstance(index, dict) else []
+    if not isinstance(objects, list):
+        return []
+    snapshot: list[dict[str, str]] = []
+    for item in objects:
+        if not isinstance(item, dict):
+            continue
+        source = item.get("source", {})
+        if not isinstance(source, dict):
+            source = {}
+        snapshot.append(
+            {
+                "label": _kb_object_label(item),
+                "source_label": _kb_source_label(source),
+                "location": _kb_source_location(source),
+            }
+        )
+        if len(snapshot) >= limit:
+            break
+    return snapshot
+
+
 def _count_approved_exercises(project_root: Path) -> int:
     generated_root = project_root / "05_exercises" / "generated"
     if not generated_root.exists():
@@ -324,6 +357,60 @@ def _review_lines(value: object) -> list[str]:
         reason = str(item.get("reason", "review scheduled"))
         lines.append(f"- {concept}: {priority}, {due} - {reason}")
     return lines or ["- none scheduled"]
+
+
+def _kb_snapshot_lines(snapshot: list[dict[str, str]]) -> list[str]:
+    if not snapshot:
+        return ["- none indexed"]
+    lines: list[str] = []
+    for item in snapshot:
+        source_label = item["source_label"]
+        label = item["label"]
+        lines.append(f"- {label}{source_label}")
+        location = item["location"]
+        if location:
+            lines.append(f"  Source: {location}")
+    return lines
+
+
+def _kb_object_label(item: dict[str, object]) -> str:
+    object_type = str(item.get("type", "object")).title()
+    number = str(item.get("number", "")).strip()
+    title = str(item.get("title", "Untitled"))
+    if number:
+        return f"{object_type} {number}: {title}"
+    return f"{object_type}: {title}"
+
+
+def _kb_source_label(source: dict[object, object]) -> str:
+    source_id = str(source.get("source_id", "")).strip()
+    source_title = str(source.get("title", "")).strip()
+    source_role = str(source.get("role", "")).strip()
+    if source_title:
+        label = source_title
+        if source_role:
+            label = f"{label} ({source_role})"
+        if source_id:
+            label = f"{label} [{source_id}]"
+        return f" - {label}"
+    if source_id:
+        return f" [{source_id}]"
+    return ""
+
+
+def _kb_source_location(source: dict[object, object]) -> str:
+    path = str(source.get("path", "")).strip()
+    if not path:
+        return ""
+    page = str(source.get("page", "")).strip()
+    line = source.get("line")
+    if page and line:
+        return f"{path}:p{page}:{line}"
+    if page:
+        return f"{path}:p{page}"
+    if line:
+        return f"{path}:{line}"
+    return path
 
 
 def _misconception_lines(value: object) -> list[str]:

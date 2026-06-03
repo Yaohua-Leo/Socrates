@@ -9,6 +9,7 @@ import unittest
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
 from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
+from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
@@ -86,6 +87,7 @@ class ReportTests(unittest.TestCase):
             self.assertIn("# Project Summary", report_text)
             self.assertIn("- Title: Group Theory", report_text)
             self.assertIn("## Artifact Inventory", report_text)
+            self.assertIn("- KB objects: 1", report_text)
             self.assertIn("- Sessions completed: 1", report_text)
             self.assertIn("- Reviewed notes: 1", report_text)
             self.assertIn("- Obsidian exports: 1", report_text)
@@ -93,6 +95,15 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Approved exercises: 1", report_text)
             self.assertIn("- Attempted exercises: 1", report_text)
             self.assertIn("- Graded exercises: 1", report_text)
+            self.assertIn("## Reference KB Snapshot", report_text)
+            self.assertIn(
+                "- Definition 3.1: Normal Subgroup - Normality Notes (lecture_notes) [normality_notes]",
+                report_text,
+            )
+            self.assertIn(
+                "  Source: 01_references/curated/normality.curated.md:p82:10",
+                report_text,
+            )
             self.assertIn("## Current Learning State", report_text)
             self.assertIn("- normal_subgroup: 0.8", report_text)
             self.assertIn("## Next Review Items", report_text)
@@ -158,6 +169,22 @@ class ReportTests(unittest.TestCase):
 
     def _create_report_fixture(self, root: Path) -> Path:
         project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+        curated = project / "01_references" / "curated" / "normality.curated.md"
+        curated.write_text(
+            "# Curated Reference: Normality Notes\n\n"
+            "## Source Metadata\n\n"
+            "- source_id: normality_notes\n"
+            "- title: Normality Notes\n"
+            "- role: lecture_notes\n"
+            "- raw_path: 01_references/raw/markdown/normality.md\n\n"
+            "### Definition 3.1: Normal Subgroup\n"
+            "Page: 82\n"
+            "A normal subgroup is stable under conjugation.\n"
+            "Depends: subgroup, conjugation\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        build_reference_kb(project)
         session = project / "03_sessions" / "session_0001"
         session.mkdir()
         (session / "summary.md").write_text(
