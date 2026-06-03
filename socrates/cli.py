@@ -22,7 +22,13 @@ from .exercises import (
     list_exercises,
     record_exercise_attempt,
 )
-from .kb import build_reference_kb, find_counterexamples, search_reference_kb
+from .kb import (
+    OBJECT_TYPES,
+    build_reference_kb,
+    find_counterexamples,
+    list_reference_kb_objects,
+    search_reference_kb,
+)
 from .learning_queue import collect_learning_queue, format_learning_queue
 from .notes import (
     AtomicNoteSummary,
@@ -225,6 +231,22 @@ def build_parser() -> argparse.ArgumentParser:
     kb_build_parser = kb_subparsers.add_parser("build", help="Build the reference KB.")
     kb_build_parser.add_argument("--project", required=True, help="Socrates project directory.")
     kb_build_parser.set_defaults(func=_handle_kb_build)
+    kb_list_parser = kb_subparsers.add_parser(
+        "list",
+        help="List indexed reference KB objects.",
+    )
+    kb_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_list_parser.add_argument(
+        "--type",
+        choices=("all", *sorted(OBJECT_TYPES)),
+        default="all",
+        help="Filter by reference object type; defaults to all.",
+    )
+    kb_list_parser.add_argument(
+        "--source-id",
+        help="Filter by source registry id.",
+    )
+    kb_list_parser.set_defaults(func=_handle_kb_list)
     kb_search_parser = kb_subparsers.add_parser("search", help="Search the reference KB.")
     kb_search_parser.add_argument("--project", required=True, help="Socrates project directory.")
     kb_search_parser.add_argument("--query", required=True, help="Search query.")
@@ -698,6 +720,29 @@ def _handle_kb_build(args: argparse.Namespace) -> int:
     print(f"Indexed {result.object_count} reference {noun}")
     print(f"Reference index: {result.index_path}")
     return 0
+
+
+def _handle_kb_list(args: argparse.Namespace) -> int:
+    objects = list_reference_kb_objects(
+        args.project,
+        object_type=args.type,
+        source_id=args.source_id,
+    )
+    print(_reference_kb_objects_text(objects), end="")
+    return 0
+
+
+def _reference_kb_objects_text(objects: list[dict[str, object]]) -> str:
+    lines = ["# Reference KB Objects", ""]
+    if not objects:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    for item in objects:
+        source = item.get("source", {})
+        lines.append(
+            f"- {_object_label(item)}{_source_label(source)} | {_source_location(source)}"
+        )
+    return "\n".join(lines) + "\n"
 
 
 def _handle_kb_search(args: argparse.Namespace) -> int:

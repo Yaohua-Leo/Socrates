@@ -89,6 +89,89 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("definition 3.1: Normal Subgroup", search)
             self.assertIn("normality.curated.md:p82:1", search)
 
+    def test_kb_list_displays_indexed_objects_and_filters(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Curated Reference: Normality Notes\n\n"
+                "## Source Metadata\n\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "- raw_path: 01_references/raw/markdown/normality.md\n\n"
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n\n"
+                "### Theorem 3.2: Kernel Normality\n"
+                "The kernel of a group homomorphism is normal.\n"
+                "Depends: kernel, homomorphism\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            exercises = project / "01_references" / "curated" / "exercises.curated.md"
+            exercises.write_text(
+                "## Source Metadata\n\n"
+                "- source_id: exercise_notes\n"
+                "- title: Exercise Notes\n"
+                "- role: exercise_source\n\n"
+                "### Exercise: Construct A Non-Normal Subgroup\n"
+                "Find a subgroup of S3 that is not normal.\n"
+                "Depends: normal subgroup, symmetric group\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            all_objects = self._run_cli("kb", "list", "--project", str(project)).stdout
+            theorem_objects = self._run_cli(
+                "kb",
+                "list",
+                "--project",
+                str(project),
+                "--type",
+                "theorem",
+            ).stdout
+            exercise_source_objects = self._run_cli(
+                "kb",
+                "list",
+                "--project",
+                str(project),
+                "--source-id",
+                "exercise_notes",
+            ).stdout
+            missing_source_objects = self._run_cli(
+                "kb",
+                "list",
+                "--project",
+                str(project),
+                "--source-id",
+                "missing_source",
+            ).stdout
+
+            self.assertIn("# Reference KB Objects", all_objects)
+            self.assertIn("definition 3.1: Normal Subgroup", all_objects)
+            self.assertIn("theorem 3.2: Kernel Normality", all_objects)
+            self.assertIn("exercise: Construct A Non-Normal Subgroup", all_objects)
+            self.assertIn("Normality Notes (lecture_notes) [normality_notes]", all_objects)
+            self.assertIn("normality.curated.md:p82", all_objects)
+
+            self.assertIn("theorem 3.2: Kernel Normality", theorem_objects)
+            self.assertNotIn("definition 3.1: Normal Subgroup", theorem_objects)
+            self.assertNotIn("Construct A Non-Normal Subgroup", theorem_objects)
+
+            self.assertIn("exercise: Construct A Non-Normal Subgroup", exercise_source_objects)
+            self.assertIn(
+                "Exercise Notes (exercise_source) [exercise_notes]",
+                exercise_source_objects,
+            )
+            self.assertNotIn("Kernel Normality", exercise_source_objects)
+
+            self.assertIn("- none", missing_source_objects)
+
     def test_kb_counterexamples_lists_matching_reference_counterexamples(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

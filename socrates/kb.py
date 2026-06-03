@@ -86,6 +86,43 @@ def find_counterexamples(project_path: Path | str, concept: str, *, limit: int =
     )
 
 
+def list_reference_kb_objects(
+    project_path: Path | str,
+    *,
+    object_type: str = "all",
+    source_id: str | None = None,
+) -> list[dict[str, object]]:
+    """Return indexed reference objects with optional lifecycle filters."""
+
+    allowed_types = {"all", *OBJECT_TYPES}
+    if object_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(
+            f"Unknown reference object type {object_type!r}; expected one of: {allowed}"
+        )
+
+    context = load_project(project_path)
+    index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    objects = index.get("objects", []) if isinstance(index, dict) else []
+    if not isinstance(objects, list):
+        return []
+
+    items: list[dict[str, object]] = []
+    for item in objects:
+        if not isinstance(item, dict):
+            continue
+        if (
+            object_type != "all"
+            and str(item.get("type", "")).casefold() != object_type
+        ):
+            continue
+        if source_id is not None and _object_source_id(item) != source_id:
+            continue
+        items.append(item)
+    return items
+
+
 def _search_reference_objects(
     project_path: Path | str,
     query: str,
@@ -109,6 +146,13 @@ def _search_reference_objects(
         if len(matches) >= limit:
             break
     return matches
+
+
+def _object_source_id(item: dict[str, object]) -> str:
+    source = item.get("source", {})
+    if not isinstance(source, dict):
+        return ""
+    return str(source.get("source_id", ""))
 
 
 def _search_haystack(item: dict[str, object]) -> str:
