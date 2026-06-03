@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .context import append_project_log, load_project, write_text
+from .context import append_project_log, load_project, read_json, write_text
 from .quality import check_generated_exercise_quality, exercise_quality_issues
 from .project import slugify_topic
 from .state import LearningStatePatch, build_review_schedule, update_learning_state
@@ -122,10 +122,18 @@ def grade_exercise_attempt(
             proof_skills={"exercise_solving": score},
         ),
     )
-    if score < REVIEW_MASTERY_THRESHOLD:
+    if score < REVIEW_MASTERY_THRESHOLD or _has_review_schedule(context.learning_state):
         build_review_schedule(context, mastery_threshold=REVIEW_MASTERY_THRESHOLD)
     append_project_log(context, f"Graded attempt {attempt_id} with score {score:g}.")
     return grade_path
+
+
+def _has_review_schedule(learning_state_path: Path) -> bool:
+    state = read_json(learning_state_path) if learning_state_path.exists() else {}
+    if not isinstance(state, dict):
+        return False
+    schedule = state.get("review_schedule", [])
+    return isinstance(schedule, list) and bool(schedule)
 
 
 def _next_attempt_path(project_root: Path, exercise_id: str) -> Path:

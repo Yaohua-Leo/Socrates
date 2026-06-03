@@ -324,6 +324,86 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Scheduled reviews: 1", status.stdout)
 
+    def test_high_score_grade_cli_clears_existing_review_schedule(self) -> None:
+        from socrates.context import load_project
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+        from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.4}),
+            )
+            build_review_schedule(context)
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "I checked conjugation invariance directly.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text(
+                "This resolves the scheduled review item.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            record_exercise_attempt(project, "normal_subgroup_01", answer)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.8",
+                    "--feedback",
+                    str(feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(learning_state["concept_mastery"]["normal_subgroup"], 0.8)
+            self.assertEqual(learning_state["review_schedule"], [])
+            schedule_text = (project / "02_learning_plan" / "review_schedule.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("No review items scheduled.", schedule_text)
+
+            queue = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(queue.returncode, 0, queue.stderr)
+            self.assertIn("## Scheduled Reviews\n\n- none", queue.stdout)
+            self.assertNotIn("- normal_subgroup | 02_learning_plan/review_schedule.md", queue.stdout)
+
     def test_grade_exercise_attempt_rejects_missing_attempt(self) -> None:
         from socrates.exercises import grade_exercise_attempt
 
