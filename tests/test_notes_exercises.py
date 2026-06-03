@@ -130,6 +130,7 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertTrue(all(isinstance(exercise, ExerciseDraft) for exercise in exercises))
             required_sections = [
                 "## Statement",
+                "## Target Training Point",
                 "## Concepts",
                 "## Prerequisites",
                 "## Hints",
@@ -184,7 +185,9 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('priority: "high"', text)
             self.assertIn('due: "next_session"', text)
             self.assertIn("## Target Weakness\n\nmastery 0.43", text)
+            self.assertIn("## Target Training Point", text)
             self.assertIn("## Review Prompt", text)
+            self.assertIn("## Common Mistakes", text)
 
     def test_generate_targeted_review_exercises_preserves_reviewed_existing_files(self) -> None:
         artifacts = self._load_artifacts_module()

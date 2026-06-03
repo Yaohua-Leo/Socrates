@@ -170,6 +170,8 @@ def _exercise_text(
         + f"# {concept} Exercise {index:02d}\n\n"
         + "## Statement\n\n"
         + f"Work out a focused problem about {concept}.\n\n"
+        + "## Target Training Point\n\n"
+        + f"Practice applying {concept} by checking each defining condition explicitly.\n\n"
         + "## Concepts\n\n"
         + _bullet_list([concept])
         + "\n## Prerequisites\n\n"
@@ -212,6 +214,8 @@ def _targeted_review_exercise_text(
         + f"# Review Exercise: {concept}\n\n"
         + "## Target Weakness\n\n"
         + f"{reason}\n\n"
+        + "## Target Training Point\n\n"
+        + f"Repair the scheduled weakness in {concept} by contrasting the definition with a borderline case.\n\n"
         + "## Review Prompt\n\n"
         + f"State the relevant definition of {concept}, then give one example and one non-example.\n\n"
         + "## Hints\n\n"
@@ -225,6 +229,9 @@ def _targeted_review_exercise_text(
         + "- Definition is stated accurately.\n"
         + "- Example and non-example are both justified.\n"
         + "- The explanation addresses the scheduled weakness.\n"
+        + "\n## Common Mistakes\n\n"
+        + "- Repeating the weak slogan without checking the definition.\n"
+        + "- Giving an example without explaining the failing condition in the non-example.\n"
     )
 
 

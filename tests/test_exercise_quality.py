@@ -528,6 +528,37 @@ class ExerciseQualityTests(unittest.TestCase):
             report = project / "08_evals" / "exercise_quality_eval.md"
             self.assertIn("bad_exercise.md: fail", report.read_text(encoding="utf-8"))
 
+    def test_exercise_quality_requires_training_point_and_common_mistakes(self) -> None:
+        from socrates.quality import exercise_quality_issues
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            exercise = project / "05_exercises" / "generated" / "thin_exercise.md"
+            exercise.write_text(
+                "---\n"
+                "status: draft\n"
+                "review_status: needs_review\n"
+                "type: generated_exercise\n"
+                "concept: Normal Subgroup\n"
+                "---\n\n"
+                "# Thin Exercise\n\n"
+                "## Statement\n\n"
+                "Prove a basic fact.\n\n"
+                "## Hints\n\n"
+                "- Use the definition.\n\n"
+                "## Solution Outline\n\n"
+                "- Unfold the definition.\n\n"
+                "## Rubric\n\n"
+                "- Checks the right condition.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            issues = exercise_quality_issues(exercise)
+
+            self.assertIn("missing section Target Training Point", issues)
+            self.assertIn("missing section Common Mistakes", issues)
+
     def test_exercise_check_cli_writes_quality_report_for_generated_exercises(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

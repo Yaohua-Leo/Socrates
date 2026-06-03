@@ -68,7 +68,13 @@ class LifecycleAuditResult:
 
 
 REQUIRED_FRONTMATTER = ("status:", "review_status:", "type:", "concept:")
-REQUIRED_SECTIONS = ("## Hints", "## Solution Outline", "## Rubric")
+REQUIRED_SECTIONS = (
+    "## Target Training Point",
+    "## Hints",
+    "## Solution Outline",
+    "## Rubric",
+    "## Common Mistakes",
+)
 NOTE_REQUIRED_FRONTMATTER = (
     "status:",
     "review_status:",
