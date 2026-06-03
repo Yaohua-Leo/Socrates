@@ -1228,6 +1228,10 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
         _section_text(text, "## Review Questions")
     ) == 0:
         issues.append("missing review questions")
+    if not _frontmatter_list(text, "related") and _bullet_count(
+        _section_text(text, "## Related Concepts")
+    ) == 0:
+        issues.append("missing related concept links")
     return issues
 
 

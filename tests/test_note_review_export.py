@@ -51,7 +51,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Normal Subgroup",
                 note_type="definition",
                 body=(
-                    "A normal subgroup is stable under conjugation.\n\n"
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- How is normality different from commutativity?\n"
                 ),
@@ -117,7 +117,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Normal Subgroup",
                 note_type="definition",
                 body=(
-                    "A normal subgroup is stable under conjugation.\n\n"
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- What conjugation condition must be checked?\n"
                 ),
@@ -191,7 +191,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Normal Subgroup",
                 note_type="definition",
                 body=(
-                    "A normal subgroup is stable under conjugation.\n\n"
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- What conjugation condition must be checked?\n"
                 ),
@@ -259,7 +259,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Normal Subgroup",
                 note_type="definition",
                 body=(
-                    "A normal subgroup is stable under conjugation.\n\n"
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- What conjugation condition must be checked?\n"
                 ),
@@ -300,7 +300,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Normal Subgroup",
                 note_type="definition",
                 body=(
-                    "A normal subgroup is stable under conjugation.\n\n"
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- What conjugation condition must be checked?\n"
                 ),
@@ -313,7 +313,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Quotient Group",
                 note_type="definition",
                 body=(
-                    "A quotient group packages cosets using a normal subgroup.\n\n"
+                    "A quotient group packages cosets using a [[Normal Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- Why must the subgroup be normal?\n"
                 ),

@@ -6,6 +6,7 @@ from collections.abc import Iterable
 from datetime import date
 import json
 from pathlib import Path
+import re
 
 from socrates.context import load_project, write_text
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft, yaml_scalar
@@ -29,7 +30,12 @@ def generate_atomic_note_draft(
     relative_path = Path("04_atomic_notes") / "drafts" / f"{note_id}.md"
     note_path = context.root / relative_path
     reference_object = _kb_reference_object(context.root, concept)
-    related_concepts = _kb_related_concepts(reference_object)
+    related_concepts = _unique_concepts(
+        [
+            *_kb_related_concepts(reference_object),
+            *_body_related_concepts(body, concept=concept),
+        ]
+    )
     related_links = [f"[[{_concept_title(item)}]]" for item in related_concepts]
     note_body = _with_required_note_sections(body.rstrip(), concept)
     reference_context = _reference_context_section(reference_object)
@@ -317,6 +323,29 @@ def _kb_related_concepts(reference_object: dict[str, object] | None) -> list[str
     if reference_object is None:
         return []
     return [str(value) for value in reference_object.get("dependencies", [])]
+
+
+def _body_related_concepts(body: str, *, concept: str) -> list[str]:
+    values: list[str] = []
+    own_id = slugify_topic(concept)
+    for match in re.finditer(r"\[\[([^\]|#]+)(?:[#|][^\]]*)?\]\]", body):
+        value = match.group(1).strip()
+        if value and slugify_topic(value) != own_id:
+            values.append(value)
+    return values
+
+
+def _unique_concepts(values: Iterable[str]) -> list[str]:
+    concepts: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value).strip()
+        key = slugify_topic(text)
+        if not text or key in seen:
+            continue
+        seen.add(key)
+        concepts.append(text)
+    return concepts
 
 
 def _reference_context_section(reference_object: dict[str, object] | None) -> str:

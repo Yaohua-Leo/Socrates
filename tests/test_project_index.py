@@ -97,7 +97,7 @@ class ProjectIndexTests(unittest.TestCase):
                 concept="Normal Subgroup",
                 note_type="definition",
                 body=(
-                    "A normal subgroup is stable under conjugation.\n\n"
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- What condition distinguishes normality from centrality?\n"
                 ),
@@ -108,7 +108,7 @@ class ProjectIndexTests(unittest.TestCase):
                 concept="Group Representation",
                 note_type="definition",
                 body=(
-                    "A group representation is an action by linear maps.\n\n"
+                    "A group representation is an action by linear maps; compare [[Group Action]].\n\n"
                     "## Review Questions\n\n"
                     "- What structure must each group element preserve?\n"
                 ),
@@ -170,7 +170,7 @@ class ProjectIndexTests(unittest.TestCase):
                 concept="Group Representation",
                 note_type="definition",
                 body=(
-                    "A group representation is a homomorphism into linear automorphisms.\n\n"
+                    "A group representation is a homomorphism into linear automorphisms; compare [[Group Action]].\n\n"
                     "## Review Questions\n\n"
                     "- Which vector space is carrying the action?\n"
                 ),

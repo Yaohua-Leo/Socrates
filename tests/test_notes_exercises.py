@@ -79,6 +79,23 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("related:\n  - \"[[Subgroup]]\"\n  - \"[[Conjugation]]\"", text)
             self.assertIn("## Related Concepts\n\n- [[Subgroup]]\n- [[Conjugation]]", text)
 
+    def test_atomic_note_draft_uses_body_wikilinks_for_related_links(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            note = artifacts.generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body="A normal subgroup refines [[Subgroup]] and supports [[Quotient Group]].",
+                source_id="df-1",
+            )
+
+            text = (project / note.path).read_text(encoding="utf-8")
+            self.assertIn("related:\n  - \"[[Subgroup]]\"\n  - \"[[Quotient Group]]\"", text)
+            self.assertIn("## Related Concepts\n\n- [[Subgroup]]\n- [[Quotient Group]]", text)
+
     def test_atomic_note_draft_includes_kb_reference_context(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:
