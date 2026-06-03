@@ -20,6 +20,7 @@ from .state import (
     EvalReportUpdate,
     LearningStatePatch,
     MistakeRecord,
+    build_review_schedule,
     update_eval_report,
     update_learning_state,
 )
@@ -135,6 +136,18 @@ def build_parser() -> argparse.ArgumentParser:
     note_export_parser.add_argument("--project", required=True, help="Socrates project directory.")
     note_export_parser.set_defaults(func=_handle_note_export_obsidian)
 
+    review_parser = subparsers.add_parser(
+        "review",
+        help="Schedule review from the current learning state.",
+    )
+    review_subparsers = review_parser.add_subparsers(dest="review_command", required=True)
+    review_schedule_parser = review_subparsers.add_parser(
+        "schedule",
+        help="Build a review schedule from weak concepts and active misconceptions.",
+    )
+    review_schedule_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_schedule_parser.set_defaults(func=_handle_review_schedule)
+
     return parser
 
 
@@ -241,6 +254,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     kb_object_count = _count_kb_objects(context.root)
     reviewed_count = _count_reviewed_notes(context.root)
     obsidian_export_count = len(list((context.root / "07_exports" / "obsidian").glob("*.md")))
+    scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     phase = "tutoring_complete" if latest_session != "none" else "initialization"
 
     print(f"Project: {context.root}")
@@ -253,6 +267,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Reviewed notes: {reviewed_count}")
     print(f"Generated exercises: {exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
+    print(f"Scheduled reviews: {scheduled_review_count}")
     return 0
 
 
@@ -286,6 +301,15 @@ def _handle_note_export_obsidian(args: argparse.Namespace) -> int:
     exported = export_reviewed_notes_to_obsidian(args.project)
     noun = "note" if len(exported) == 1 else "notes"
     print(f"Exported {len(exported)} reviewed {noun}")
+    return 0
+
+
+def _handle_review_schedule(args: argparse.Namespace) -> int:
+    context = load_project(args.project)
+    schedule_path = build_review_schedule(context)
+    count = _count_scheduled_reviews(context.learning_state)
+    noun = "item" if count == 1 else "items"
+    print(f"Scheduled {count} review {noun}: {schedule_path}")
     return 0
 
 
@@ -424,3 +448,11 @@ def _count_reviewed_notes(project_root: Path) -> int:
             if "reviewed_by_user: true" in text:
                 reviewed += 1
     return reviewed
+
+
+def _count_scheduled_reviews(learning_state: Path) -> int:
+    if not learning_state.exists():
+        return 0
+    state = json.loads(learning_state.read_text(encoding="utf-8"))
+    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    return len(schedule) if isinstance(schedule, list) else 0

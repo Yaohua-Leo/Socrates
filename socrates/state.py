@@ -44,6 +44,16 @@ class EvalReportUpdate:
     next_actions: list[str] = field(default_factory=list)
 
 
+@dataclass(frozen=True)
+class ReviewScheduleItem:
+    """One review item derived from learning state."""
+
+    concept: str
+    priority: str
+    due: str
+    reason: str
+
+
 EVAL_REPORTS = {
     "tutoring": ("tutoring_eval.md", "Tutoring Eval"),
     "exercise": ("exercise_eval.md", "Exercise Eval"),
@@ -90,13 +100,99 @@ def update_eval_report(context: ProjectContext, update: EvalReportUpdate) -> Pat
     return path
 
 
+def build_review_schedule(context: ProjectContext, *, mastery_threshold: float = 0.7) -> Path:
+    """Build a first review schedule from weak concepts and active misconceptions."""
+
+    state = _learning_state_dict(context.learning_state)
+    items = _review_items(state, mastery_threshold=mastery_threshold)
+    state["review_schedule"] = [
+        {
+            "concept": item.concept,
+            "priority": item.priority,
+            "due": item.due,
+            "reason": item.reason,
+        }
+        for item in items
+    ]
+    write_json(context.learning_state, state)
+
+    schedule_path = context.learning_plan_dir / "review_schedule.md"
+    write_text(schedule_path, _review_schedule_markdown(items))
+    return schedule_path
+
+
 def _learning_state_dict(path: Path) -> dict[str, object]:
     loaded = read_json(path) if path.exists() else {}
     state = loaded if isinstance(loaded, dict) else {}
     for key in ("concept_mastery", "proof_skills", "misconceptions"):
         if not isinstance(state.get(key), dict):
             state[key] = {}
+    if not isinstance(state.get("review_schedule"), list):
+        state["review_schedule"] = []
     return state
+
+
+def _review_items(state: dict[str, object], *, mastery_threshold: float) -> list[ReviewScheduleItem]:
+    concept_reasons: dict[str, list[str]] = {}
+    concept_priorities: dict[str, str] = {}
+
+    concept_mastery = state.get("concept_mastery", {})
+    if isinstance(concept_mastery, dict):
+        for concept, score_value in concept_mastery.items():
+            score = float(score_value)
+            if score >= mastery_threshold:
+                continue
+            concept_id = str(concept)
+            concept_reasons.setdefault(concept_id, []).append(f"mastery {score:g}")
+            concept_priorities[concept_id] = "high" if score < 0.5 else "medium"
+
+    misconceptions = state.get("misconceptions", {})
+    if isinstance(misconceptions, dict):
+        for misconception_id, value in misconceptions.items():
+            if not isinstance(value, dict):
+                continue
+            if value.get("status", "active") != "active":
+                continue
+            concept = str(value.get("concept", "general"))
+            count = int(value.get("count", 1))
+            concept_reasons.setdefault(concept, []).append(
+                f"active misconception {misconception_id} x{count}"
+            )
+            if count > 1 or concept_priorities.get(concept) != "high":
+                concept_priorities[concept] = "high" if count > 1 else "medium"
+
+    items: list[ReviewScheduleItem] = []
+    for concept in sorted(concept_reasons):
+        priority = concept_priorities.get(concept, "medium")
+        due = "next_session" if priority == "high" else "within_3_days"
+        items.append(
+            ReviewScheduleItem(
+                concept=concept,
+                priority=priority,
+                due=due,
+                reason="; ".join(concept_reasons[concept]),
+            )
+        )
+    return items
+
+
+def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:
+    lines = ["# Review Schedule", ""]
+    if not items:
+        lines.append("No review items scheduled.")
+        return "\n".join(lines) + "\n"
+    for item in items:
+        lines.extend(
+            [
+                f"## {item.concept}",
+                "",
+                f"- Priority: {item.priority}",
+                f"- Due: {item.due}",
+                f"- Reason: {item.reason}",
+                "",
+            ]
+        )
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _mistake_bank_entry(mistake: MistakeRecord, *, is_recurrence: bool) -> str:
