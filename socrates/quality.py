@@ -432,6 +432,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
         "Learning reports": _has_learning_reports(context.root),
         "Benchmark report": _has_benchmark_report(context.root),
         "Benchmark manifest": _has_benchmark_manifest(context.root),
+        "Tool verification records": _has_tool_verification_records(context.root),
     }
     report_path = context.evals_dir / "lifecycle_eval.md"
     write_text(report_path, _lifecycle_report(checks))
@@ -1411,6 +1412,39 @@ def _has_benchmark_manifest(project_root: Path) -> bool:
     if not _valid_benchmark_manifest(project_root, manifest):
         return False
     return _latest_benchmark_input_mtime(project_root) <= manifest_path.stat().st_mtime_ns
+
+
+def _has_tool_verification_records(project_root: Path) -> bool:
+    manifest_path = project_root / "08_evals" / "tool_verification" / "manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return False
+    records = manifest.get("records")
+    if not isinstance(records, list) or not records:
+        return False
+    return all(_valid_tool_verification_record(project_root, record) for record in records)
+
+
+def _valid_tool_verification_record(project_root: Path, record: object) -> bool:
+    if not isinstance(record, dict):
+        return False
+    for key in ("kind", "object_id", "status", "report_path"):
+        if not isinstance(record.get(key), str) or not record[key]:
+            return False
+    artifact_path = (
+        record.get("skeleton_path")
+        or record.get("artifact_path")
+        or record.get("output_path")
+    )
+    return (
+        _manifest_artifact_exists(project_root, artifact_path)
+        and _manifest_artifact_exists(project_root, record.get("report_path"))
+    )
 
 
 def _valid_benchmark_manifest(project_root: Path, manifest: object) -> bool:

@@ -26,6 +26,7 @@ from socrates.reports import (
     generate_weekly_report,
 )
 from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+from socrates.tool_verification import generate_lean_statement_skeleton
 from socrates.tutoring import run_scripted_tutoring_session
 
 
@@ -54,7 +55,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 1/14 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 1/15 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
@@ -62,6 +63,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Obsidian export: fail", report_text)
             self.assertIn("- Benchmark report: fail", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
+            self.assertIn("- Tool verification records: fail", report_text)
 
     def test_lifecycle_audit_does_not_count_obsidian_utility_index_as_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -234,6 +236,58 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
 
+    def test_lifecycle_audit_rejects_broken_tool_verification_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            manifest_path = project / "08_evals" / "tool_verification" / "manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "records": [
+                            {
+                                "kind": "lean_statement_skeleton",
+                                "object_id": "normal_subgroup",
+                                "status": "unchecked_skeleton",
+                                "skeleton_path": (
+                                    "08_evals/tool_verification/"
+                                    "missing_statement.lean"
+                                ),
+                                "report_path": (
+                                    "08_evals/tool_verification/"
+                                    "missing_statement_report.md"
+                                ),
+                            }
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Tool verification records: fail", report_text)
+
     def test_lifecycle_audit_cli_reports_complete_learning_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -292,6 +346,7 @@ class LifecycleAuditTests(unittest.TestCase):
                 LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
             )
             build_review_schedule(context)
+            generate_lean_statement_skeleton(project, object_id="normal_subgroup")
             generate_weekly_report(project)
             generate_monthly_report(project)
             generate_project_summary(project)
@@ -314,7 +369,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 14/14 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 15/15 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -324,6 +379,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Learning reports: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: pass", report_text)
+            self.assertIn("- Tool verification records: pass", report_text)
 
     def test_lifecycle_audit_accepts_completed_empty_review_schedule(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
