@@ -409,6 +409,18 @@ def build_parser() -> argparse.ArgumentParser:
     exercise_grade_parser.add_argument("--attempt", required=True, help="Attempt id, without .md.")
     exercise_grade_parser.add_argument("--score", type=float, required=True, help="Score from 0 to 1.")
     exercise_grade_parser.add_argument("--feedback", required=True, help="Markdown/text feedback file.")
+    exercise_grade_parser.add_argument(
+        "--misconception",
+        help="Optional misconception id to record in the mistake bank.",
+    )
+    exercise_grade_parser.add_argument(
+        "--analysis",
+        help="Optional concise mistake analysis; requires --misconception to be recorded.",
+    )
+    exercise_grade_parser.add_argument(
+        "--repair-suggestion",
+        help="Optional repair suggestion; defaults to the feedback text when a misconception is recorded.",
+    )
     exercise_grade_parser.set_defaults(func=_handle_exercise_grade)
 
     session_parser = subparsers.add_parser(
@@ -940,7 +952,15 @@ def _handle_exercise_attempt(args: argparse.Namespace) -> int:
 
 
 def _handle_exercise_grade(args: argparse.Namespace) -> int:
-    grade = grade_exercise_attempt(args.project, args.attempt, args.score, args.feedback)
+    grade = grade_exercise_attempt(
+        args.project,
+        args.attempt,
+        args.score,
+        args.feedback,
+        misconception_id=args.misconception,
+        analysis=args.analysis,
+        repair_suggestion=args.repair_suggestion,
+    )
     print(f"Graded attempt {args.attempt}: {grade}")
     return 0
 

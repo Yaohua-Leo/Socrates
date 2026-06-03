@@ -10,6 +10,7 @@ from .quality import check_generated_exercise_quality, exercise_quality_issues
 from .project import slugify_topic
 from .state import (
     LearningStatePatch,
+    MistakeRecord,
     build_review_schedule,
     resolve_active_misconceptions_for_concept,
     update_learning_state,
@@ -132,6 +133,10 @@ def grade_exercise_attempt(
     attempt_id: str,
     score: float,
     feedback_path: Path | str,
+    *,
+    misconception_id: str | None = None,
+    analysis: str | None = None,
+    repair_suggestion: str | None = None,
 ) -> Path:
     """Write a grade artifact for one recorded exercise attempt."""
 
@@ -168,15 +173,34 @@ def grade_exercise_attempt(
             feedback_text=feedback_text,
         ),
     )
+    concept_id = slugify_topic(concept)
+    mistakes = []
+    if misconception_id:
+        mistakes.append(
+            MistakeRecord(
+                session_id=attempt_id,
+                concept=concept_id,
+                misconception_id=slugify_topic(misconception_id),
+                user_answer=_attempt_answer(attempt_text),
+                analysis=_one_line(analysis) or "Recorded during exercise grading.",
+                repair_suggestion=(
+                    _one_line(repair_suggestion)
+                    or _one_line(feedback_text)
+                    or f"Review feedback for {attempt_id}."
+                ),
+                follow_up_exercises=[exercise_id],
+            )
+        )
     update_learning_state(
         context,
         LearningStatePatch(
-            concept_mastery={slugify_topic(concept): score},
+            concept_mastery={concept_id: score},
             proof_skills={"exercise_solving": score},
+            mistakes=mistakes,
         ),
     )
     if score >= REVIEW_MASTERY_THRESHOLD:
-        resolve_active_misconceptions_for_concept(context, slugify_topic(concept))
+        resolve_active_misconceptions_for_concept(context, concept_id)
     if score < REVIEW_MASTERY_THRESHOLD or _has_review_schedule(context.learning_state):
         build_review_schedule(context, mastery_threshold=REVIEW_MASTERY_THRESHOLD)
     append_project_log(context, f"Graded attempt {attempt_id} with score {score:g}.")
@@ -256,6 +280,20 @@ def _exercise_id_from_attempt(attempt_id: str) -> str:
 
 def _is_approved_exercise(text: str) -> bool:
     return 'status: "approved"' in text and "reviewed_by_user: true" in text
+
+
+def _attempt_answer(attempt_text: str) -> str:
+    marker = "## Answer"
+    if marker not in attempt_text:
+        return "No answer recorded."
+    answer = attempt_text.split(marker, 1)[1].strip()
+    return answer or "No answer recorded."
+
+
+def _one_line(value: str | None) -> str:
+    if value is None:
+        return ""
+    return " ".join(value.split())
 
 
 def _frontmatter_value(text: str, key: str) -> str | None:

@@ -437,6 +437,90 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Scheduled reviews: 1", status.stdout)
 
+    def test_grade_cli_records_labeled_misconception_in_mistake_bank(self) -> None:
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "I treated normality as elementwise commutativity.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text(
+                "Use conjugation invariance instead of commutativity.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            record_exercise_attempt(project, "normal_subgroup_01", answer)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.35",
+                    "--feedback",
+                    str(feedback),
+                    "--misconception",
+                    "normal_equals_central",
+                    "--analysis",
+                    "Confuses normality with centrality or commutativity.",
+                    "--repair-suggestion",
+                    "Compare gNg^-1=N with gn=ng.",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"],
+                {"concept": "normal_subgroup", "count": 1, "status": "active"},
+            )
+            self.assertEqual(
+                learning_state["review_schedule"][0]["reason"],
+                "mastery 0.35; active misconception normal_equals_central x1",
+            )
+            mistake_bank = (project / "05_exercises" / "mistake_bank.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## normal_subgroup_01_attempt_001 - normal_subgroup", mistake_bank)
+            self.assertIn("- Misconception: normal_equals_central", mistake_bank)
+            self.assertIn(
+                "- User answer: I treated normality as elementwise commutativity.",
+                mistake_bank,
+            )
+            self.assertIn(
+                "- Analysis: Confuses normality with centrality or commutativity.",
+                mistake_bank,
+            )
+            self.assertIn("- Repair suggestion: Compare gNg^-1=N with gn=ng.", mistake_bank)
+            self.assertIn("  - normal_subgroup_01", mistake_bank)
+
     def test_high_score_grade_cli_clears_existing_review_schedule(self) -> None:
         from socrates.context import load_project
         from socrates.exercises import approve_exercise_draft, record_exercise_attempt
