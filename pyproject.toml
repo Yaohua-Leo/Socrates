@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "socrates"
+version = "0.1.0"
+description = "Local-first project-based mathematics learning CLI skeleton."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+authors = [
+  { name = "Leo" }
+]
+
+[project.scripts]
+socrates = "socrates.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["socrates*"]
