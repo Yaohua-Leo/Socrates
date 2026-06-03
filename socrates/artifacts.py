@@ -242,6 +242,7 @@ def _targeted_review_exercise_text(
     reference_object: dict[str, object] | None,
 ) -> str:
     reference_context = _reference_context_section(reference_object)
+    prerequisites = _review_exercise_prerequisites(reference_object, concept)
     return (
         _frontmatter(
             {
@@ -261,6 +262,11 @@ def _targeted_review_exercise_text(
         + (reference_context + "\n" if reference_context else "")
         + "## Target Training Point\n\n"
         + f"Repair the scheduled weakness in {concept} by contrasting the definition with a borderline case.\n\n"
+        + "## Concepts\n\n"
+        + _bullet_list([concept])
+        + "\n## Prerequisites\n\n"
+        + _bullet_list(prerequisites)
+        + "\n"
         + "## Review Prompt\n\n"
         + f"State the relevant definition of {concept}, then give one example and one non-example.\n\n"
         + "## Hints\n\n"
@@ -284,6 +290,16 @@ def _targeted_review_exercise_text(
 
 def _review_exercise_difficulty(priority: str) -> int:
     return 3 if priority == "high" else 2
+
+
+def _review_exercise_prerequisites(
+    reference_object: dict[str, object] | None,
+    concept: str,
+) -> list[str]:
+    dependencies = _kb_related_concepts(reference_object)
+    if dependencies:
+        return dependencies
+    return [f"current weakness record for {concept}"]
 
 
 def _frontmatter(values: dict[str, object]) -> str:

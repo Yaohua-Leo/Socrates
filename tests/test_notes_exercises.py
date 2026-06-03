@@ -257,6 +257,8 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn('scheduled_for: "2026-06-04"', text)
             self.assertIn("## Target Weakness\n\nmastery 0.43", text)
             self.assertIn("## Target Training Point", text)
+            self.assertIn("## Concepts\n\n- normal_subgroup", text)
+            self.assertIn("## Prerequisites", text)
             self.assertIn("## Review Prompt", text)
             self.assertIn("Hint 1", text)
             self.assertIn("Hint 2", text)
