@@ -32,6 +32,39 @@ def list_projects(root_path: Path | str) -> list[dict[str, str]]:
     return discover_projects(root)
 
 
+def find_project_references(
+    root_path: Path | str,
+    *,
+    query: str = "",
+) -> list[dict[str, str]]:
+    """Return reviewed atomic notes as cross-project knowledge references."""
+
+    root = Path(root_path).expanduser().resolve()
+    query_text = query.casefold().strip()
+    references: list[dict[str, str]] = []
+    for project in list_projects(root):
+        project_root = root / project["path"]
+        project_id = project["id"]
+        for note_path in _reviewed_note_paths(project_root):
+            text = note_path.read_text(encoding="utf-8")
+            metadata = _frontmatter_values(text)
+            note_id = note_path.stem
+            concept = metadata.get("concept") or _first_heading(text) or note_id
+            note_type = metadata.get("type") or note_path.parent.name.rstrip("s")
+            reference = {
+                "ref": f"{project_id}.{note_id}",
+                "project_id": project_id,
+                "note_id": note_id,
+                "concept": concept,
+                "type": note_type,
+                "path": note_path.relative_to(root).as_posix(),
+            }
+            if query_text and query_text not in _reference_haystack(reference, text):
+                continue
+            references.append(reference)
+    return sorted(references, key=lambda item: item["ref"])
+
+
 def discover_projects(root_path: Path | str) -> list[dict[str, str]]:
     """Find immediate child directories that look like Socrates projects."""
 
@@ -90,6 +123,56 @@ def _read_project_metadata(project_file: Path) -> dict[str, str]:
         elif section == "learning" and key == "current_phase":
             metadata["phase"] = value
     return metadata
+
+
+def _reviewed_note_paths(project_root: Path) -> list[Path]:
+    notes_root = project_root / "04_atomic_notes"
+    if not notes_root.exists():
+        return []
+    paths: list[Path] = []
+    for folder in sorted(notes_root.iterdir(), key=lambda path: path.name.casefold()):
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in sorted(folder.glob("*.md"), key=lambda path: path.name.casefold()):
+            text = note_path.read_text(encoding="utf-8")
+            if _frontmatter_values(text).get("reviewed_by_user") == "true":
+                paths.append(note_path)
+    return paths
+
+
+def _frontmatter_values(text: str) -> dict[str, str]:
+    if not text.startswith("---\n"):
+        return {}
+    parts = text.split("---\n", 2)
+    if len(parts) != 3:
+        return {}
+    values: dict[str, str] = {}
+    for line in parts[1].splitlines():
+        if line.startswith(" ") or not line.strip():
+            continue
+        key, separator, raw_value = line.partition(":")
+        if separator:
+            values[key] = _yaml_like_string(raw_value.strip())
+    return values
+
+
+def _first_heading(text: str) -> str:
+    for line in text.splitlines():
+        if line.startswith("# "):
+            return line.removeprefix("# ").strip()
+    return ""
+
+
+def _reference_haystack(reference: dict[str, str], text: str) -> str:
+    return " ".join(
+        [
+            reference["ref"],
+            reference["concept"],
+            reference["type"],
+            reference["path"],
+            text,
+        ]
+    ).casefold()
 
 
 def _yaml_like_string(value: str) -> str:
