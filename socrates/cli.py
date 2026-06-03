@@ -360,8 +360,11 @@ def _handle_import(args: argparse.Namespace) -> int:
 
 
 def _handle_curate(args: argparse.Namespace) -> int:
-    curated = curate_reference(args.project, args.source_id)
-    print(f"Curated reference {args.source_id}: {curated}")
+    path = curate_reference(args.project, args.source_id)
+    if path.name.endswith(".conversion_pending.md"):
+        print(f"Marked reference {args.source_id} conversion pending: {path}")
+    else:
+        print(f"Curated reference {args.source_id}: {path}")
     return 0
 
 

@@ -71,6 +71,8 @@ def curate_reference(project_path: Path | str, source_id: str) -> Path:
         raise ValueError(f"Unknown source id: {source_id}")
 
     source_type = record.get("type", "")
+    if source_type == "pdf":
+        return _record_conversion_pending(context, record)
     if source_type not in {"markdown", "text", "latex"}:
         raise ValueError(f"Curated draft passthrough is not supported for {source_type} sources")
 
@@ -199,6 +201,38 @@ def _converted_markdown(record: dict[str, str], source_text: str) -> str:
     )
 
 
+def _record_conversion_pending(context, record: dict[str, str]) -> Path:
+    pending_path = (
+        context.references_dir
+        / "converted"
+        / "markdown"
+        / f"{record['id']}.conversion_pending.md"
+    )
+    write_text(pending_path, _conversion_pending_markdown(record))
+    relative_pending_path = _relative_project_path(context.root, pending_path)
+    _update_registry_source(
+        context.source_registry,
+        record["id"],
+        status="conversion_pending",
+        markdown_path=relative_pending_path,
+        curated_path=None,
+    )
+    append_project_log(context, f"Marked reference {record['id']} conversion pending.")
+    return pending_path
+
+
+def _conversion_pending_markdown(record: dict[str, str]) -> str:
+    return (
+        f"# Conversion Pending: {record.get('title', record['id'])}\n\n"
+        "<!-- socrates-conversion-pending: no approved PDF extraction backend configured -->\n\n"
+        "## Source Metadata\n\n"
+        f"- source_id: {record['id']}\n"
+        f"- raw_path: {record.get('local_path', '')}\n\n"
+        "## Pending Reason\n\n"
+        "- PDF extraction requires an approved backend before curated content can be built.\n"
+    )
+
+
 LATEX_OBJECT_TYPES = {
     "definition",
     "theorem",
@@ -255,7 +289,7 @@ def _update_registry_source(
     *,
     status: str,
     markdown_path: str,
-    curated_path: str,
+    curated_path: str | None,
 ) -> None:
     lines = registry_path.read_text(encoding="utf-8").splitlines()
     updated: list[str] = []

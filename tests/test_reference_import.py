@@ -73,6 +73,43 @@ class ReferenceImportTests(unittest.TestCase):
                 (project / "01_references" / "raw" / "books" / "abstract_algebra_copy.pdf").exists()
             )
 
+    def test_curate_pdf_reference_records_conversion_pending_without_curated_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "abstract_algebra.pdf"
+            source.write_bytes(b"%PDF placeholder")
+            record = import_reference(
+                project,
+                source,
+                role="main_textbook",
+                title="Abstract Algebra",
+            )
+
+            pending = curate_reference(project, record.id)
+
+            self.assertEqual(
+                pending.relative_to(project).as_posix(),
+                "01_references/converted/markdown/abstract_algebra.conversion_pending.md",
+            )
+            pending_text = pending.read_text(encoding="utf-8")
+            self.assertIn("# Conversion Pending: Abstract Algebra", pending_text)
+            self.assertIn("- source_id: abstract_algebra", pending_text)
+            self.assertIn("- raw_path: 01_references/raw/books/abstract_algebra.pdf", pending_text)
+            self.assertFalse(
+                (project / "01_references" / "curated" / "abstract_algebra.curated.md").exists()
+            )
+
+            registry = (project / "01_references" / "source_registry.yaml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("status: conversion_pending", registry)
+            self.assertIn(
+                'markdown: "01_references/converted/markdown/abstract_algebra.conversion_pending.md"',
+                registry,
+            )
+            self.assertIn("curated: null", registry)
+
     def test_curate_markdown_reference_creates_curated_draft_and_updates_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
