@@ -494,6 +494,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
             issues.append(f"missing section {section.removeprefix('## ')}")
     if not _has_hint_ladder(text):
         issues.append("missing hint ladder")
+    elif not _has_progressive_hint_ladder(text):
+        issues.append("non-progressive hint ladder")
     if not _has_solution_steps(text):
         issues.append("missing structured solution steps")
     if not _has_rubric_points(text):
@@ -1034,6 +1036,29 @@ def _frontmatter_string(value: str) -> str:
 def _has_hint_ladder(text: str) -> bool:
     hint_section = _section_text(text, "## Hints")
     return all(f"Hint {index}" in hint_section for index in range(1, 4))
+
+
+def _has_progressive_hint_ladder(text: str) -> bool:
+    hints = _hint_ladder_lines(text)
+    if len(hints) < 3:
+        return False
+    normalized = {_normalize_hint_text(hint) for hint in hints[:3]}
+    return len(normalized) == 3
+
+
+def _hint_ladder_lines(text: str) -> list[str]:
+    hint_section = _section_text(text, "## Hints")
+    return [
+        line.strip().lstrip("- ").strip()
+        for line in hint_section.splitlines()
+        if line.strip().lstrip("- ").startswith("Hint ")
+    ]
+
+
+def _normalize_hint_text(hint: str) -> str:
+    if ":" in hint:
+        hint = hint.split(":", 1)[1]
+    return " ".join(hint.casefold().split())
 
 
 def _has_solution_steps(text: str) -> bool:
