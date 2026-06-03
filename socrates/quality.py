@@ -1213,6 +1213,10 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
     for section in NOTE_REQUIRED_SECTIONS:
         if section not in text:
             issues.append(f"missing section {section.removeprefix('## ')}")
+    if "## Review Questions" in text and _bullet_count(
+        _section_text(text, "## Review Questions")
+    ) == 0:
+        issues.append("missing review questions")
     return issues
 
 
