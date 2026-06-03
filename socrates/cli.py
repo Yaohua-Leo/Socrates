@@ -14,7 +14,7 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
 )
 from .context import load_project
-from .exercises import approve_exercise_draft, record_exercise_attempt
+from .exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
 from .kb import build_reference_kb, search_reference_kb
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
@@ -210,6 +210,15 @@ def build_parser() -> argparse.ArgumentParser:
     exercise_attempt_parser.add_argument("--exercise", required=True, help="Generated exercise id, without .md.")
     exercise_attempt_parser.add_argument("--answer", required=True, help="Markdown/text answer file.")
     exercise_attempt_parser.set_defaults(func=_handle_exercise_attempt)
+    exercise_grade_parser = exercise_subparsers.add_parser(
+        "grade",
+        help="Grade one recorded exercise attempt.",
+    )
+    exercise_grade_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_grade_parser.add_argument("--attempt", required=True, help="Attempt id, without .md.")
+    exercise_grade_parser.add_argument("--score", type=float, required=True, help="Score from 0 to 1.")
+    exercise_grade_parser.add_argument("--feedback", required=True, help="Markdown/text feedback file.")
+    exercise_grade_parser.set_defaults(func=_handle_exercise_grade)
 
     session_parser = subparsers.add_parser(
         "session",
@@ -341,6 +350,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     approved_exercise_count = _count_approved_exercises(context.root)
     attempted_exercise_count = len(list((context.root / "05_exercises" / "attempted").glob("*.md")))
+    graded_exercise_count = len(list((context.root / "05_exercises" / "graded").glob("*.md")))
     phase = "tutoring_complete" if latest_session != "none" else "initialization"
 
     print(f"Project: {context.root}")
@@ -354,6 +364,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Generated exercises: {exercise_count}")
     print(f"Approved exercises: {approved_exercise_count}")
     print(f"Attempted exercises: {attempted_exercise_count}")
+    print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     return 0
@@ -454,6 +465,12 @@ def _handle_exercise_approve(args: argparse.Namespace) -> int:
 def _handle_exercise_attempt(args: argparse.Namespace) -> int:
     attempt = record_exercise_attempt(args.project, args.exercise, args.answer)
     print(f"Recorded attempt for exercise {args.exercise}: {attempt}")
+    return 0
+
+
+def _handle_exercise_grade(args: argparse.Namespace) -> int:
+    grade = grade_exercise_attempt(args.project, args.attempt, args.score, args.feedback)
+    print(f"Graded attempt {args.attempt}: {grade}")
     return 0
 
 

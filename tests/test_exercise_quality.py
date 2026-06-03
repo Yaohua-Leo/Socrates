@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -168,6 +169,93 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(second.name, "normal_subgroup_01_attempt_002.md")
             self.assertIn("First attempt.", first.read_text(encoding="utf-8"))
             self.assertIn("Second attempt.", second.read_text(encoding="utf-8"))
+
+    def test_exercise_grade_cli_writes_grade_and_updates_learning_state(self) -> None:
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "I would prove normality by checking gng^-1 remains in N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text(
+                "Good use of conjugation invariance; subgroup closure still needs detail.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            record_exercise_attempt(project, "normal_subgroup_01", answer)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.8",
+                    "--feedback",
+                    str(feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Graded attempt normal_subgroup_01_attempt_001", result.stdout)
+            graded = project / "05_exercises" / "graded" / "normal_subgroup_01_attempt_001_grade.md"
+            grade_text = graded.read_text(encoding="utf-8")
+            self.assertIn('attempt_id: "normal_subgroup_01_attempt_001"', grade_text)
+            self.assertIn('exercise_id: "normal_subgroup_01"', grade_text)
+            self.assertIn("score: 0.8", grade_text)
+            self.assertIn("Good use of conjugation invariance", grade_text)
+
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(learning_state["concept_mastery"]["normal_subgroup"], 0.8)
+            self.assertEqual(learning_state["proof_skills"]["exercise_solving"], 0.8)
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Graded exercises: 1", status.stdout)
+
+    def test_grade_exercise_attempt_rejects_missing_attempt(self) -> None:
+        from socrates.exercises import grade_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            feedback = root / "feedback.md"
+            feedback.write_text("No attempt exists.\n", encoding="utf-8", newline="\n")
+
+            with self.assertRaisesRegex(FileNotFoundError, "Attempt does not exist"):
+                grade_exercise_attempt(project, "missing_attempt", 0.4, feedback)
 
     def test_approve_exercise_draft_rejects_failed_quality_gate(self) -> None:
         from socrates.exercises import approve_exercise_draft
