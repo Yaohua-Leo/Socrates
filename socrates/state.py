@@ -129,8 +129,8 @@ def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: 
     if not isinstance(misconceptions, dict):
         return 0
 
-    resolved = 0
-    for value in misconceptions.values():
+    resolved_ids: list[str] = []
+    for misconception_id, value in misconceptions.items():
         if not isinstance(value, dict):
             continue
         if str(value.get("concept", "")) != concept:
@@ -138,11 +138,12 @@ def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: 
         if value.get("status", "active") != "active":
             continue
         value["status"] = "resolved"
-        resolved += 1
+        resolved_ids.append(str(misconception_id))
 
-    if resolved:
+    if resolved_ids:
         write_json(context.learning_state, state)
-    return resolved
+        _append_text(context.mistake_bank, _resolution_entry(concept, resolved_ids))
+    return len(resolved_ids)
 
 
 def _learning_state_dict(path: Path) -> dict[str, object]:
@@ -234,6 +235,18 @@ def _mistake_bank_entry(mistake: MistakeRecord, *, is_recurrence: bool) -> str:
         lines.extend(f"  - {exercise}" for exercise in mistake.follow_up_exercises)
     else:
         lines.append("- Follow-up exercises: none recorded")
+    return "\n".join(lines) + "\n"
+
+
+def _resolution_entry(concept: str, misconception_ids: list[str]) -> str:
+    lines = [f"## resolved - {concept}", ""]
+    for misconception_id in misconception_ids:
+        lines.extend(
+            [
+                f"- Misconception: {misconception_id}",
+                "- Status: resolved",
+            ]
+        )
     return "\n".join(lines) + "\n"
 
 

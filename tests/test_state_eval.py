@@ -99,6 +99,34 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("## session-002 - normal_subgroup", mistake_bank)
             self.assertIn("- Recurrence: yes", mistake_bank)
 
+    def test_resolving_misconception_appends_repair_entry_to_mistake_bank(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Use conjugation rather than commutativity.",
+                        )
+                    ],
+                ),
+            )
+
+            resolved = resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+
+            self.assertEqual(resolved, 1)
+            mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            self.assertIn("## resolved - normal_subgroup", mistake_bank)
+            self.assertIn("- Misconception: normal_equals_central", mistake_bank)
+            self.assertIn("- Status: resolved", mistake_bank)
+
     def test_build_review_schedule_uses_weak_concepts_and_active_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
