@@ -58,7 +58,11 @@ from .state import (
     update_eval_report,
     update_learning_state,
 )
-from .tutoring import run_scripted_tutoring_session
+from .tutoring import (
+    TutoringSessionSummary,
+    list_tutoring_sessions,
+    run_scripted_tutoring_session,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -368,6 +372,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Check and manage tutoring session artifacts.",
     )
     session_subparsers = session_parser.add_subparsers(dest="session_command", required=True)
+    session_list_parser = session_subparsers.add_parser(
+        "list",
+        help="List tutoring sessions and artifact completeness.",
+    )
+    session_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_list_parser.add_argument(
+        "--status",
+        choices=("all", "complete", "incomplete"),
+        default="all",
+        help="Filter sessions by artifact completeness; defaults to all.",
+    )
+    session_list_parser.set_defaults(func=_handle_session_list)
     session_check_parser = session_subparsers.add_parser(
         "check",
         help="Run checklist quality checks on one tutoring session.",
@@ -840,6 +856,26 @@ def _handle_exercise_grade(args: argparse.Namespace) -> int:
     grade = grade_exercise_attempt(args.project, args.attempt, args.score, args.feedback)
     print(f"Graded attempt {args.attempt}: {grade}")
     return 0
+
+
+def _handle_session_list(args: argparse.Namespace) -> int:
+    sessions = list_tutoring_sessions(args.project, status=args.status)
+    print(_sessions_text(sessions), end="")
+    return 0
+
+
+def _sessions_text(sessions: list[TutoringSessionSummary]) -> str:
+    lines = ["# Tutoring Sessions", ""]
+    if not sessions:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    for session in sessions:
+        lines.append(f"- {session.session_id} | {session.status} | {session.path}")
+        if session.missing_artifacts:
+            lines.append(f"  - missing: {', '.join(session.missing_artifacts)}")
+        else:
+            lines.append("  - missing: none")
+    return "\n".join(lines) + "\n"
 
 
 def _handle_session_check(args: argparse.Namespace) -> int:

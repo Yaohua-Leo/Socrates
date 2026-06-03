@@ -17,6 +17,16 @@ class TutoringSessionResult:
 
 
 @dataclass(frozen=True)
+class TutoringSessionSummary:
+    """A filesystem summary for one persisted tutoring session."""
+
+    session_id: str
+    status: str
+    path: str
+    missing_artifacts: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class _Script:
     topic: str
     goal: str
@@ -26,6 +36,15 @@ class _Script:
     solution: str | None
     misconceptions: tuple[str, ...]
     next_actions: tuple[str, ...]
+
+
+SESSION_ARTIFACTS = (
+    "transcript.md",
+    "tutor_notes.md",
+    "detected_misconceptions.md",
+    "summary.md",
+    "next_actions.md",
+)
 
 
 def run_scripted_tutoring_session(
@@ -53,6 +72,40 @@ def run_scripted_tutoring_session(
     )
 
     return TutoringSessionResult(session_id=session_id, session_dir=session_dir)
+
+
+def list_tutoring_sessions(
+    project_path: Path | str,
+    *,
+    status: str = "all",
+) -> list[TutoringSessionSummary]:
+    """List persisted tutoring sessions and required artifact completeness."""
+
+    allowed_statuses = {"all", "complete", "incomplete"}
+    if status not in allowed_statuses:
+        allowed = ", ".join(sorted(allowed_statuses))
+        raise ValueError(f"Unknown session status {status!r}; expected one of: {allowed}")
+
+    context = load_project(project_path)
+    summaries: list[TutoringSessionSummary] = []
+    if not context.sessions_dir.exists():
+        return summaries
+    for session_dir in sorted(context.sessions_dir.iterdir(), key=lambda path: path.name):
+        if not session_dir.is_dir():
+            continue
+        missing = tuple(name for name in SESSION_ARTIFACTS if not (session_dir / name).exists())
+        session_status = "incomplete" if missing else "complete"
+        summaries.append(
+            TutoringSessionSummary(
+                session_id=session_dir.name,
+                status=session_status,
+                path=session_dir.relative_to(context.root).as_posix(),
+                missing_artifacts=missing,
+            )
+        )
+    if status != "all":
+        summaries = [summary for summary in summaries if summary.status == status]
+    return summaries
 
 
 def _read_script(script_path: Path) -> _Script:
