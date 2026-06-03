@@ -98,6 +98,16 @@ NOTE_REQUIRED_FRONTMATTER = (
 )
 NOTE_ALLOWED_STATUSES = {"draft", "reviewed"}
 NOTE_ALLOWED_REVIEW_STATUSES = {"needs_review", "approved"}
+NOTE_ALLOWED_TYPES = {
+    "definition",
+    "theorem",
+    "example",
+    "counterexample",
+    "technique",
+    "proof_pattern",
+    "exercise",
+    "misconception",
+}
 NOTE_REQUIRED_SECTIONS = (
     "## Key Examples",
     "## Non-Examples",
@@ -1325,6 +1335,8 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
         issues.append("invalid status")
     if _invalid_note_review_status(text):
         issues.append("invalid review_status")
+    if _invalid_note_type(text):
+        issues.append("invalid type")
     if _missing_note_concept(text):
         issues.append("missing concept")
     if _missing_note_source_id(text):
@@ -1379,6 +1391,10 @@ def _invalid_note_review_status(text: str) -> bool:
     return _invalid_note_frontmatter_choice(
         text, "review_status", NOTE_ALLOWED_REVIEW_STATUSES
     )
+
+
+def _invalid_note_type(text: str) -> bool:
+    return _invalid_note_frontmatter_choice(text, "type", NOTE_ALLOWED_TYPES)
 
 
 def _invalid_note_frontmatter_choice(
