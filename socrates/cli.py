@@ -16,6 +16,7 @@ from .artifacts import (
 from .context import load_project
 from .exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
 from .kb import build_reference_kb, search_reference_kb
+from .learning_queue import collect_learning_queue, format_learning_queue
 from .notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
@@ -125,6 +126,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
     status_parser.set_defaults(func=_handle_status)
+
+    queue_parser = subparsers.add_parser(
+        "queue",
+        help="List actionable notes and exercises for a Socrates project.",
+    )
+    queue_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    queue_parser.set_defaults(func=_handle_queue)
 
     lifecycle_parser = subparsers.add_parser(
         "lifecycle",
@@ -442,6 +450,11 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
+    return 0
+
+
+def _handle_queue(args: argparse.Namespace) -> int:
+    print(format_learning_queue(collect_learning_queue(args.project)), end="")
     return 0
 
 
