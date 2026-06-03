@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -170,6 +171,126 @@ class ReportTests(unittest.TestCase):
             self.assertIn(
                 "- project-summary | stale | Project Summary | "
                 "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("weekly_report.md", stale_reports.stdout)
+
+    def test_report_list_marks_weekly_report_stale_after_learning_state_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            report_path = project / "07_exports" / "reports" / "weekly_report.md"
+            os.utime(report_path, (1_000_000, 1_000_000))
+            os.utime(project / "00_meta" / "learning_state.json", (1_000_100, 1_000_100))
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- weekly | stale | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("monthly_report.md", stale_reports.stdout)
+
+    def test_report_list_marks_monthly_report_stale_after_note_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            monthly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            report_path = project / "07_exports" / "reports" / "monthly_report.md"
+            draft = project / "04_atomic_notes" / "drafts" / "new_draft.md"
+            draft.write_text("# New Draft\n", encoding="utf-8", newline="\n")
+            os.utime(report_path, (1_000_000, 1_000_000))
+            os.utime(draft, (1_000_100, 1_000_100))
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(monthly.returncode, 0, monthly.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- monthly | stale | Monthly Learning Report | "
+                "07_exports/reports/monthly_report.md",
                 stale_reports.stdout,
             )
             self.assertNotIn("weekly_report.md", stale_reports.stdout)

@@ -136,13 +136,76 @@ def _report_status(project_root: Path, report_id: str, report_path: Path) -> str
 
 
 def _is_report_stale(project_root: Path, report_id: str, report_path: Path) -> bool:
-    if report_id != "project-summary":
-        return False
-    benchmark_manifest = project_root / "08_evals" / "benchmark_manifest.json"
-    return (
-        benchmark_manifest.exists()
-        and benchmark_manifest.stat().st_mtime_ns > report_path.stat().st_mtime_ns
+    latest_input_mtime = _latest_report_input_mtime(project_root, report_id)
+    return latest_input_mtime is not None and latest_input_mtime > report_path.stat().st_mtime_ns
+
+
+def _latest_report_input_mtime(project_root: Path, report_id: str) -> int | None:
+    latest: int | None = None
+    for path in _report_input_paths(project_root, report_id):
+        for mtime in _artifact_mtimes(path):
+            latest = mtime if latest is None else max(latest, mtime)
+    return latest
+
+
+def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
+    if report_id == "weekly":
+        return (
+            project_root / "03_sessions",
+            *_reviewed_note_input_paths(project_root),
+            project_root / "05_exercises" / "generated",
+            project_root / "05_exercises" / "attempted",
+            project_root / "05_exercises" / "graded",
+            project_root / "00_meta" / "learning_state.json",
+        )
+    if report_id == "monthly":
+        return (
+            project_root / "04_atomic_notes",
+            project_root / "05_exercises" / "generated",
+            project_root / "05_exercises" / "attempted",
+            project_root / "05_exercises" / "graded",
+            project_root / "07_exports" / "obsidian",
+            project_root / "00_meta" / "learning_state.json",
+        )
+    if report_id == "project-summary":
+        return (
+            project_root / "project.yaml",
+            project_root / "01_references" / "source_registry.yaml",
+            project_root / "01_references" / "curated",
+            project_root / "03_sessions",
+            *_reviewed_note_input_paths(project_root),
+            project_root / "05_exercises" / "generated",
+            project_root / "05_exercises" / "attempted",
+            project_root / "05_exercises" / "graded",
+            project_root / "06_kb" / "chunks" / "reference_index.json",
+            project_root / "07_exports" / "obsidian",
+            project_root / "08_evals" / "benchmark_manifest.json",
+            project_root / "00_meta" / "learning_state.json",
+        )
+    return ()
+
+
+def _reviewed_note_input_paths(project_root: Path) -> tuple[Path, ...]:
+    return tuple(
+        project_root / "04_atomic_notes" / folder
+        for folder in (
+            "definitions",
+            "theorems",
+            "examples",
+            "counterexamples",
+            "techniques",
+            "exercises",
+        )
     )
+
+
+def _artifact_mtimes(path: Path) -> list[int]:
+    if not path.exists():
+        return []
+    mtimes = [path.stat().st_mtime_ns]
+    if path.is_dir():
+        mtimes.extend(item.stat().st_mtime_ns for item in path.rglob("*") if item.exists())
+    return mtimes
 
 
 def _weekly_report_text(
