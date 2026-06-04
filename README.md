@@ -6,14 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.30-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.31-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, machine-readable and Markdown read-only
-multi-project resume indexes,
+long-term report-surface refresh, readiness-counted machine-readable and
+Markdown read-only multi-project resume indexes,
 machine-readable read-only project resume state, read-only project resume
 cards, read-only study dashboards, generated
 study-start briefs with a read-only manifest-backed freshness command,
@@ -191,6 +191,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   readiness state as structured JSON with
   `quality_boundary: deterministic_project_resume_index` for future UI or
   plugin wrappers.
+- v0.31 collection resume outputs include ready and refresh-brief counts so a
+  project root can be scanned without reading every row.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -279,6 +281,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - `projects resume --json` is the same read-only collection state as
   machine-readable output. It is not a scanner, generator, writer, score,
   project-readiness gate, or child-project state mutation.
+- Collection resume readiness counts are read-only scan aids derived from
+  `resume_state` rows. They are not scores, readiness gates, predictions, or
+  project-state mutations.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

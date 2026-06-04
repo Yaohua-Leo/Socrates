@@ -193,6 +193,8 @@ class ProjectIndexTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("# Project Resume Index", result.stdout)
             self.assertIn("- Projects: 2", result.stdout)
+            self.assertIn("- Ready: 1", result.stdout)
+            self.assertIn("- Refresh brief: 1", result.stdout)
             self.assertIn(
                 f"group_theory | Group Theory | ready | current | {next_action} | none",
                 result.stdout,
@@ -267,6 +269,8 @@ class ProjectIndexTests(unittest.TestCase):
             self.assertEqual(payload["quality_boundary"], "deterministic_project_resume_index")
             self.assertEqual(payload["root"], str(root.resolve()))
             self.assertEqual(payload["project_count"], 2)
+            self.assertEqual(payload["ready_count"], 1)
+            self.assertEqual(payload["refresh_brief_count"], 1)
             self.assertEqual(
                 [project["id"] for project in payload["projects"]],
                 ["group_theory", "ring_theory"],

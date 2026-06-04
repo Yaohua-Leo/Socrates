@@ -30,11 +30,17 @@ def build_project_resume_index_payload(root_path: Path | str) -> dict[str, objec
                 "recommended_command": resume_payload["recommended_command"],
             }
         )
+    ready_count = sum(1 for project in projects if project["resume_state"] == "ready")
+    refresh_brief_count = sum(
+        1 for project in projects if project["resume_state"] == "refresh_brief"
+    )
     return {
         "schema_version": 1,
         "quality_boundary": PROJECT_RESUME_INDEX_QUALITY_BOUNDARY,
         "root": str(root),
         "project_count": len(projects),
+        "ready_count": ready_count,
+        "refresh_brief_count": refresh_brief_count,
         "projects": projects,
     }
 
@@ -51,6 +57,8 @@ def format_project_resume_index(root_path: Path | str) -> str:
         "",
         f"- Root: {payload['root']}",
         f"- Projects: {payload['project_count']}",
+        f"- Ready: {payload['ready_count']}",
+        f"- Refresh brief: {payload['refresh_brief_count']}",
         "",
         "## Projects",
         "",

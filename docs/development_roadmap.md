@@ -2082,6 +2082,30 @@ Markdown and JSON generated from the same collection payload
 - fresh child project 不会因为 `projects resume --json` 写入 `study_brief.md`、`study_brief_manifest.json`、`socrates_projects.json` 或 project log。
 - 这不是 scanner、generator、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 child-project mutation；它只是 wrapper-facing read-only collection state。
 
+v0.31：multi-project resume readiness counts
+
+建议目标：
+
+让 collection-level resume index 在项目很多时也能快速扫读，直接显示有多少项目可以继续学习，以及有多少项目需要刷新 brief。
+
+必须完成：
+
+Markdown snapshot `Ready` count
+
+Markdown snapshot `Refresh brief` count
+
+JSON `ready_count`
+
+JSON `refresh_brief_count`
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects resume --root <root>` 已在 snapshot 中输出 `Ready` 和 `Refresh brief` counts。
+- `python -m socrates projects resume --root <root> --json` 已输出 `ready_count` 和 `refresh_brief_count`。
+- Counts 来自 collection payload 中每个项目的 `resume_state`，不改变项目 rows。
+- fresh child project 不会因为 counts 写入 `study_brief.md`、`study_brief_manifest.json`、`socrates_projects.json` 或 project log。
+- 这不是 score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读扫读辅助。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
