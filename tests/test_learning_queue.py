@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import date
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -271,6 +272,74 @@ class LearningQueueTests(unittest.TestCase):
             self.assertIn(urgent, result.stdout)
             self.assertIn(medium, result.stdout)
             self.assertLess(result.stdout.index(urgent), result.stdout.index(medium))
+
+    def test_queue_cli_lists_failed_tool_verification_records_to_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            verification_dir = project / "08_evals" / "tool_verification"
+            verification_dir.mkdir(parents=True, exist_ok=True)
+            (verification_dir / "manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "records": [
+                            {
+                                "kind": "lean_statement_skeleton",
+                                "object_id": "missing_kernel",
+                                "status": "unchecked_skeleton",
+                                "skeleton_path": (
+                                    "08_evals/tool_verification/missing_kernel.lean"
+                                ),
+                                "report_path": (
+                                    "08_evals/tool_verification/missing_kernel_report.md"
+                                ),
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Tool Verifications To Fix", result.stdout)
+            self.assertIn(
+                (
+                    "- missing_kernel | 08_evals/tool_verification_eval.md | "
+                    "quality: fail; status: unchecked_skeleton; "
+                    "issues: missing artifact: "
+                    "08_evals/tool_verification/missing_kernel.lean; "
+                    "missing report: "
+                    "08_evals/tool_verification/missing_kernel_report.md; "
+                    "rerun with: socrates tool check --project <project>"
+                ),
+                result.stdout,
+            )
 
 
 if __name__ == "__main__":

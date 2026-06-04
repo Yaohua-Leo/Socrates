@@ -28,6 +28,7 @@ class LearningQueue:
     exercise_drafts_to_approve: list[QueueItem]
     exercises_to_attempt: list[QueueItem]
     attempts_to_grade: list[QueueItem]
+    tool_verifications_to_fix: list[QueueItem]
 
 
 def collect_learning_queue(project_path: Path | str) -> LearningQueue:
@@ -41,6 +42,7 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
         exercises_to_attempt=_exercises_to_attempt(context.root),
         attempts_to_grade=_attempts_to_grade(context.root),
+        tool_verifications_to_fix=_tool_verifications_to_fix(context.root),
     )
 
 
@@ -56,6 +58,7 @@ def format_learning_queue(queue: LearningQueue) -> str:
     lines.extend(_section("Exercise Drafts To Approve", queue.exercise_drafts_to_approve))
     lines.extend(_section("Exercises To Attempt", queue.exercises_to_attempt))
     lines.extend(_section("Attempts To Grade", queue.attempts_to_grade))
+    lines.extend(_section("Tool Verifications To Fix", queue.tool_verifications_to_fix))
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -212,6 +215,52 @@ def _attempts_to_grade(project_root: Path) -> list[QueueItem]:
             continue
         items.append(_queue_item(attempt_path, project_root))
     return items
+
+
+def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
+    manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
+    if not manifest_path.exists():
+        return []
+    manifest = read_json(manifest_path)
+    if not isinstance(manifest, dict):
+        return []
+    records = manifest.get("records", [])
+    if not isinstance(records, list):
+        return []
+
+    report_path = project_root / "08_evals" / "tool_verification_eval.md"
+    queue_path = report_path if report_path.exists() else manifest_path
+    items: list[QueueItem] = []
+    for index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            continue
+        if str(record.get("quality_status", "")).strip() != "fail":
+            continue
+        object_id = str(record.get("object_id") or f"record_{index}")
+        record_status = str(record.get("record_status") or "unknown")
+        issues = _tool_verification_issues(record.get("issues", []))
+        detail = (
+            f"quality: fail; status: {record_status}; "
+            f"issues: {issues}; "
+            "rerun with: socrates tool check --project <project>"
+        )
+        items.append(
+            QueueItem(
+                item_id=object_id,
+                path=queue_path.relative_to(project_root).as_posix(),
+                detail=detail,
+            )
+        )
+    return items
+
+
+def _tool_verification_issues(value: object) -> str:
+    if not isinstance(value, list):
+        return "none recorded"
+    issues = [str(issue).strip() for issue in value if str(issue).strip()]
+    if not issues:
+        return "none recorded"
+    return "; ".join(issues)
 
 
 def _graded_attempt_ids(project_root: Path) -> set[str]:
