@@ -242,7 +242,13 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
         ]
     records = manifest.get("records", [])
     if not isinstance(records, list):
-        return []
+        return [
+            _tool_quality_manifest_item(
+                project_root,
+                manifest_path,
+                issue="invalid tool-verification quality manifest records",
+            )
+        ]
 
     report_path = project_root / "08_evals" / "tool_verification_eval.md"
     queue_path = report_path if report_path.exists() else manifest_path
