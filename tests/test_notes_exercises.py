@@ -364,6 +364,7 @@ class NotesExercisesTests(unittest.TestCase):
 
             self.assertEqual(len(exercises), 1)
             self.assertEqual(exercises[0].id, "review_normal_subgroup_01")
+            self.assertEqual(exercises[0].type, "targeted_review_exercise")
             self.assertEqual(
                 exercises[0].path,
                 "05_exercises/generated/review_normal_subgroup_01.md",

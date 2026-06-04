@@ -223,7 +223,7 @@ def generate_targeted_review_exercise_drafts(
         drafts.append(
             ExerciseDraft(
                 id=exercise_id,
-                type="targeted_review",
+                type="targeted_review_exercise",
                 difficulty=difficulty,
                 path=_as_posix(relative_path),
             )
