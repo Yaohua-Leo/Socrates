@@ -1722,6 +1722,29 @@ v0.16：报告与行动队列的完成度/阻塞摘要
 
 继续把 priority/focus/report evidence 压缩成更清晰的 completion/blocker summary，帮助长期项目区分“下一步操作”“阻塞项”“可继续学习项”和“需要人工审核项”。
 
+必须完成：
+
+action summary section in queue all view
+
+selectable queue summary section
+
+action summary section in weekly/monthly/project summary reports
+
+deterministic fallback rows when no open actions exist
+
+当前状态（2026-06-04）：
+
+- `queue --section summary` 已显示 `## Action Summary`，并且默认 queue all view 会先显示该摘要。
+- weekly、monthly 与 project summary report 已包含 `## Action Summary` section。
+- Action Summary 统计 open actions、blockers、can continue learning、needs human review，并复用 priority queue 的 first next action。
+- 这不是新的 readiness gate、score、planner、tutor 或 learning-state mutation；它只是把已有 queue buckets 压缩成可读的完成度/阻塞摘要。
+
+v0.17：报告阻塞项的修复路径与阶段趋势
+
+建议目标：
+
+在 action summary 之后继续打磨 blocker repair path 和阶段趋势，让长期报告更清楚地区分“马上修复哪个命令”“哪些学习项可以继续”和“哪些状态正在积累风险”。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

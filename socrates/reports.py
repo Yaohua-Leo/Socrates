@@ -8,7 +8,12 @@ from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
 from .kb import reference_kb_status
-from .learning_queue import QueueItem, collect_learning_queue, priority_queue_items
+from .learning_queue import (
+    QueueItem,
+    action_summary_lines,
+    collect_learning_queue,
+    priority_queue_items,
+)
 from .obsidian import (
     obsidian_backlink_count,
     obsidian_export_count,
@@ -45,6 +50,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
     state = _read_learning_state(context.learning_state)
     queue = collect_learning_queue(context.root)
     priority_actions = priority_queue_items(queue)
+    action_summary = action_summary_lines(queue)
     write_text(
         report_path,
         _weekly_report_text(
@@ -57,6 +63,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             priority_actions=priority_actions,
+            action_summary=action_summary,
             state=state,
         ),
     )
@@ -73,6 +80,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
     kb_status = reference_kb_status(context.root)
     queue = collect_learning_queue(context.root)
     priority_actions = priority_queue_items(queue)
+    action_summary = action_summary_lines(queue)
     write_text(
         report_path,
         _project_summary_text(
@@ -94,6 +102,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             priority_actions=priority_actions,
+            action_summary=action_summary,
             tool_verification_records=list_tool_verification_records(context.root),
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
@@ -115,6 +124,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     state = _read_learning_state(context.learning_state)
     queue = collect_learning_queue(context.root)
     priority_actions = priority_queue_items(queue)
+    action_summary = action_summary_lines(queue)
     write_text(
         report_path,
         _monthly_report_text(
@@ -127,6 +137,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             priority_actions=priority_actions,
+            action_summary=action_summary,
             state=state,
         ),
     )
@@ -288,6 +299,7 @@ def _weekly_report_text(
     attempted_exercises: int,
     graded_exercises: int,
     priority_actions: list[QueueItem],
+    action_summary: list[str],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -311,6 +323,10 @@ def _weekly_report_text(
         "## Recommended Focus",
         "",
         *_recommended_focus_lines(priority_actions=priority_actions, state=state),
+        "",
+        "## Action Summary",
+        "",
+        *action_summary,
         "",
         *_state_warning_section(state),
         "## Learning State",
@@ -339,6 +355,7 @@ def _monthly_report_text(
     attempted_exercises: int,
     graded_exercises: int,
     priority_actions: list[QueueItem],
+    action_summary: list[str],
     state: dict[str, object],
 ) -> str:
     concept_mastery = state.get("concept_mastery", {})
@@ -368,6 +385,10 @@ def _monthly_report_text(
         "## Recommended Focus",
         "",
         *_recommended_focus_lines(priority_actions=priority_actions, state=state),
+        "",
+        "## Action Summary",
+        "",
+        *action_summary,
         "",
         "## Misconceptions",
         "",
@@ -404,6 +425,7 @@ def _project_summary_text(
     attempted_exercises: int,
     graded_exercises: int,
     priority_actions: list[QueueItem],
+    action_summary: list[str],
     tool_verification_records: list[ToolVerificationSummary],
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
@@ -446,6 +468,10 @@ def _project_summary_text(
         "## Recommended Focus",
         "",
         *_recommended_focus_lines(priority_actions=priority_actions, state=state),
+        "",
+        "## Action Summary",
+        "",
+        *action_summary,
         "",
         "## Benchmark Snapshot",
         "",

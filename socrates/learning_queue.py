@@ -18,6 +18,7 @@ from .workflow_manifest import SESSION_CLOSEOUT_MANIFEST_PATH, read_session_clos
 
 QUEUE_SECTIONS = frozenset(
     {
+        "summary",
         "priority",
         "notes",
         "obsidian-exports",
@@ -84,6 +85,13 @@ def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
         raise ValueError(f"Unknown queue section {section!r}; expected one of: {allowed}")
 
     lines = ["# Learning Queue", ""]
+    if section in {"all", "summary"}:
+        lines.extend(["## Action Summary", ""])
+        lines.extend(action_summary_lines(queue))
+        lines.append("")
+        if section == "summary":
+            return "\n".join(lines).rstrip() + "\n"
+
     for section_id, title, items in _queue_sections(queue):
         if section != "all" and section != section_id:
             continue
@@ -104,6 +112,38 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("workflow", "Workflow Actions", queue.workflow_actions),
         ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
+    ]
+
+
+def action_summary_lines(queue: LearningQueue) -> list[str]:
+    """Return completion/blocker rows derived from existing queue buckets."""
+
+    blockers = (
+        len(queue.workflow_actions)
+        + len(queue.quality_checks_to_fix)
+        + len(queue.tool_verifications_to_fix)
+    )
+    can_continue = len(queue.scheduled_reviews) + len(queue.exercises_to_attempt)
+    human_review = (
+        len(queue.obsidian_exports_to_run)
+        + len(queue.notes_to_review)
+        + len(queue.misconception_notes_to_draft)
+        + len(queue.exercise_drafts_to_approve)
+        + len(queue.attempts_to_grade)
+    )
+    open_actions = blockers + can_continue + human_review
+    completion = "clear" if open_actions == 0 else "blocked" if blockers else "in_progress"
+    next_actions = priority_queue_items(queue)
+    next_action = "none"
+    if next_actions:
+        next_action = _queue_line(next_actions[0]).removeprefix("- ")
+    return [
+        f"- Completion: {completion}",
+        f"- Open actions: {open_actions}",
+        f"- Blockers: {blockers}",
+        f"- Can continue learning: {can_continue}",
+        f"- Needs human review: {human_review}",
+        f"- Next action: {next_action}",
     ]
 
 

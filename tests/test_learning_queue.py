@@ -806,6 +806,119 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_includes_action_summary_for_all_sections(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = _create_ready_closeout_fixture(Path(temp_dir))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Action Summary", result.stdout)
+            self.assertLess(
+                result.stdout.index("## Action Summary"),
+                result.stdout.index("## Priority Actions"),
+            )
+            self.assertIn("- Completion: blocked", result.stdout)
+            self.assertIn("- Open actions: 7", result.stdout)
+            self.assertIn("- Blockers: 1", result.stdout)
+            self.assertIn("- Can continue learning: 0", result.stdout)
+            self.assertIn("- Needs human review: 6", result.stdout)
+            self.assertIn(
+                (
+                    "- Next action: workflow:multi_session_regression | "
+                    "08_evals/session_closeout_manifest.json | "
+                    "status: not_run; run with: socrates lifecycle regression --project <project>"
+                ),
+                result.stdout,
+            )
+
+    def test_queue_cli_action_summary_section_can_be_selected(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "summary",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Action Summary", result.stdout)
+            self.assertNotIn("## Priority Actions", result.stdout)
+            self.assertIn("- Completion: clear", result.stdout)
+            self.assertIn("- Open actions: 0", result.stdout)
+            self.assertIn("- Blockers: 0", result.stdout)
+            self.assertIn("- Can continue learning: 0", result.stdout)
+            self.assertIn("- Needs human review: 0", result.stdout)
+            self.assertIn("- Next action: none", result.stdout)
+
+    def test_queue_cli_action_summary_distinguishes_review_work_from_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- What condition distinguishes normality from centrality?\n"
+                ),
+                source_id="df-1",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "summary",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("- Completion: in_progress", result.stdout)
+            self.assertIn("- Open actions: 1", result.stdout)
+            self.assertIn("- Blockers: 0", result.stdout)
+            self.assertIn("- Can continue learning: 0", result.stdout)
+            self.assertIn("- Needs human review: 1", result.stdout)
+            self.assertIn(
+                "- Next action: notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md",
+                result.stdout,
+            )
+
     def test_queue_cli_prioritizes_workflow_actions_before_note_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = _create_ready_closeout_fixture(Path(temp_dir))
