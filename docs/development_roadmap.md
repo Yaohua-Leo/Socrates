@@ -2106,6 +2106,31 @@ JSON `refresh_brief_count`
 - fresh child project 不会因为 counts 写入 `study_brief.md`、`study_brief_manifest.json`、`socrates_projects.json` 或 project log。
 - 这不是 score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读扫读辅助。
 
+v0.32：multi-project resume state filter
+
+建议目标：
+
+让用户看到 ready/refresh_brief counts 后，可以直接筛选出某一类项目继续处理，而不用手动扫全部 rows。
+
+必须完成：
+
+`projects resume --state all|ready|refresh_brief`
+
+Markdown filtered output
+
+JSON `state_filter`
+
+counts computed after filtering
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects resume --root <root> --state refresh_brief` 已只显示需要刷新 brief 的项目。
+- `python -m socrates projects resume --root <root> --state ready` 已只显示可继续学习的项目。
+- `projects resume --json` 已记录 `state_filter`，并只输出 filtered project rows。
+- `project_count`、`ready_count` 和 `refresh_brief_count` 均基于筛选后的 rows 计算。
+- 默认行为仍等价于 `--state all`。
+- 这不是 score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读导航筛选。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

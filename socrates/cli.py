@@ -74,7 +74,11 @@ from .project_index import (
     list_projects,
     scan_project_root,
 )
-from .project_resume import build_project_resume_index_payload, format_project_resume_index
+from .project_resume import (
+    RESUME_STATE_FILTERS,
+    build_project_resume_index_payload,
+    format_project_resume_index,
+)
 from .quality import (
     audit_project_lifecycle,
     check_atomic_note_quality,
@@ -494,6 +498,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show read-only resume state across projects.",
     )
     projects_resume_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
+    projects_resume_parser.add_argument(
+        "--state",
+        choices=RESUME_STATE_FILTERS,
+        default="all",
+        help="Filter projects by resume state; defaults to all.",
+    )
     projects_resume_parser.add_argument(
         "--json",
         action="store_true",
@@ -1691,13 +1701,13 @@ def _handle_projects_resume(args: argparse.Namespace) -> int:
     if args.json:
         print(
             json.dumps(
-                build_project_resume_index_payload(args.root),
+                build_project_resume_index_payload(args.root, state_filter=args.state),
                 indent=2,
                 sort_keys=True,
             )
         )
     else:
-        print(format_project_resume_index(args.root), end="")
+        print(format_project_resume_index(args.root, state_filter=args.state), end="")
     return 0
 
 

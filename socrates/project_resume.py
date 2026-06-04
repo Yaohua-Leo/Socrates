@@ -9,9 +9,14 @@ from .resume import build_project_resume_payload
 
 
 PROJECT_RESUME_INDEX_QUALITY_BOUNDARY = "deterministic_project_resume_index"
+RESUME_STATE_FILTERS = ("all", "ready", "refresh_brief")
 
 
-def build_project_resume_index_payload(root_path: Path | str) -> dict[str, object]:
+def build_project_resume_index_payload(
+    root_path: Path | str,
+    *,
+    state_filter: str = "all",
+) -> dict[str, object]:
     """Build the machine-readable read-only resume index payload."""
 
     root = Path(root_path).expanduser().resolve()
@@ -30,6 +35,7 @@ def build_project_resume_index_payload(root_path: Path | str) -> dict[str, objec
                 "recommended_command": resume_payload["recommended_command"],
             }
         )
+    projects = _filtered_projects(projects, state_filter)
     ready_count = sum(1 for project in projects if project["resume_state"] == "ready")
     refresh_brief_count = sum(
         1 for project in projects if project["resume_state"] == "refresh_brief"
@@ -38,6 +44,7 @@ def build_project_resume_index_payload(root_path: Path | str) -> dict[str, objec
         "schema_version": 1,
         "quality_boundary": PROJECT_RESUME_INDEX_QUALITY_BOUNDARY,
         "root": str(root),
+        "state_filter": state_filter,
         "project_count": len(projects),
         "ready_count": ready_count,
         "refresh_brief_count": refresh_brief_count,
@@ -45,10 +52,14 @@ def build_project_resume_index_payload(root_path: Path | str) -> dict[str, objec
     }
 
 
-def format_project_resume_index(root_path: Path | str) -> str:
+def format_project_resume_index(
+    root_path: Path | str,
+    *,
+    state_filter: str = "all",
+) -> str:
     """Render resume readiness across a root of Socrates projects."""
 
-    payload = build_project_resume_index_payload(root_path)
+    payload = build_project_resume_index_payload(root_path, state_filter=state_filter)
     projects = payload["projects"]
     lines = [
         "# Project Resume Index",
@@ -56,6 +67,7 @@ def format_project_resume_index(root_path: Path | str) -> str:
         "## Snapshot",
         "",
         f"- Root: {payload['root']}",
+        f"- State filter: {payload['state_filter']}",
         f"- Projects: {payload['project_count']}",
         f"- Ready: {payload['ready_count']}",
         f"- Refresh brief: {payload['refresh_brief_count']}",
@@ -87,3 +99,14 @@ def format_project_resume_index(root_path: Path | str) -> str:
         ]
     )
     return "\n".join(lines)
+
+
+def _filtered_projects(
+    projects: list[dict[str, object]],
+    state_filter: str,
+) -> list[dict[str, object]]:
+    if state_filter not in RESUME_STATE_FILTERS:
+        raise ValueError(f"unknown resume state filter: {state_filter}")
+    if state_filter == "all":
+        return projects
+    return [project for project in projects if project["resume_state"] == state_filter]
