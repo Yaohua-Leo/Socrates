@@ -905,6 +905,55 @@ class ReportTests(unittest.TestCase):
                 report_text,
             )
 
+    def test_monthly_report_cli_recovers_malformed_misconception_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {
+                            "normal_equals_central": {
+                                "concept": "normal_subgroup",
+                                "count": "many",
+                                "status": "active",
+                            }
+                        },
+                        "review_schedule": [],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            report_text = (project / "07_exports" / "reports" / "monthly_report.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- normal_equals_central: normal_subgroup, active x1", report_text)
+            self.assertNotIn("many", report_text)
+
     def _create_report_fixture(self, root: Path) -> Path:
         project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
         curated = project / "01_references" / "curated" / "normality.curated.md"

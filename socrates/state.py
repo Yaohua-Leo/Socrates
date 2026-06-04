@@ -337,7 +337,7 @@ def _review_items(
             if value.get("status", "active") != "active":
                 continue
             concept = str(value.get("concept", "general"))
-            count = _safe_count(value.get("count", 1)) or 1
+            count = coerce_occurrence_count(value.get("count", 1))
             concept_reasons.setdefault(concept, []).append(
                 f"active misconception {misconception_id} x{count}"
             )
@@ -476,7 +476,7 @@ def _repair_context_tuple(value: object) -> tuple[dict[str, object], ...]:
             _misconception_repair_context(
                 misconception_id,
                 raw_context,
-                _safe_count(raw_context.get("count", 1)) or 1,
+                coerce_occurrence_count(raw_context.get("count", 1)),
             )
         )
     return tuple(contexts)
@@ -495,6 +495,13 @@ def _safe_count(value: object) -> int:
         return int(value)
     except (TypeError, ValueError):
         return 0
+
+
+def coerce_occurrence_count(value: object) -> int:
+    """Return a positive occurrence count, defaulting malformed persisted data to 1."""
+
+    count = _safe_count(value)
+    return count if count > 0 else 1
 
 
 def _misconception_status_order(status: str) -> int:
@@ -566,7 +573,7 @@ def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:
             lines.extend(["### Repair Context", ""])
             for context in item.repair_context:
                 misconception_id = str(context.get("misconception_id", "")).strip()
-                count = _safe_count(context.get("count", 1)) or 1
+                count = coerce_occurrence_count(context.get("count", 1))
                 if not misconception_id:
                     continue
                 lines.append(f"- Misconception: {misconception_id} (x{count})")

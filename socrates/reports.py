@@ -12,7 +12,7 @@ from .obsidian import (
     obsidian_backlink_count,
     obsidian_export_count,
 )
-from .state import coerce_learning_score
+from .state import coerce_learning_score, coerce_occurrence_count
 from .tool_verification import ToolVerificationSummary, list_tool_verification_records
 
 
@@ -698,7 +698,7 @@ def _misconception_lines(value: object) -> list[str]:
             continue
         concept = str(item.get("concept", "general"))
         status = str(item.get("status", "active"))
-        count = int(item.get("count", 1))
+        count = coerce_occurrence_count(item.get("count", 1))
         lines.append(f"- {misconception_id}: {concept}, {status} x{count}")
     return lines or ["- none recorded"]
 
