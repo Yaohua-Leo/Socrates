@@ -404,6 +404,90 @@ class NoteReviewExportTests(unittest.TestCase):
             )
             self.assertEqual(notes_by_id["quotient_group"]["backlinks"], [])
 
+    def test_export_reviewed_notes_to_obsidian_uses_body_wikilinks_for_backlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            definitions = project / "04_atomic_notes" / "definitions"
+            normal_note = definitions / "normal_subgroup.md"
+            quotient_note = definitions / "quotient_group.md"
+            normal_note.write_text(
+                "---\n"
+                "status: reviewed\n"
+                "review_status: approved\n"
+                "reviewed_by_user: true\n"
+                "type: definition\n"
+                "topic: group_theory\n"
+                "concept: Normal Subgroup\n"
+                "created_by: socrates\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - normal-subgroup\n"
+                "related: [[Subgroup]]\n"
+                "---\n\n"
+                "# Normal Subgroup\n\n"
+                "A normal subgroup is stable under conjugation.\n\n"
+                "## Key Examples\n\n"
+                "- A3 in S3.\n\n"
+                "## Non-Examples\n\n"
+                "- A transposition subgroup in S3.\n\n"
+                "## Common Mistakes\n\n"
+                "- Confusing normal with central.\n\n"
+                "## Review Questions\n\n"
+                "- What conjugation condition must be checked?\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            quotient_note.write_text(
+                "---\n"
+                "status: reviewed\n"
+                "review_status: approved\n"
+                "reviewed_by_user: true\n"
+                "type: definition\n"
+                "topic: group_theory\n"
+                "concept: Quotient Group\n"
+                "created_by: socrates\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - quotient-group\n"
+                "related: [[Subgroup]]\n"
+                "---\n\n"
+                "# Quotient Group\n\n"
+                "A quotient group is built from cosets of a [[Normal Subgroup]].\n\n"
+                "## Key Examples\n\n"
+                "- Z / nZ.\n\n"
+                "## Non-Examples\n\n"
+                "- Cosets of a non-normal subgroup do not form a group.\n\n"
+                "## Common Mistakes\n\n"
+                "- Forgetting well-defined multiplication.\n\n"
+                "## Review Questions\n\n"
+                "- Why is normality required?\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            export_reviewed_notes_to_obsidian(project)
+
+            exported_normal = project / "07_exports" / "obsidian" / "normal_subgroup.md"
+            normal_text = exported_normal.read_text(encoding="utf-8")
+            manifest = json.loads(
+                (project / "07_exports" / "obsidian" / "export_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            notes_by_id = {item["note_id"]: item for item in manifest["exported_notes"]}
+            self.assertIn("## Socrates Backlinks", normal_text)
+            self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
+            self.assertEqual(
+                notes_by_id["normal_subgroup"]["backlinks"],
+                [
+                    {
+                        "note_id": "quotient_group",
+                        "concept": "Quotient Group",
+                        "path": "quotient_group.md",
+                    }
+                ],
+            )
+
     def test_export_reviewed_notes_to_obsidian_prunes_stale_manifest_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import re
 
 from .context import append_project_log, load_project, write_text
 from .obsidian import obsidian_exported_note_ids, read_obsidian_export_manifest
@@ -92,6 +93,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
                 "source_location": _frontmatter_value(text, "source_location") or "",
                 "tags": _frontmatter_list(text, "tags"),
                 "related": _frontmatter_list(text, "related"),
+                "_body_links": _body_wikilinks(text),
             }
             manifest_notes.append(note_entry)
             reviewed_notes.append({"text": text, "destination": destination, "entry": note_entry})
@@ -113,6 +115,8 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
                 backlinks,
             ),
         )
+    for note in manifest_notes:
+        note.pop("_body_links", None)
     _write_export_manifest(obsidian_dir, manifest_notes)
     _write_export_index(obsidian_dir, manifest_notes)
     append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
@@ -219,8 +223,11 @@ def _obsidian_backlinks(exported_notes: list[dict[str, object]]) -> dict[str, li
         source_path = str(note["path"])
         related = note.get("related", [])
         if not isinstance(related, list):
-            continue
-        for item in related:
+            related = []
+        body_links = note.get("_body_links", [])
+        if not isinstance(body_links, list):
+            body_links = []
+        for item in [*related, *body_links]:
             target_id = by_target.get(_obsidian_link_target_id(str(item)))
             if not target_id or target_id == source_id:
                 continue
@@ -247,6 +254,20 @@ def _obsidian_link_target_id(value: str) -> str:
         text = text[2:-2]
     target = text.split("|", 1)[0].strip()
     return slugify_topic(target)
+
+
+def _body_wikilinks(text: str) -> list[str]:
+    body = _markdown_body(text)
+    return [f"[[{match.group(1).strip()}]]" for match in re.finditer(r"\[\[([^\]]+)\]\]", body)]
+
+
+def _markdown_body(text: str) -> str:
+    if not text.startswith("---\n"):
+        return text
+    parts = text.split("---\n", 2)
+    if len(parts) != 3:
+        return text
+    return parts[2]
 
 
 def _unique_backlinks(items: list[dict[str, str]]) -> list[dict[str, str]]:
