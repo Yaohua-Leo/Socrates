@@ -2499,7 +2499,12 @@ def _due_review_rows(
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     if not learning_state.exists():
         return ([], [])
-    state = json.loads(learning_state.read_text(encoding="utf-8"))
+    try:
+        state = json.loads(learning_state.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            "invalid learning_state.json; repair the JSON before listing due reviews"
+        ) from exc
     schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
     if not isinstance(schedule, list):
         return ([], [])
