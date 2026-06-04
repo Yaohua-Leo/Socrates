@@ -335,7 +335,10 @@ def read_reference_concept_graph(project_path: Path | str) -> dict[str, object]:
         raise ValueError(
             _reference_concept_graph_rebuild_message(context.root, "is invalid")
         ) from exc
-    if not isinstance(graph, dict) or not isinstance(graph.get("edges", []), list):
+    if not isinstance(graph, dict) or not _valid_graph_artifact(
+        graph,
+        allowed_relationships={"prerequisite", *CONCEPT_RELATIONSHIP_TYPES},
+    ):
         raise ValueError(
             _reference_concept_graph_rebuild_message(
                 context.root,

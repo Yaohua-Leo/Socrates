@@ -556,6 +556,50 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("- alternating_group_in_s3 --example_of--> normal_subgroup", examples)
             self.assertNotIn("counterexample_to", examples)
 
+    def test_kb_relationships_reports_invalid_concept_graph_with_rebuild_hint(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "relations.curated.md"
+            curated.write_text(
+                "### Example: Alternating Group In S3\n"
+                "The alternating group A3 is normal in S3.\n"
+                "Example of: normal subgroup\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            graph_path = project / "06_kb" / "concept_graph.json"
+            graph = json.loads(graph_path.read_text(encoding="utf-8"))
+            graph["edges"][0].pop("target")
+            graph_path.write_text(
+                json.dumps(graph, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "relationships",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB concept graph has invalid schema", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+
     def test_import_curate_kb_plan_teach_review_export_flow_from_cli(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
