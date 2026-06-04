@@ -17,12 +17,16 @@ def refresh_project_briefs_payload(
     root_path: Path | str,
     *,
     dry_run: bool = False,
+    limit: int | None = None,
 ) -> dict[str, object]:
     """Build the batch study-brief refresh payload, optionally without writes."""
 
+    if limit is not None and limit <= 0:
+        raise ValueError("limit must be positive")
     root = Path(root_path).expanduser().resolve()
     selected: list[dict[str, str]] = []
     refreshed: list[dict[str, str]] = []
+    deferred: list[dict[str, str]] = []
     skipped: list[dict[str, str]] = []
     for project in list_projects(root):
         project_path = root / str(project["path"])
@@ -35,6 +39,15 @@ def refresh_project_briefs_payload(
         }
         if row["resume_state"] != "refresh_brief":
             skipped.append({**row, "reason": "resume_state_ready"})
+            continue
+        if limit is not None and len(selected) >= limit:
+            deferred.append(
+                {
+                    **row,
+                    "brief_path": STUDY_BRIEF_RELATIVE_PATH,
+                    "reason": "limit_reached",
+                }
+            )
             continue
         if dry_run:
             selected.append({**row, "brief_path": STUDY_BRIEF_RELATIVE_PATH})
@@ -53,11 +66,14 @@ def refresh_project_briefs_payload(
         "root": str(root),
         "mode": mode,
         "dry_run": dry_run,
+        "limit": limit,
         "selected_count": len(selected),
         "refreshed_count": len(refreshed),
+        "deferred_count": len(deferred),
         "skipped_count": len(skipped),
         "selected": selected,
         "refreshed": refreshed,
+        "deferred": deferred,
         "skipped": skipped,
     }
 
@@ -66,10 +82,11 @@ def format_project_brief_refresh(
     root_path: Path | str,
     *,
     dry_run: bool = False,
+    limit: int | None = None,
 ) -> str:
     """Render a deterministic batch study-brief refresh summary."""
 
-    payload = refresh_project_briefs_payload(root_path, dry_run=dry_run)
+    payload = refresh_project_briefs_payload(root_path, dry_run=dry_run, limit=limit)
     lines = [
         "# Project Brief Refresh",
         "",
@@ -77,8 +94,10 @@ def format_project_brief_refresh(
         "",
         f"- Root: {payload['root']}",
         f"- Mode: {payload['mode']}",
+        f"- Limit: {payload['limit'] if payload['limit'] is not None else 'none'}",
         f"- Selected: {payload['selected_count']}",
         f"- Refreshed: {payload['refreshed_count']}",
+        f"- Deferred: {payload['deferred_count']}",
         f"- Skipped: {payload['skipped_count']}",
         "",
         "## Selected Projects",
@@ -107,6 +126,23 @@ def format_project_brief_refresh(
         for project in refreshed:
             lines.append(
                 f"- {project['id']} | {project['title']} | {project['brief_path']}"
+            )
+    lines.extend(
+        [
+            "",
+            "## Deferred Projects",
+            "",
+        ]
+    )
+    deferred = payload["deferred"]
+    if not deferred:
+        lines.append("- none")
+    else:
+        for project in deferred:
+            lines.append(
+                f"- {project['id']} | {project['title']} | "
+                f"{project['resume_state']} | {project['brief_path']} | "
+                f"{project['reason']}"
             )
     lines.extend(
         [
@@ -150,5 +186,13 @@ def format_project_brief_refresh(
                 ),
                 "",
             ]
+        )
+    if limit is not None:
+        lines.insert(
+            -1,
+            (
+                "When --limit is set, over-limit refresh_brief projects are "
+                "reported as deferred and left unwritten."
+            ),
         )
     return "\n".join(lines)

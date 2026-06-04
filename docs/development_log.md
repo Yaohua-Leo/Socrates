@@ -6,9 +6,9 @@
 
 ## 当前阶段
 
-Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.37-alpha 的 dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume index 层。
+Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.38-alpha 的 limit-controlled dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume index 层。
 
-当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.37 projects refresh-briefs dry-run preview：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作、阻塞项、可继续学习项、人工审核项、修复路径、当前风险压力、同类型报告之间的风险变化、report history artifact 健康状态、regression manifest 写入后的报告/status 一致性、可读的一屏 operator dashboard、可保存的学习启动 brief、旧 brief 是否仍对应当前 first next action、新 brief 的结构化 manifest、只读检查 brief freshness 的命令、返回学习项目时的只读 resume card、给未来 UI/plugin 读取的 resume JSON、跨项目根目录的返回学习 ready/refresh 导航、给未来 UI/plugin 读取的 collection-level JSON、project root 的 ready/refresh_brief 分布、按 resume state 筛选项目根目录视图、从 filtered rows 派生出的推荐命令摘要、只输出推荐命令行的 copy mode、只对 refresh_brief 子项目写 brief 的 collection writer、该 writer 的 structured JSON result，以及该 writer 的 no-write dry-run preview 都必须清楚可见。
+当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.38 projects refresh-briefs limit control：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作、阻塞项、可继续学习项、人工审核项、修复路径、当前风险压力、同类型报告之间的风险变化、report history artifact 健康状态、regression manifest 写入后的报告/status 一致性、可读的一屏 operator dashboard、可保存的学习启动 brief、旧 brief 是否仍对应当前 first next action、新 brief 的结构化 manifest、只读检查 brief freshness 的命令、返回学习项目时的只读 resume card、给未来 UI/plugin 读取的 resume JSON、跨项目根目录的返回学习 ready/refresh 导航、给未来 UI/plugin 读取的 collection-level JSON、project root 的 ready/refresh_brief 分布、按 resume state 筛选项目根目录视图、从 filtered rows 派生出的推荐命令摘要、只输出推荐命令行的 copy mode、只对 refresh_brief 子项目写 brief 的 collection writer、该 writer 的 structured JSON result、该 writer 的 no-write dry-run preview，以及该 writer 的 bounded execution limit 都必须清楚可见。
 
 ## v0.2 收口基线
 
@@ -651,6 +651,24 @@ Verification evidence:
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 432 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 432 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
 
+## v0.38 Multi-project brief refresh limit alpha
+
+- Added `--limit N` to `python -m socrates projects refresh-briefs`.
+- Limited writer output reuses `refresh_project_briefs_payload(root_path, limit=N)`, so batch-size control shares the same deterministic project ordering and resume-state selection as no-limit mode.
+- The refresh payload now records `limit`, `deferred_count`, and `deferred` rows while preserving selected/refreshed/skipped rows.
+- Over-limit `refresh_brief` child projects are reported as deferred with `reason: limit_reached`; ready child projects remain skipped with `reason: resume_state_ready`.
+- Safety boundary: v0.38 limit changes batch size only. It is not a new selector, queue, scanner, report refresh, repair runner, LLM call, score, tutor, approval, readiness gate, or learning-state truth mutation.
+
+Verification evidence:
+  - `python -m unittest tests.test_project_index` failed during RED because `projects refresh-briefs --limit` was not registered.
+  - `python -m unittest tests.test_project_index tests.test_resume tests.test_study_brief` passed with 39 tests OK after implementation.
+  - `python -m unittest tests.test_project_index tests.test_resume tests.test_study_brief tests.test_dashboard tests.test_status_quality_summary tests.test_learning_queue` passed with 90 tests OK.
+  - `python -m unittest discover -s tests` passed with 435 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 435 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 435 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -687,7 +705,7 @@ Verification evidence:
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，v0.13 已增加 priority action queue navigation，v0.14 已增加 report priority action snapshots，v0.15 已增加 recommended focus report summaries，v0.16 已增加 action summary queue/report summaries，v0.17 已增加 repair path queue/report summaries，v0.18 已增加 current-state risk summary report snapshots，v0.19 已增加 bounded risk trend report snapshots，v0.20 已增加 report-history audit visibility，v0.21 已增加 long-term multi-session regression refresh，v0.22 已增加 read-only study dashboard，v0.23 已增加 generated study-start brief，v0.24 已增加 study brief next-action freshness visibility，v0.25 已增加 manifest-backed study brief freshness，v0.26 已增加 read-only brief status command，v0.27 已增加 read-only project resume command，v0.28 已增加 read-only resume JSON，v0.29 已增加 read-only multi-project resume index，v0.30 已增加 read-only multi-project resume JSON，v0.31 已增加 collection resume readiness counts，v0.32 已增加 collection resume state filtering，v0.33 已增加 collection resume recommended-command summaries，v0.34 已增加 collection resume commands-only output，v0.35 已增加 collection refresh-briefs writer，v0.36 已增加 refresh-briefs JSON output，v0.37 已增加 refresh-briefs dry-run preview，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend、prediction/scoring 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，v0.13 已增加 priority action queue navigation，v0.14 已增加 report priority action snapshots，v0.15 已增加 recommended focus report summaries，v0.16 已增加 action summary queue/report summaries，v0.17 已增加 repair path queue/report summaries，v0.18 已增加 current-state risk summary report snapshots，v0.19 已增加 bounded risk trend report snapshots，v0.20 已增加 report-history audit visibility，v0.21 已增加 long-term multi-session regression refresh，v0.22 已增加 read-only study dashboard，v0.23 已增加 generated study-start brief，v0.24 已增加 study brief next-action freshness visibility，v0.25 已增加 manifest-backed study brief freshness，v0.26 已增加 read-only brief status command，v0.27 已增加 read-only project resume command，v0.28 已增加 read-only resume JSON，v0.29 已增加 read-only multi-project resume index，v0.30 已增加 read-only multi-project resume JSON，v0.31 已增加 collection resume readiness counts，v0.32 已增加 collection resume state filtering，v0.33 已增加 collection resume recommended-command summaries，v0.34 已增加 collection resume commands-only output，v0.35 已增加 collection refresh-briefs writer，v0.36 已增加 refresh-briefs JSON output，v0.37 已增加 refresh-briefs dry-run preview，v0.38 已增加 refresh-briefs limit control，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend、prediction/scoring 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

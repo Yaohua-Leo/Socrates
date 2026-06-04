@@ -517,6 +517,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Preview selected project brief refreshes without writing artifacts.",
     )
+    projects_refresh_briefs_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum refresh-needed projects to select for this run.",
+    )
     projects_refresh_briefs_parser.set_defaults(func=_handle_projects_refresh_briefs)
     projects_resume_parser = projects_subparsers.add_parser(
         "resume",
@@ -1729,16 +1735,30 @@ def _handle_projects_graph(args: argparse.Namespace) -> int:
 
 
 def _handle_projects_refresh_briefs(args: argparse.Namespace) -> int:
+    if args.limit is not None and args.limit <= 0:
+        print("error: limit must be positive", file=sys.stderr)
+        return 2
     if args.json:
         print(
             json.dumps(
-                refresh_project_briefs_payload(args.root, dry_run=args.dry_run),
+                refresh_project_briefs_payload(
+                    args.root,
+                    dry_run=args.dry_run,
+                    limit=args.limit,
+                ),
                 indent=2,
                 sort_keys=True,
             )
         )
     else:
-        print(format_project_brief_refresh(args.root, dry_run=args.dry_run), end="")
+        print(
+            format_project_brief_refresh(
+                args.root,
+                dry_run=args.dry_run,
+                limit=args.limit,
+            ),
+            end="",
+        )
     return 0
 
 

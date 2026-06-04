@@ -2252,6 +2252,32 @@ no child-project or root writes
 - 命令不会写入 root `socrates_projects.json`。
 - 这不是 read-only resume command、新 selector、scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit writer selection 的 no-write preview。
 
+v0.38：multi-project brief refresh limit control
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以在 dry-run 之后只刷新一小批 selected child projects，而不是每次都刷新全部 refresh-needed projects。
+
+必须完成：
+
+`projects refresh-briefs --limit N`
+
+deferred rows for over-limit refresh-needed projects
+
+same writer selection order as no-limit mode
+
+non-positive limit rejection
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects refresh-briefs --root <root> --limit 1` 已按 deterministic project id order 只选择第一批 refresh-needed child projects。
+- `python -m socrates projects refresh-briefs --root <root> --limit 1 --json` 已输出 selected/refreshed/deferred/skipped rows。
+- `python -m socrates projects refresh-briefs --root <root> --dry-run --limit 1` 已输出 no-write limited preview。
+- Over-limit refresh-needed child projects 会进入 `deferred`，reason 为 `limit_reached`，不会被混入 ready-only `skipped`。
+- Deferred child projects 不会写入 `07_exports/briefs/study_brief.md`、manifest 或 project-log entry。
+- `--limit 0` 与 negative limits 会在写入前失败。
+- 这不是新 selector、queue、scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit writer selection 的 batch-size control。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
