@@ -64,6 +64,7 @@ def generate_atomic_note_draft(
                 "source_id": source_id,
                 "source_title": source_title,
                 "source_location": source_location,
+                "reference_kb_status": kb_status.status,
                 "tags": _note_tags(note_type, concept, related_concepts),
                 "related": related_links,
             }
@@ -248,6 +249,7 @@ def _exercise_text(
                 "concept": concept,
                 "source_id": source_id,
                 "difficulty": difficulty,
+                "reference_kb_status": kb_status,
             }
         )
         + f"# {concept} Exercise {index:02d}\n\n"
@@ -308,6 +310,7 @@ def _targeted_review_exercise_text(
                 "priority": priority,
                 "due": due,
                 "scheduled_for": scheduled_for,
+                "reference_kb_status": kb_status,
             }
         )
         + f"# Review Exercise: {concept}\n\n"
@@ -542,7 +545,12 @@ def _kb_reference_object(project_root: Path, concept: str) -> dict[str, object] 
     index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
     if not index_path.exists():
         return None
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(index, dict):
+        return None
     concept_id = slugify_topic(concept)
     for item in index.get("objects", []):
         if not isinstance(item, dict):

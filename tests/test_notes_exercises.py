@@ -144,6 +144,35 @@ class NotesExercisesTests(unittest.TestCase):
                 text,
             )
 
+    def test_atomic_note_draft_continues_with_invalid_reference_kb_index(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            kb_result = build_reference_kb(project)
+            kb_result.index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            note = artifacts.generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body="A normal subgroup is stable under conjugation.",
+                source_id="df-1",
+            )
+
+            text = (project / note.path).read_text(encoding="utf-8")
+            self.assertIn("# Normal Subgroup", text)
+            self.assertIn("reference_kb_status: \"invalid\"", text)
+            self.assertNotIn("## Reference Context", text)
+            self.assertNotIn("Expecting property name", text)
+
     def test_generate_exercise_drafts_writes_required_sections(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -291,6 +320,34 @@ class NotesExercisesTests(unittest.TestCase):
             text = (project / exercises[0].path).read_text(encoding="utf-8")
             self.assertIn("## Reference Context", text)
             self.assertIn("- Reference KB status: stale", text)
+
+    def test_generate_exercise_drafts_continue_with_invalid_reference_kb_index(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            kb_result = build_reference_kb(project)
+            kb_result.index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            exercises = artifacts.generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="normality_notes",
+                count=5,
+            )
+
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn("# Normal Subgroup Exercise 01", text)
+            self.assertIn('reference_kb_status: "invalid"', text)
+            self.assertIn("- Current definition of Normal Subgroup", text)
+            self.assertNotIn("## Reference Context", text)
 
     def test_generate_targeted_review_exercises_uses_review_schedule(self) -> None:
         artifacts = self._load_artifacts_module()
