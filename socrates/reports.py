@@ -9,6 +9,7 @@ from pathlib import Path
 from .context import append_project_log, load_project, write_text
 from .kb import reference_kb_status
 from .learning_queue import (
+    LearningQueue,
     QueueItem,
     action_summary_lines,
     collect_learning_queue,
@@ -53,6 +54,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
     repair_paths = repair_path_items(queue)
+    risk_summary = _risk_summary_lines(queue=queue, state=state)
     write_text(
         report_path,
         _weekly_report_text(
@@ -67,6 +69,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
             priority_actions=priority_actions,
             action_summary=action_summary,
             repair_paths=repair_paths,
+            risk_summary=risk_summary,
             state=state,
         ),
     )
@@ -85,6 +88,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
     repair_paths = repair_path_items(queue)
+    risk_summary = _risk_summary_lines(queue=queue, state=state)
     write_text(
         report_path,
         _project_summary_text(
@@ -108,6 +112,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             priority_actions=priority_actions,
             action_summary=action_summary,
             repair_paths=repair_paths,
+            risk_summary=risk_summary,
             tool_verification_records=list_tool_verification_records(context.root),
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
@@ -131,6 +136,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
     repair_paths = repair_path_items(queue)
+    risk_summary = _risk_summary_lines(queue=queue, state=state)
     write_text(
         report_path,
         _monthly_report_text(
@@ -145,6 +151,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
             priority_actions=priority_actions,
             action_summary=action_summary,
             repair_paths=repair_paths,
+            risk_summary=risk_summary,
             state=state,
         ),
     )
@@ -308,6 +315,7 @@ def _weekly_report_text(
     priority_actions: list[QueueItem],
     action_summary: list[str],
     repair_paths: list[QueueItem],
+    risk_summary: list[str],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -340,6 +348,10 @@ def _weekly_report_text(
         "",
         *_priority_action_lines(repair_paths),
         "",
+        "## Risk Summary",
+        "",
+        *risk_summary,
+        "",
         *_state_warning_section(state),
         "## Learning State",
         "",
@@ -369,6 +381,7 @@ def _monthly_report_text(
     priority_actions: list[QueueItem],
     action_summary: list[str],
     repair_paths: list[QueueItem],
+    risk_summary: list[str],
     state: dict[str, object],
 ) -> str:
     concept_mastery = state.get("concept_mastery", {})
@@ -407,6 +420,10 @@ def _monthly_report_text(
         "",
         *_priority_action_lines(repair_paths),
         "",
+        "## Risk Summary",
+        "",
+        *risk_summary,
+        "",
         "## Misconceptions",
         "",
         *_misconception_lines(state.get("misconceptions", {})),
@@ -444,6 +461,7 @@ def _project_summary_text(
     priority_actions: list[QueueItem],
     action_summary: list[str],
     repair_paths: list[QueueItem],
+    risk_summary: list[str],
     tool_verification_records: list[ToolVerificationSummary],
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
@@ -494,6 +512,10 @@ def _project_summary_text(
         "## Repair Paths",
         "",
         *_priority_action_lines(repair_paths),
+        "",
+        "## Risk Summary",
+        "",
+        *risk_summary,
         "",
         "## Benchmark Snapshot",
         "",
@@ -871,6 +893,77 @@ def _recommended_focus_lines(
             f"{_active_misconception_focus(state.get('misconceptions', {}))}"
         ),
     ]
+
+
+def _risk_summary_lines(*, queue: LearningQueue, state: dict[str, object]) -> list[str]:
+    blocker_pressure = (
+        len(queue.workflow_actions)
+        + len(queue.quality_checks_to_fix)
+        + len(queue.tool_verifications_to_fix)
+    )
+    review_pressure = len(queue.scheduled_reviews)
+    human_review_backlog = (
+        len(queue.obsidian_exports_to_run)
+        + len(queue.notes_to_review)
+        + len(queue.misconception_notes_to_draft)
+        + len(queue.exercise_drafts_to_approve)
+        + len(queue.attempts_to_grade)
+    )
+    weak_concepts = _weak_concept_count(state.get("concept_mastery", {}))
+    active_misconceptions = _active_misconception_count(state.get("misconceptions", {}))
+    risk_level = _risk_level(
+        blocker_pressure=blocker_pressure,
+        review_pressure=review_pressure,
+        human_review_backlog=human_review_backlog,
+        weak_concepts=weak_concepts,
+        active_misconceptions=active_misconceptions,
+    )
+    return [
+        f"- Risk level: {risk_level}",
+        f"- Blocker pressure: {blocker_pressure}",
+        f"- Review pressure: {review_pressure}",
+        f"- Human review backlog: {human_review_backlog}",
+        f"- Weak concepts: {weak_concepts}",
+        f"- Active misconceptions: {active_misconceptions}",
+    ]
+
+
+def _risk_level(
+    *,
+    blocker_pressure: int,
+    review_pressure: int,
+    human_review_backlog: int,
+    weak_concepts: int,
+    active_misconceptions: int,
+) -> str:
+    if blocker_pressure:
+        return "blocked"
+    if review_pressure or human_review_backlog or weak_concepts or active_misconceptions:
+        return "attention"
+    return "clear"
+
+
+def _weak_concept_count(value: object, *, threshold: float = 0.7) -> int:
+    if not isinstance(value, dict):
+        return 0
+    return sum(
+        1
+        for concept, score in value.items()
+        if str(concept).strip() and coerce_learning_score(score) < threshold
+    )
+
+
+def _active_misconception_count(value: object) -> int:
+    if not isinstance(value, dict):
+        return 0
+    active_count = 0
+    for item in value.values():
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", "active")).strip() or "active"
+        if status == "active":
+            active_count += coerce_occurrence_count(item.get("count", 1))
+    return active_count
 
 
 def _next_action_focus(priority_actions: list[QueueItem]) -> str:

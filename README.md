@@ -6,7 +6,7 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.17-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.18-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
@@ -14,11 +14,11 @@ next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression, workflow
 action queue visibility, priority action queue navigation, priority action
 snapshots in reports, recommended focus report summaries, action summary
-queue/report summaries, repair path queue/report summaries, and an opt-in LLM
-provider layer for reviewable draft suggestions, including review-only session
-judge drafts. It is not yet a full AI tutor: autonomous LLM tutoring, OCR/PDF
-extraction backends, trusted LLM judges, and product UI layers remain future
-work.
+queue/report summaries, repair path queue/report summaries, risk summary report
+snapshots, and an opt-in LLM provider layer for reviewable draft suggestions,
+including review-only session judge drafts. It is not yet a full AI tutor:
+autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM judges, and
+product UI layers remain future work.
 
 ## Quick Start
 
@@ -135,6 +135,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.17 repair path rows in queue and learning reports, showing blocker-only
   workflow, quality-check, and tool-verification actions without mixing in
   ordinary study or review work.
+- v0.18 risk summary rows in weekly, monthly, and project-summary reports,
+  showing deterministic current-state pressure from blockers, reviews,
+  human-review backlog, weak concepts, and active misconceptions.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -183,6 +186,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   create a new readiness gate, score, planner, tutor, or learning-state truth.
 - Repair path rows are deterministic blocker summaries. They do not run repair
   commands, fix artifacts, create a readiness gate, or mutate project state.
+- Risk summary rows are deterministic current-state report snapshots over
+  existing queue and learning-state evidence. They are not historical analytics,
+  prediction, scoring, grading, tutoring, planning, readiness gates, or
+  learning-state mutation.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

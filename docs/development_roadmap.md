@@ -1762,11 +1762,34 @@ deterministic fallback rows when no blockers exist
 - Repair Paths 只汇总 workflow、quality-checks 与 tool-verifications blocker buckets；普通 note/review/exercise 学习项不会进入 repair path。
 - 这不是 fixer、command runner、readiness gate、score、planner 或 learning-state mutation；它只是把已有 blocker queue evidence 压缩成修复路径摘要。
 
-v0.18：阶段趋势与风险累积摘要
+v0.18：报告风险累积摘要
 
 建议目标：
 
-在 repair path 之后继续打磨 report trend summary，让报告能看到 quality、review、exercise、misconception 等长期信号是在改善、持平还是积累风险。
+在 repair path 之后继续打磨 report risk summary，让报告能看到当前 blockers、reviews、human-review backlog、weak concepts 与 active misconceptions 是否已经积累成风险。
+
+必须完成：
+
+risk summary section in weekly report
+
+risk summary section in monthly report
+
+risk summary section in project summary
+
+deterministic fallback rows when no risk evidence exists
+
+当前状态（2026-06-04）：
+
+- weekly、monthly 与 project summary report 已包含 `## Risk Summary` section。
+- Risk Summary 汇总 blocker pressure、review pressure、human review backlog、weak concepts 与 active misconceptions，并给出 `clear` / `attention` / `blocked` risk level。
+- 空项目或缺失 evidence 会输出 0-count fallback，不会制造伪风险。
+- 这不是 historical analytics、prediction、score、grade、tutor、planner、readiness gate 或 learning-state mutation；它只是把已有 queue/state evidence 压缩成当前状态的风险摘要。
+
+v0.19：阶段趋势与长期风险信号
+
+建议目标：
+
+在 current-state risk summary 之后再打磨 historical trend summary，让报告能看到 quality、review、exercise、misconception 等长期信号是在改善、持平还是积累风险。
 
 v1.0：可长期使用的数学学习系统
 

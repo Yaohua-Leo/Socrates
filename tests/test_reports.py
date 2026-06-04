@@ -1118,6 +1118,76 @@ class ReportTests(unittest.TestCase):
             )
             self.assertIn("- none", report_text.split("## Repair Paths", 1)[1])
 
+    def test_project_summary_includes_risk_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Risk Summary", report_text)
+            self.assertLess(
+                report_text.index("## Repair Paths"),
+                report_text.index("## Risk Summary"),
+            )
+            self.assertIn("- Risk level: blocked", report_text)
+            self.assertIn("- Blocker pressure: 1", report_text)
+            self.assertIn("- Review pressure: 1", report_text)
+            self.assertIn("- Human review backlog: 4", report_text)
+            self.assertIn("- Weak concepts: 1", report_text)
+            self.assertIn("- Active misconceptions: 0", report_text)
+
+    def test_weekly_report_risk_summary_uses_empty_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Risk Summary", report_text)
+            self.assertIn("- Risk level: clear", report_text)
+            self.assertIn("- Blocker pressure: 0", report_text)
+            self.assertIn("- Review pressure: 0", report_text)
+            self.assertIn("- Human review backlog: 0", report_text)
+            self.assertIn("- Weak concepts: 0", report_text)
+            self.assertIn("- Active misconceptions: 0", report_text)
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
