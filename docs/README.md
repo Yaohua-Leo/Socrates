@@ -7,16 +7,16 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.21-alpha long-term multi-session
-  regression refresh, over v0.20 report-history audit visibility, v0.19 risk
-  trend report summaries, v0.18 risk summary report snapshots, v0.17 repair
-  paths in queue and reports, v0.16 action summaries, v0.15 recommended focus
-  summaries, v0.14 priority action snapshots, v0.13 priority action queue
-  navigation, and v0.12 workflow action queue visibility over deterministic
-  multi-session regression, status/lifecycle visibility, deterministic session
-  closeout workflow, review-only LLM session judge drafts, deterministic
-  next-session handoff planning, external Markdown conversion handoff for
-  PDF/OCR workflows, and deterministic teaching-quality scoring.
+- Current implementation baseline: v0.22-alpha read-only study dashboards, over
+  v0.21 long-term multi-session regression refresh, v0.20 report-history audit
+  visibility, v0.19 risk trend report summaries, v0.18 risk summary report
+  snapshots, v0.17 repair paths in queue and reports, v0.16 action summaries,
+  v0.15 recommended focus summaries, v0.14 priority action snapshots, v0.13
+  priority action queue navigation, and v0.12 workflow action queue visibility
+  over deterministic multi-session regression, status/lifecycle visibility,
+  deterministic session closeout workflow, review-only LLM session judge drafts,
+  deterministic next-session handoff planning, external Markdown conversion
+  handoff for PDF/OCR workflows, and deterministic teaching-quality scoring.
 
 ## Plans
 
@@ -58,3 +58,5 @@ from the source planning conversation.
   plan for report-history audit visibility in status and project-summary output.
 - `superpowers/plans/2026-06-04-v21-long-term-regression.md`: executable v0.21
   plan for long-term multi-session regression and refreshed report surfaces.
+- `superpowers/plans/2026-06-04-v22-study-dashboard.md`: executable v0.22
+  plan for a read-only operator dashboard over existing deterministic evidence.

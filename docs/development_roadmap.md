@@ -1857,6 +1857,32 @@ status/report workflow consistency after regression pass
 - 真实 closeout -> regression fixture 已验证通过后 `Workflow actions: 0`、`Multi-session regression checks: 7/7` 与 `Report history: current` 同时可见。
 - 这不是 autonomous tutoring、score、prediction、proof、readiness shortcut 或 learning-state truth；它只是长期使用链路的确定性 artifact/report/status 一致性证据。
 
+v0.22：一屏式学习项目 dashboard
+
+建议目标：
+
+把 status、queue、report list、report-history、closeout 与 regression 的关键读数组合成一个只读 dashboard，降低长期使用时的上下文切换成本。
+
+必须完成：
+
+top-level `dashboard` CLI command
+
+read-only dashboard formatter
+
+action summary and top priority actions
+
+report health rows
+
+report-history / closeout / regression snapshot rows
+
+当前状态（2026-06-04）：
+
+- `python -m socrates dashboard --project <project>` 已输出 `# Study Dashboard` Markdown。
+- Dashboard 已包含 snapshot、action summary、top priority actions、report health 与 boundary sections。
+- Dashboard 只调用现有 deterministic readers，不运行 audit、report generation、repair、LLM call 或 project mutation。
+- 空项目显示 `Completion: clear` 与 `- none`；有 draft note 的项目显示同 priority queue 一致的 first next action。
+- 这不是新的 truth source、readiness gate、score、prediction、planner、tutor、repair runner 或 learning-state mutation。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

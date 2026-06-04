@@ -18,6 +18,7 @@ from .artifacts import (
 )
 from .context import load_project
 from .contracts import REVIEW_PRIORITY_FILTERS
+from .dashboard import format_study_dashboard
 from .exercise_bank import build_exercise_bank, read_exercise_bank
 from .exercises import (
     EXERCISE_TYPES,
@@ -367,6 +368,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
     status_parser.set_defaults(func=_handle_status)
+
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Show a compact read-only project dashboard.",
+    )
+    dashboard_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    dashboard_parser.set_defaults(func=_handle_dashboard)
 
     queue_parser = subparsers.add_parser(
         "queue",
@@ -1512,6 +1520,11 @@ def _handle_queue(args: argparse.Namespace) -> int:
         ),
         end="",
     )
+    return 0
+
+
+def _handle_dashboard(args: argparse.Namespace) -> int:
+    print(format_study_dashboard(args.project), end="")
     return 0
 
 
