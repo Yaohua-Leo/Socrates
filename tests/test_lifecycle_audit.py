@@ -21,6 +21,7 @@ from socrates.exercises import (
     record_exercise_attempt,
 )
 from socrates.kb import build_reference_kb
+from socrates.multi_session import run_multi_session_regression
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.planning import create_learning_plan
 from socrates.project import ProjectSpec, create_project
@@ -67,7 +68,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 2/22 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 2/23 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
@@ -76,6 +77,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Session score report: fail", report_text)
             self.assertIn("- Session score manifest: fail", report_text)
             self.assertIn("- Session closeout manifest: fail", report_text)
+            self.assertIn("- Multi-session regression: fail", report_text)
             self.assertIn("- Benchmark report: fail", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
             self.assertIn("- Tool verification records: fail", report_text)
@@ -875,11 +877,24 @@ class LifecycleAuditTests(unittest.TestCase):
             generate_lean_statement_skeleton(project, object_id="normal_subgroup")
             generate_weekly_report(project)
             generate_monthly_report(project)
+            script_2 = root / "session_0002.script"
+            script_2.write_text(
+                "topic: Kernel Normality\n"
+                "question: Why is a kernel normal?\n"
+                "hint: Use the homomorphism property.\n"
+                "hint: Compute phi(gkg^-1).\n"
+                "attempt: phi(gkg^-1)=e, so gkg^-1 is in the kernel.\n"
+                "next: Compare quotient groups with cosets.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            run_scripted_tutoring_session(project, script_2, session_id="session_0002")
             close_tutoring_session(
                 project,
                 session_id="session_0001",
                 next_session_id="session_0002",
             )
+            run_multi_session_regression(project)
             run_project_benchmark(project, session_id="session_0001")
             build_exercise_bank(project)
 
@@ -900,7 +915,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 24/24 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 25/25 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -916,6 +931,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Session score report: pass", report_text)
             self.assertIn("- Session score manifest: pass", report_text)
             self.assertIn("- Session closeout manifest: pass", report_text)
+            self.assertIn("- Multi-session regression: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: pass", report_text)
             self.assertIn("- Tool verification records: pass", report_text)

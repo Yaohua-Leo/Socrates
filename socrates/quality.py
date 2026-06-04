@@ -25,6 +25,7 @@ from .exercise_validation import (
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .learning_queue import collect_learning_queue
 from .llm_artifacts import validate_llm_suggestion_manifest
+from .multi_session import has_passing_multi_session_regression
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
 from .state import ensure_learning_state_readable
@@ -526,6 +527,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
             "Session score report": _has_session_score_report(context.root),
             "Session score manifest": _has_session_score_manifest(context.root),
             "Session closeout manifest": has_ready_session_closeout(context.root),
+            "Multi-session regression": has_passing_multi_session_regression(context.root),
             "Benchmark report": _has_benchmark_report(context.root),
             "Benchmark manifest": _has_benchmark_manifest(context.root),
             "Tool verification records": _has_tool_verification_records(context.root),

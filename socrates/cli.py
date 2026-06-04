@@ -45,6 +45,10 @@ from .llm import LlmMessage, LlmProviderError, LlmRequest
 from .llm_artifacts import list_llm_suggestions
 from .llm_config import load_llm_config
 from .llm_judge import suggest_session_judge_with_llm
+from .multi_session import (
+    read_multi_session_regression_status,
+    run_multi_session_regression,
+)
 from .notes import (
     AtomicNoteSummary,
     NOTE_TYPES,
@@ -386,6 +390,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     lifecycle_audit_parser.add_argument("--project", required=True, help="Socrates project directory.")
     lifecycle_audit_parser.set_defaults(func=_handle_lifecycle_audit)
+    lifecycle_regression_parser = lifecycle_subparsers.add_parser(
+        "regression",
+        help="Run deterministic multi-session product-loop regression.",
+    )
+    lifecycle_regression_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    lifecycle_regression_parser.set_defaults(func=_handle_lifecycle_regression)
 
     projects_parser = subparsers.add_parser(
         "projects",
@@ -1360,6 +1374,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     benchmark_status = _read_benchmark_status(context.root)
     session_score_status = _read_session_score_status(context.root)
     session_closeout_status = read_session_closeout_status(context.root)
+    multi_session_regression_status = read_multi_session_regression_status(context.root)
     next_session_plan_status = _read_next_session_plan_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
@@ -1442,6 +1457,18 @@ def _handle_status(args: argparse.Namespace) -> int:
         f"{_session_closeout_sessions_text(session_closeout_status)}"
     )
     print(f"Session closeout score: {_session_closeout_score_text(session_closeout_status)}")
+    print(
+        "Multi-session regression: "
+        f"{_multi_session_regression_status_text(multi_session_regression_status)}"
+    )
+    print(
+        "Multi-session regression checks: "
+        f"{_multi_session_regression_checks_text(multi_session_regression_status)}"
+    )
+    print(
+        "Multi-session regression issues: "
+        f"{_multi_session_regression_issues_text(multi_session_regression_status)}"
+    )
     print(f"Next session plan: {_next_session_plan_text(next_session_plan_status)}")
     print(
         "Next session due reviews: "
@@ -1487,6 +1514,17 @@ def _handle_lifecycle_audit(args: argparse.Namespace) -> int:
         f"{result.report_path}"
     )
     return 0 if result.passed_checks == result.total_checks else 1
+
+
+def _handle_lifecycle_regression(args: argparse.Namespace) -> int:
+    result = run_multi_session_regression(args.project)
+    issues = ", ".join(result.issues) if result.issues else "none"
+    print(f"Multi-session regression: {result.status}")
+    print(f"Regression checks: {result.passed_checks}/{result.total_checks}")
+    print(f"Regression issues: {issues}")
+    print(f"Regression report: {result.report_path}")
+    print(f"Regression manifest: {result.manifest_path}")
+    return 0 if result.status == "pass" else 1
 
 
 def _handle_projects_scan(args: argparse.Namespace) -> int:
@@ -2935,6 +2973,31 @@ def _session_closeout_score_text(value: dict[str, object] | None) -> str:
     if value.get("status") == "invalid":
         return "invalid"
     return f"{value['session_score']}/100 ({value['session_score_status']})"
+
+
+def _multi_session_regression_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    return str(value.get("status", "invalid"))
+
+
+def _multi_session_regression_checks_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['passed_checks']}/{value['total_checks']}"
+
+
+def _multi_session_regression_issues_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    issues = value.get("issues", [])
+    if isinstance(issues, list) and issues:
+        return ", ".join(str(issue) for issue in issues)
+    return "none"
 
 
 def _next_session_plan_text(value: dict[str, object] | None) -> str:

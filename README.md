@@ -6,15 +6,16 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.10-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.11-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
-status/lifecycle visibility, and an opt-in LLM provider layer for reviewable
-draft suggestions, including review-only session judge drafts. It is not yet a
-full AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM
-judges, and product UI layers remain future work.
+status/lifecycle visibility, deterministic multi-session regression, and an
+opt-in LLM provider layer for reviewable draft suggestions, including
+review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
+tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
+remain future work.
 
 ## Quick Start
 
@@ -59,6 +60,7 @@ python -m socrates exercise bank build --project ".\projects\group_theory"
 python -m socrates session score --project ".\projects\group_theory" --session-id session_0001
 python -m socrates session plan-next --project ".\projects\group_theory" --session-id session_0002
 python -m socrates session closeout --project ".\projects\group_theory" --session-id session_0001 --next-session-id session_0002
+python -m socrates lifecycle regression --project ".\projects\group_theory"
 python -m socrates session judge-suggest --project ".\projects\group_theory" --session-id session_0001
 python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
@@ -102,6 +104,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   post-session command.
 - v0.10 status and lifecycle visibility for session closeout manifests, with
   missing, corrupt, or `needs_attention` closeouts treated conservatively.
+- v0.11 deterministic multi-session regression reports that verify a ready
+  closeout carries into visible next-session artifacts, status, and lifecycle
+  readiness.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -133,6 +138,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   failed session score gates; failed scores produce a `needs_attention`
   closeout manifest for human follow-up, and lifecycle audit treats that as not
   ready.
+- Multi-session regression is deterministic artifact evidence. It checks the
+  persisted closeout, completed/next session artifacts, handoff manifest, and
+  project summary visibility; it is not an LLM judge, mathematical proof, grade,
+  or learning-state truth source.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

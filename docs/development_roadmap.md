@@ -1603,6 +1603,32 @@ v0.11：真实多 session 回归与产品闭环打磨
 
 用一个真实小型数学主题跑通多 session 回归，优先修补长期使用时的 CLI 体验、artifact consistency 与报告可读性。除非显式扩展边界，否则继续保持 deterministic gates authoritative，LLM 只作为 review-only draft provider。
 
+必须完成：
+
+multi-session regression command
+
+persist regression report / manifest
+
+status multi-session regression snapshot
+
+lifecycle multi-session regression check
+
+missing/corrupt/malformed regression conservative failure
+
+当前状态（2026-06-04）：
+
+- `lifecycle regression` 已能写入 `08_evals/multi_session_regression.md` 与 `08_evals/multi_session_regression_manifest.json`。
+- 回归检查 ready closeout、已完成 session artifacts、下一 session artifacts、next-session handoff manifest 和 project summary refresh。
+- `status` 已显示 multi-session regression 的状态、通过检查数和 issue 摘要。
+- lifecycle audit 已增加 `Multi-session regression` 检查，只接受 valid 且 `status: pass` 的 regression manifest。
+- 这不是新的教学评分、LLM judge、数学证明、自动通过或 learning-state truth；它只是长期产品闭环的确定性 artifact 回归证据。
+
+v0.12：长期使用体验与报告打磨
+
+建议目标：
+
+在已经可见的多 session 回归基础上，继续打磨长期学习时的 CLI 导航、报告可读性、待办队列和阶段性复盘体验。除非显式扩展边界，否则继续优先修补真实使用路径中的 artifact consistency，而不是引入新的智能后端。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

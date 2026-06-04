@@ -7,11 +7,11 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.10-alpha deterministic session closeout
-  workflow with status/lifecycle visibility, review-only LLM session judge
-  drafts, deterministic next-session handoff planning, external Markdown
-  conversion handoff for PDF/OCR workflows, and deterministic teaching-quality
-  scoring.
+- Current implementation baseline: v0.11-alpha deterministic multi-session
+  regression with status/lifecycle visibility, deterministic session closeout
+  workflow, review-only LLM session judge drafts, deterministic next-session
+  handoff planning, external Markdown conversion handoff for PDF/OCR workflows,
+  and deterministic teaching-quality scoring.
 
 ## Plans
 
@@ -31,3 +31,5 @@ from the source planning conversation.
   v0.9 plan for deterministic session closeout workflow.
 - `superpowers/plans/2026-06-04-v10-closeout-status-lifecycle.md`: executable
   v0.10 plan for closeout status and lifecycle visibility.
+- `superpowers/plans/2026-06-04-v11-multi-session-regression.md`: executable
+  v0.11 plan for deterministic multi-session product-loop regression.

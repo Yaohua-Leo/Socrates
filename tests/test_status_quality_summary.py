@@ -170,6 +170,11 @@ class StatusQualitySummaryTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
+            (evals / "multi_session_regression_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
 
             status = subprocess.run(
                 [sys.executable, "-m", "socrates", "status", "--project", str(project)],
@@ -189,6 +194,9 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Session closeout: invalid", status.stdout)
             self.assertIn("Session closeout sessions: invalid", status.stdout)
             self.assertIn("Session closeout score: invalid", status.stdout)
+            self.assertIn("Multi-session regression: invalid", status.stdout)
+            self.assertIn("Multi-session regression checks: invalid", status.stdout)
+            self.assertIn("Multi-session regression issues: invalid", status.stdout)
 
     def test_status_cli_counts_reviewed_notes_pending_obsidian_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

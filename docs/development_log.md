@@ -192,6 +192,22 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 372 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 372 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
 
+## v0.11 Multi-session regression alpha
+
+- Added `socrates/multi_session.py` and `python -m socrates lifecycle regression` for deterministic product-loop regression across a completed session and its next session.
+- The command writes `08_evals/multi_session_regression.md` plus `08_evals/multi_session_regression_manifest.json`.
+- Regression checks the ready closeout manifest, completed session artifacts, next session artifacts, next-session handoff manifest, and project summary refresh.
+- `status` now reports multi-session regression status, passed checks, and issue summary with conservative invalid/not-run handling.
+- Lifecycle audit now includes `Multi-session regression` and only passes it for valid `status: pass` regression manifests.
+- Safety boundary: v0.11 multi-session regression is deterministic artifact evidence for product-loop continuity. It is not an LLM judge, mathematical proof, grade, new score, or learning-state truth source.
+- Verification evidence:
+  - `python -m unittest tests.test_multi_session_regression tests.test_status_quality_summary tests.test_lifecycle_audit` passed with 42 tests OK.
+  - `python -m unittest discover -s tests` passed with 375 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 375 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 375 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning and a line-ending warning for `scripts/check.ps1`, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -228,14 +244,14 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 
 - v0.1：基本完成。
 - v0.2：大部分完成，剩余重点是集成清理、文档同步、端到端稳定性。
 - v0.3-v0.5：已有实现基础，但仍需扩展为可靠的长期学习状态、复习调度、题目质量与教学质量评测闭环。
-- v1.0：仍缺少完整产品体验、多 session 长期学习稳定性、可靠自动组题、阶段性学习报告打磨、UI/插件层和真实使用场景回归。
+- v1.0：仍缺少完整产品体验、多 session 长期学习稳定性、可靠自动组题、阶段性学习报告打磨、UI/插件层和更多真实使用场景回归。
 
 按能力完成度估算，当前约完成最终目标的 60%-70%。剩余 30%-40% 的主要风险不在单个函数，而在长期工作流的稳定性、集成一致性、用户体验和真实数学学习质量。
 
