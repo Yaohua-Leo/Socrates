@@ -380,6 +380,10 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="Filter matches by reference object type; defaults to all.",
     )
+    kb_search_parser.add_argument(
+        "--source-id",
+        help="Filter matches by source registry id.",
+    )
     kb_search_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
     kb_search_parser.set_defaults(func=_handle_kb_search)
     kb_counterexamples_parser = kb_subparsers.add_parser(
@@ -1354,6 +1358,7 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
         args.query,
         limit=args.limit,
         object_type=args.type,
+        source_id=args.source_id,
     )
     if not matches:
         print("No reference matches")

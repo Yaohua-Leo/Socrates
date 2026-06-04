@@ -130,6 +130,7 @@ def search_reference_kb(
     *,
     limit: int = 10,
     object_type: str = "all",
+    source_id: str | None = None,
 ) -> list[dict[str, object]]:
     """Return source-grounded reference objects matching a query."""
 
@@ -144,6 +145,7 @@ def search_reference_kb(
         query,
         limit=limit,
         object_type=None if object_type == "all" else object_type,
+        source_id=source_id,
     )
 
 
@@ -294,6 +296,7 @@ def _search_reference_objects(
     *,
     limit: int,
     object_type: str | None = None,
+    source_id: str | None = None,
 ) -> list[dict[str, object]]:
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
@@ -304,6 +307,8 @@ def _search_reference_objects(
         if not isinstance(item, dict):
             continue
         if object_type is not None and str(item.get("type", "")).casefold() != object_type:
+            continue
+        if source_id is not None and _object_source_id(item) != source_id:
             continue
         haystack = _search_haystack(item)
         if query_text in haystack:

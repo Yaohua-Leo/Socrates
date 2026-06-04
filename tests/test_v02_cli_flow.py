@@ -119,6 +119,47 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("theorem: Kernel Normality", search)
             self.assertNotIn("definition: Normal Subgroup", search)
 
+    def test_kb_search_filters_by_source_id(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "## Source Metadata\n\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n\n"
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            exercises = project / "01_references" / "curated" / "exercises.curated.md"
+            exercises.write_text(
+                "## Source Metadata\n\n"
+                "- source_id: exercise_notes\n"
+                "- title: Exercise Notes\n\n"
+                "### Exercise: Test Normality\n"
+                "Decide whether the given subgroup is normal.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            search = self._run_cli(
+                "kb",
+                "search",
+                "--project",
+                str(project),
+                "--query",
+                "normal",
+                "--source-id",
+                "exercise_notes",
+            ).stdout
+
+            self.assertIn("exercise: Test Normality", search)
+            self.assertIn("Exercise Notes [exercise_notes]", search)
+            self.assertNotIn("definition: Normal Subgroup", search)
+            self.assertNotIn("Normality Notes", search)
+
     def test_kb_list_displays_indexed_objects_and_filters(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
