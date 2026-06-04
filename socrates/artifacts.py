@@ -159,6 +159,7 @@ def generate_targeted_review_exercise_drafts(
                     difficulty=difficulty,
                     due=str(item.get("due", "within_3_days")),
                     scheduled_for=str(item.get("scheduled_for", "")),
+                    repair_context=item.get("repair_context", []),
                     reference_object=reference_object,
                 ),
             )
@@ -245,9 +246,11 @@ def _targeted_review_exercise_text(
     difficulty: int,
     due: str,
     scheduled_for: str,
+    repair_context: object,
     reference_object: dict[str, object] | None,
 ) -> str:
     reference_context = _reference_context_section(reference_object)
+    repair_context_section = _repair_context_section(repair_context)
     prerequisites = _review_exercise_prerequisites(reference_object, concept)
     return (
         _frontmatter(
@@ -265,9 +268,11 @@ def _targeted_review_exercise_text(
         + f"# Review Exercise: {concept}\n\n"
         + "## Target Weakness\n\n"
         + f"{reason}\n\n"
+        + (repair_context_section + "\n" if repair_context_section else "")
         + (reference_context + "\n" if reference_context else "")
         + "## Target Training Point\n\n"
-        + f"Repair the scheduled weakness in {concept} by contrasting the definition with a borderline case.\n\n"
+        + _targeted_review_training_point(concept, bool(repair_context_section))
+        + "\n\n"
         + "## Concepts\n\n"
         + _bullet_list([concept])
         + "\n## Prerequisites\n\n"
@@ -292,6 +297,55 @@ def _targeted_review_exercise_text(
         + "- Repeating the weak slogan without checking the definition.\n"
         + "- Giving an example without explaining the failing condition in the non-example.\n"
     )
+
+
+def _repair_context_section(value: object) -> str:
+    if not isinstance(value, list):
+        return ""
+    lines = ["## Repair Context", ""]
+    has_context = False
+    for raw_context in value:
+        if not isinstance(raw_context, dict):
+            continue
+        misconception_id = str(raw_context.get("misconception_id", "")).strip()
+        if not misconception_id:
+            continue
+        count = _safe_positive_int(raw_context.get("count", 1))
+        lines.append(f"- Misconception: {misconception_id} (x{count})")
+        for key, label in (
+            ("last_session_id", "Last session"),
+            ("analysis", "Analysis"),
+            ("repair_suggestion", "Repair suggestion"),
+        ):
+            text = str(raw_context.get(key, "")).strip()
+            if text:
+                lines.append(f"  - {label}: {text}")
+        follow_up_exercises = raw_context.get("follow_up_exercises", [])
+        if isinstance(follow_up_exercises, list) and follow_up_exercises:
+            lines.append(
+                "  - Follow-up exercises: "
+                + ", ".join(str(item) for item in follow_up_exercises)
+            )
+        has_context = True
+    return "\n".join(lines) + "\n" if has_context else ""
+
+
+def _targeted_review_training_point(concept: str, has_repair_context: bool) -> str:
+    if has_repair_context:
+        return (
+            f"Repair {concept} by addressing the recorded misconception before adding new examples."
+        )
+    return (
+        f"Repair the scheduled weakness in {concept} by contrasting the definition with a borderline case."
+    )
+
+
+def _safe_positive_int(value: object) -> int:
+    try:
+        count = int(value)
+    except (TypeError, ValueError):
+        return 1
+    return count if count > 0 else 1
 
 
 def _review_exercise_difficulty(priority: str) -> int:

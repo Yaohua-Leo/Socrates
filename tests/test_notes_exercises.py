@@ -12,7 +12,12 @@ from socrates.kb import build_reference_kb
 from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft
 from socrates.project import ProjectSpec, create_project
-from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+from socrates.state import (
+    LearningStatePatch,
+    MistakeRecord,
+    build_review_schedule,
+    update_learning_state,
+)
 
 
 class NotesExercisesTests(unittest.TestCase):
@@ -319,6 +324,43 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("- Page: 82", text)
             self.assertIn(
                 "A subgroup N of G is normal if gNg^{-1}=N for every g in G.",
+                text,
+            )
+
+    def test_targeted_review_exercises_include_misconception_repair_context(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                            follow_up_exercises=["normal_subgroup_review_01"],
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            exercises = artifacts.generate_targeted_review_exercise_drafts(project)
+
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn("## Repair Context", text)
+            self.assertIn("- Misconception: normal_equals_central (x1)", text)
+            self.assertIn("  - Last session: session-001", text)
+            self.assertIn("  - Analysis: Confuses normality with centrality.", text)
+            self.assertIn("  - Repair suggestion: Compare gNg^-1=N with gn=ng.", text)
+            self.assertIn("  - Follow-up exercises: normal_subgroup_review_01", text)
+            self.assertIn(
+                "Repair normal_subgroup by addressing the recorded misconception before adding new examples.",
                 text,
             )
 
