@@ -141,6 +141,7 @@ def update_eval_report(context: ProjectContext, update: EvalReportUpdate) -> Pat
     if update.report not in EVAL_REPORTS:
         allowed = ", ".join(sorted(EVAL_REPORTS))
         raise ValueError(f"Unknown eval report {update.report!r}; expected one of: {allowed}")
+    _validate_eval_score(update.score)
 
     filename, title = EVAL_REPORTS[update.report]
     path = context.evals_dir / filename
@@ -334,6 +335,13 @@ def _validate_mastery_threshold(threshold: float) -> None:
         raise ValueError("Review mastery threshold must be finite.")
     if threshold < 0 or threshold > 1:
         raise ValueError("Review mastery threshold must be between 0 and 1.")
+
+
+def _validate_eval_score(score: float) -> None:
+    if not math.isfinite(score):
+        raise ValueError("Eval report score must be finite.")
+    if score < 0 or score > 1:
+        raise ValueError("Eval report score must be between 0 and 1.")
 
 
 def _review_items(

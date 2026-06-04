@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 import json
+import math
 from pathlib import Path
 import subprocess
 import sys
@@ -1928,6 +1929,27 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("### Issues", report_text)
             self.assertIn("- Could have checked quotient group prerequisites earlier.", report_text)
             self.assertIn("### Next Actions", report_text)
+
+    def test_update_eval_report_rejects_nonfinite_score_without_writing_report(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            report_path = context.evals_dir / "tutoring_eval.md"
+            original_text = report_path.read_text(encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Eval report score must be finite"):
+                update_eval_report(
+                    context,
+                    EvalReportUpdate(
+                        report="tutoring",
+                        subject="session-001",
+                        score=math.nan,
+                        summary="This score should not be written.",
+                    ),
+                )
+
+            self.assertEqual(report_path.read_text(encoding="utf-8"), original_text)
+            self.assertNotIn("This score should not be written.", original_text)
 
     def test_update_eval_report_rejects_unknown_report_name(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
