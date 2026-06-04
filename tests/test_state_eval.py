@@ -1479,6 +1479,40 @@ class StateEvalTests(unittest.TestCase):
             self.assertNotIn("Traceback", result.stderr)
             self.assertNotIn("Expecting property name", result.stderr)
 
+    def test_review_exercises_cli_reports_corrupt_learning_state_json_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-04",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid learning_state.json", result.stderr)
+            self.assertIn("repair the JSON before generating review exercises", result.stderr)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
     def test_review_repair_schedule_cli_fills_missing_and_invalid_dates(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

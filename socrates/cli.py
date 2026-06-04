@@ -1423,7 +1423,14 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
-    exercises = generate_targeted_review_exercise_drafts(args.project, due_by=due_by)
+    try:
+        exercises = generate_targeted_review_exercise_drafts(args.project, due_by=due_by)
+    except json.JSONDecodeError:
+        print(
+            "error: invalid learning_state.json; repair the JSON before generating review exercises",
+            file=sys.stderr,
+        )
+        return 1
     noun = "exercise" if len(exercises) == 1 else "exercises"
     print(f"Generated {len(exercises)} targeted review {noun}")
     return 0
