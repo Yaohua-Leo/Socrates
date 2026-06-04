@@ -6,14 +6,15 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.28-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.29-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, machine-readable read-only project resume
-state, read-only project resume cards, read-only study dashboards, generated
+long-term report-surface refresh, read-only multi-project resume indexes,
+machine-readable read-only project resume state, read-only project resume
+cards, read-only study dashboards, generated
 study-start briefs with a read-only manifest-backed freshness command,
 workflow action queue visibility, priority action queue navigation, priority
 action snapshots in reports, recommended focus report summaries, action summary
@@ -80,6 +81,7 @@ python -m socrates session judge-suggest --project ".\projects\group_theory" --s
 python -m socrates dashboard --project ".\projects\group_theory"
 python -m socrates resume --project ".\projects\group_theory"
 python -m socrates resume --project ".\projects\group_theory" --json
+python -m socrates projects resume --root ".\projects"
 python -m socrates brief generate --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory"
 python -m socrates status --project ".\projects\group_theory"
@@ -179,6 +181,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.28 `resume --json` emits the same read-only resume state as structured
   JSON with `quality_boundary: deterministic_project_resume` for future UI or
   plugin wrappers.
+- v0.29 `projects resume --root <root>` renders a read-only resume index
+  across a SocratesProjects root, reusing each project's deterministic resume
+  payload so collection navigation does not duplicate status logic or write
+  child-project artifacts.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -261,6 +267,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   does not run that command or mutate project state.
 - `resume --json` is the same read-only state as machine-readable output. It is
   not a new writer, score, project-readiness gate, or learning-state truth.
+- `projects resume` is a read-only collection view over per-project resume
+  payloads. It does not generate briefs, refresh reports, run repairs, call an
+  LLM, score learning, or mutate any child project.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

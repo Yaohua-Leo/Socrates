@@ -2033,6 +2033,30 @@ Markdown and JSON generated from the same payload
 - fresh project 不会因为 `resume --json` 写入 `study_brief.md`、`study_brief_manifest.json` 或 project log。
 - 这不是 writer、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 learning-state mutation；它只是 wrapper-facing read-only state。
 
+v0.29：multi-project resume index
+
+建议目标：
+
+让用户从一个 SocratesProjects 根目录直接看到每个项目是否可以继续学习，避免逐个打开项目运行 `resume`。
+
+必须完成：
+
+`projects resume --root <root>` CLI command
+
+collection-level resume formatter
+
+reuse per-project resume payloads
+
+read-only behavior across child projects
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects resume --root <root>` 已输出 `# Project Resume Index` Markdown。
+- 输出包含 root、project count，以及每个项目的 id、标题、resume state、study brief 状态、当前 next action 和推荐命令。
+- collection view 复用 `build_project_resume_payload(project_path)`，避免 duplicated resume 状态判断。
+- current saved brief 显示 `ready`、`current` 和 `none`；missing/stale/invalid brief 显示 `refresh_brief` 并推荐 `brief generate`。
+- 这不是 generator、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 child-project mutation；它只是 project collection 的只读导航视图。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

@@ -74,6 +74,7 @@ from .project_index import (
     list_projects,
     scan_project_root,
 )
+from .project_resume import format_project_resume_index
 from .quality import (
     audit_project_lifecycle,
     check_atomic_note_quality,
@@ -488,6 +489,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects_graph_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
     projects_graph_parser.set_defaults(func=_handle_projects_graph)
+    projects_resume_parser = projects_subparsers.add_parser(
+        "resume",
+        help="Show read-only resume state across projects.",
+    )
+    projects_resume_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
+    projects_resume_parser.set_defaults(func=_handle_projects_resume)
 
     kb_parser = subparsers.add_parser(
         "kb",
@@ -1672,6 +1679,11 @@ def _handle_projects_graph(args: argparse.Namespace) -> int:
     edge_count = len(edges) if isinstance(edges, list) else 0
     noun = "edge" if edge_count == 1 else "edges"
     print(f"Wrote cross-project graph with {edge_count} {noun}: {graph_path}")
+    return 0
+
+
+def _handle_projects_resume(args: argparse.Namespace) -> int:
+    print(format_project_resume_index(args.root), end="")
     return 0
 
 

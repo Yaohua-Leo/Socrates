@@ -145,6 +145,76 @@ class ProjectIndexTests(unittest.TestCase):
             self.assertIn("group_theory | Group Theory | active | group_theory", result.stdout)
             self.assertNotIn("No Socrates projects found", result.stdout)
 
+    def test_projects_resume_lists_per_project_resume_state_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "resume",
+                    "--root",
+                    str(root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("# Project Resume Index", result.stdout)
+            self.assertIn("- Projects: 2", result.stdout)
+            self.assertIn(
+                f"group_theory | Group Theory | ready | current | {next_action} | none",
+                result.stdout,
+            )
+            self.assertIn(
+                (
+                    "ring_theory | Ring Theory | refresh_brief | not_run | none | "
+                    f'python -m socrates brief generate --project "{fresh_project}"'
+                ),
+                result.stdout,
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+
     def test_projects_refs_finds_reviewed_notes_across_projects(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "SocratesProjects"
