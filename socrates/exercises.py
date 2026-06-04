@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 from pathlib import Path
 
 from .context import append_project_log, load_project, read_json, write_text
@@ -155,6 +156,8 @@ def grade_exercise_attempt(
 ) -> Path:
     """Write a grade artifact for one recorded exercise attempt."""
 
+    if not math.isfinite(score):
+        raise ValueError("Exercise grade score must be finite.")
     if score < 0 or score > 1:
         raise ValueError("Exercise grade score must be between 0 and 1.")
 

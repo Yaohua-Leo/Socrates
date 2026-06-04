@@ -444,6 +444,69 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Graded exercises: 1", status.stdout)
 
+    def test_exercise_grade_cli_rejects_nonfinite_score_without_writing_grade(
+        self,
+    ) -> None:
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "I would prove normality by checking gng^-1 remains in N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text(
+                "This score should not be accepted.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            record_exercise_attempt(project, "normal_subgroup_01", answer)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "nan",
+                    "--feedback",
+                    str(feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: Exercise grade score must be finite", result.stderr)
+            graded = project / "05_exercises" / "graded" / "normal_subgroup_01_attempt_001_grade.md"
+            self.assertFalse(graded.exists())
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertNotIn("normal_subgroup", learning_state["concept_mastery"])
+            self.assertNotIn("exercise_solving", learning_state["proof_skills"])
+
     def test_exercise_grade_cli_rejects_corrupt_learning_state_before_writing_grade(
         self,
     ) -> None:
