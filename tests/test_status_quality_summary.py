@@ -9,6 +9,7 @@ import unittest
 
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
 from socrates.kb import build_reference_kb
+from socrates.notes import review_atomic_note
 from socrates.project import ProjectSpec, create_project
 from socrates.tutoring import run_scripted_tutoring_session
 
@@ -132,6 +133,35 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Note quality check: fail (0/1 passed, 1 failed)", status.stdout)
             self.assertIn("Quality checks to fix: 1", status.stdout)
+
+    def test_status_cli_counts_reviewed_notes_pending_obsidian_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What condition distinguishes normality from centrality?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Reviewed notes: 1", status.stdout)
+            self.assertIn("Obsidian exports: 0", status.stdout)
+            self.assertIn("Obsidian exports to run: 1", status.stdout)
 
 
 if __name__ == "__main__":

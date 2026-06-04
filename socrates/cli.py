@@ -1124,6 +1124,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     queue = collect_learning_queue(context.root)
     draft_count = len(queue.notes_to_review)
     misconception_note_draft_count = len(queue.misconception_notes_to_draft)
+    obsidian_exports_to_run_count = len(queue.obsidian_exports_to_run)
     quality_checks_to_fix_count = len(queue.quality_checks_to_fix)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     converted_count = _count_converted_references(context.references_dir)
@@ -1206,6 +1207,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Attempted exercises: {attempted_exercise_count}")
     print(f"Graded exercises: {graded_exercise_count}")
     print(f"Obsidian exports: {obsidian_export_count}")
+    print(f"Obsidian exports to run: {obsidian_exports_to_run_count}")
     print(f"Obsidian backlinks: {obsidian_backlink_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
     if next_review is not None:
