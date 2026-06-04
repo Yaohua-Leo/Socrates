@@ -6,9 +6,9 @@
 
 ## 当前阶段
 
-Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.41-alpha 的 structured learning-mastery JSON、structured misconception-ledger JSON 与 targeted limit-controlled dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume index 层。
+Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.42-alpha 的 structured due-review JSON、structured learning-mastery JSON、structured misconception-ledger JSON 与 targeted limit-controlled dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume index 层。
 
-当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.41 review mastery JSON：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作、阻塞项、可继续学习项、人工审核项、修复路径、当前风险压力、同类型报告之间的风险变化、report history artifact 健康状态、regression manifest 写入后的报告/status 一致性、可读的一屏 operator dashboard、可保存的学习启动 brief、旧 brief 是否仍对应当前 first next action、新 brief 的结构化 manifest、只读检查 brief freshness 的命令、返回学习项目时的只读 resume card、给未来 UI/plugin 读取的 resume JSON、跨项目根目录的返回学习 ready/refresh 导航、给未来 UI/plugin 读取的 collection-level JSON、project root 的 ready/refresh_brief 分布、按 resume state 筛选项目根目录视图、从 filtered rows 派生出的推荐命令摘要、只输出推荐命令行的 copy mode、只对 refresh_brief 子项目写 brief 的 collection writer、该 writer 的 structured JSON result、该 writer 的 no-write dry-run preview、该 writer 的 bounded execution limit、该 writer 的 target-by-project-id filter、错因库 reader 的 structured JSON view，以及 mastery score reader 的 structured JSON view 都必须清楚可见。
+当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.42 review due JSON：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作、阻塞项、可继续学习项、人工审核项、修复路径、当前风险压力、同类型报告之间的风险变化、report history artifact 健康状态、regression manifest 写入后的报告/status 一致性、可读的一屏 operator dashboard、可保存的学习启动 brief、旧 brief 是否仍对应当前 first next action、新 brief 的结构化 manifest、只读检查 brief freshness 的命令、返回学习项目时的只读 resume card、给未来 UI/plugin 读取的 resume JSON、跨项目根目录的返回学习 ready/refresh 导航、给未来 UI/plugin 读取的 collection-level JSON、project root 的 ready/refresh_brief 分布、按 resume state 筛选项目根目录视图、从 filtered rows 派生出的推荐命令摘要、只输出推荐命令行的 copy mode、只对 refresh_brief 子项目写 brief 的 collection writer、该 writer 的 structured JSON result、该 writer 的 no-write dry-run preview、该 writer 的 bounded execution limit、该 writer 的 target-by-project-id filter、错因库 reader 的 structured JSON view、mastery score reader 的 structured JSON view，以及 due review reader 的 structured JSON view 都必须清楚可见。
 
 ## v0.2 收口基线
 
@@ -721,6 +721,23 @@ Verification evidence:
   - `python -m compileall socrates` passed.
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 441 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 441 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
+
+## v0.42 Review due JSON alpha
+
+- Added `--json` to `python -m socrates review due`.
+- JSON output reuses `_due_review_rows(learning_state, as_of, priority=...)`, so Markdown and JSON views share the same due-review filtering and invalid-row detection.
+- The payload records `schema_version`, `quality_boundary: deterministic_due_review`, `project`, `as_of`, `priority_filter`, due/invalid counts, due rows, and invalid persisted schedule rows.
+- `--priority high --json` returns only high-priority due rows while still reporting invalid persisted schedule rows.
+- Safety boundary: v0.42 due-review JSON is a read-only ledger view. It is not a scheduler, repair command, exercise generator, planner, tutor, report refresh, LLM call, or learning-state mutation.
+
+Verification evidence:
+  - `python -m unittest tests.test_state_eval` failed during RED because `review due --json` was not registered.
+  - `python -m unittest tests.test_state_eval` passed with 46 tests OK after implementation.
+  - `python -m unittest tests.test_state_eval tests.test_status_quality_summary tests.test_learning_queue tests.test_reports` passed with 139 tests OK.
+  - `python -m unittest discover -s tests` passed with 443 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 443 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 443 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
 
 ## 当前未完成事项
 

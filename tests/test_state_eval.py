@@ -1831,6 +1831,168 @@ class StateEvalTests(unittest.TestCase):
             )
             self.assertNotIn("alpha_medium_review", high_priority.stdout)
 
+    def test_review_due_json_lists_due_and_invalid_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            state["review_schedule"].append(
+                {
+                    "concept": "broken_review",
+                    "priority": "medium",
+                    "due": "within_3_days",
+                    "scheduled_for": "not-a-date",
+                    "reason": "corrupt schedule fixture",
+                }
+            )
+            context.learning_state.write_text(
+                json.dumps(state, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Due Reviews", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_due_review")
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["as_of"], "2026-06-07")
+            self.assertEqual(payload["priority_filter"], "all")
+            self.assertEqual(payload["due_count"], 2)
+            self.assertEqual(payload["invalid_count"], 1)
+            self.assertEqual(
+                payload["due_reviews"],
+                [
+                    {
+                        "concept": "zeta_urgent_review",
+                        "scheduled_for": "2026-06-04",
+                        "priority": "high",
+                        "reason": "mastery 0.4",
+                        "repair": "",
+                    },
+                    {
+                        "concept": "alpha_medium_review",
+                        "scheduled_for": "2026-06-07",
+                        "priority": "medium",
+                        "reason": "mastery 0.62",
+                        "repair": "",
+                    },
+                ],
+            )
+            self.assertEqual(
+                payload["invalid_reviews"],
+                [
+                    {
+                        "concept": "broken_review",
+                        "scheduled_for": "not-a-date",
+                        "status": "invalid_scheduled_for",
+                    }
+                ],
+            )
+
+    def test_review_due_json_filters_priority_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            state["review_schedule"].append(
+                {
+                    "concept": "broken_review",
+                    "priority": "medium",
+                    "due": "within_3_days",
+                    "scheduled_for": "not-a-date",
+                    "reason": "corrupt schedule fixture",
+                }
+            )
+            context.learning_state.write_text(
+                json.dumps(state, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            project_log_before = context.project_log.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["priority_filter"], "high")
+            self.assertEqual(payload["due_count"], 1)
+            self.assertEqual(payload["invalid_count"], 1)
+            self.assertEqual(
+                [row["concept"] for row in payload["due_reviews"]],
+                ["zeta_urgent_review"],
+            )
+            self.assertEqual(
+                [row["concept"] for row in payload["invalid_reviews"]],
+                ["broken_review"],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(context.project_log.read_text(encoding="utf-8"), project_log_before)
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").iterdir()), [])
+
     def test_review_due_cli_shows_misconception_repair_suggestion(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

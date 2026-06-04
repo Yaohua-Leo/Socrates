@@ -749,6 +749,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="Filter due reviews by priority; defaults to all.",
     )
+    review_due_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of Markdown.",
+    )
     review_due_parser.set_defaults(func=_handle_review_due)
     review_repair_parser = review_subparsers.add_parser(
         "repair-schedule",
@@ -2100,7 +2105,23 @@ def _handle_review_due(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     context = load_project(args.project)
-    print(_due_reviews_text(context.learning_state, as_of, priority=args.priority), end="")
+    rows, invalid_rows = _due_review_rows(context.learning_state, as_of, priority=args.priority)
+    if args.json:
+        print(
+            json.dumps(
+                _due_reviews_payload(
+                    context,
+                    as_of=as_of,
+                    priority_filter=args.priority,
+                    rows=rows,
+                    invalid_rows=invalid_rows,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    print(_due_reviews_text_from_rows(rows, invalid_rows), end="")
     return 0
 
 
@@ -3634,8 +3655,15 @@ def _parse_iso_date(value: str) -> date:
 
 
 def _due_reviews_text(learning_state: Path, as_of: date, *, priority: str = "all") -> str:
-    lines = ["# Due Reviews", ""]
     rows, invalid_rows = _due_review_rows(learning_state, as_of, priority=priority)
+    return _due_reviews_text_from_rows(rows, invalid_rows)
+
+
+def _due_reviews_text_from_rows(
+    rows: list[dict[str, str]],
+    invalid_rows: list[dict[str, str]],
+) -> str:
+    lines = ["# Due Reviews", ""]
     if not rows:
         lines.append("- none")
     else:
@@ -3650,6 +3678,45 @@ def _due_reviews_text(learning_state: Path, as_of: date, *, priority: str = "all
             for row in invalid_rows
         )
     return "\n".join(lines) + "\n"
+
+
+def _due_reviews_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    priority_filter: str,
+    rows: list[dict[str, str]],
+    invalid_rows: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_due_review",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "priority_filter": priority_filter,
+        "due_count": len(rows),
+        "invalid_count": len(invalid_rows),
+        "due_reviews": [_due_review_record(row) for row in rows],
+        "invalid_reviews": [_invalid_due_review_record(row) for row in invalid_rows],
+    }
+
+
+def _due_review_record(row: dict[str, str]) -> dict[str, str]:
+    return {
+        "concept": row["concept"],
+        "scheduled_for": row["scheduled_for"],
+        "priority": row["priority"],
+        "reason": row["reason"],
+        "repair": row.get("repair", ""),
+    }
+
+
+def _invalid_due_review_record(row: dict[str, str]) -> dict[str, str]:
+    return {
+        "concept": row["concept"],
+        "scheduled_for": row["scheduled_for"],
+        "status": "invalid_scheduled_for",
+    }
 
 
 def _due_review_rows(

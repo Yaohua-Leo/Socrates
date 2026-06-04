@@ -6,13 +6,13 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.41-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.42-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured learning-mastery and
+long-term report-surface refresh, structured due-review, learning-mastery, and
 misconception-ledger JSON,
 targeted limit-controlled dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted
 machine-readable and Markdown read-only multi-project resume indexes,
@@ -65,6 +65,7 @@ Run the deterministic learning loop and inspect status:
 ```powershell
 python -m socrates plan --project ".\projects\group_theory"
 python -m socrates teach --project ".\projects\group_theory" --session-id session_0001 --script ".\session.script"
+python -m socrates review due --project ".\projects\group_theory" --as-of 2026-06-07 --json
 python -m socrates review mastery --project ".\projects\group_theory" --json
 python -m socrates review misconceptions --project ".\projects\group_theory" --json
 python -m socrates note review --project ".\projects\group_theory" --note normal_subgroup
@@ -237,6 +238,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.41 `review mastery --json` emits the same read-only concept/proof-skill
   score rows as structured JSON with filter metadata and threshold-sensitive
   counts.
+- v0.42 `review due --json` emits the same read-only due-review rows as
+  structured JSON, including invalid persisted schedule rows that need repair.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -302,6 +305,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - `review mastery --json` is a read-only structured view over persisted
   concept mastery and proof-skill rows. It is not a scheduler, planner, tutor,
   score writer, report refresh, LLM call, or learning-state mutation.
+- `review due --json` is a read-only structured view over due review rows and
+  invalid persisted schedule rows. It is not a scheduler, repair command,
+  exercise generator, planner, tutor, report refresh, LLM call, or
+  learning-state mutation.
 - Study dashboards are read-only compositions over existing deterministic
   evidence. They do not create new truth, run repairs, generate reports, call an
   LLM, approve artifacts, score learning, tutor, predict, or mutate project

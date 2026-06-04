@@ -7,8 +7,9 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.41-alpha structured learning-mastery JSON
-  over v0.40 structured misconception-ledger JSON, v0.39 targeted limit-controlled
+- Current implementation baseline: v0.42-alpha structured due-review JSON over
+  v0.41 structured learning-mastery JSON, v0.40 structured
+  misconception-ledger JSON, v0.39 targeted limit-controlled
   dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, v0.38
   limit-controlled dry-run-previewable
   structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, v0.37
@@ -131,3 +132,5 @@ from the source planning conversation.
   output.
 - `superpowers/plans/2026-06-04-v41-review-mastery-json.md`: executable v0.41
   plan for machine-readable read-only learning mastery output.
+- `superpowers/plans/2026-06-04-v42-review-due-json.md`: executable v0.42 plan
+  for machine-readable read-only due-review output.

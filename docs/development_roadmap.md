@@ -2351,6 +2351,32 @@ read-only no-write behavior
 - `--kind concept --status weak --threshold 0.8 --json` 只返回该阈值下的 weak concept rows，并且不修改 `learning_state.json`、review schedules、reports、note drafts 或 project log。
 - 这不是 scheduler、planner、tutor、score writer、report refresh、LLM call 或 learning-state mutation；它只是 persisted learning-score reader 的 structured output mode。
 
+v0.42：due-review JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 due review rows 和 invalid persisted schedule rows，而不用解析 `review due` Markdown。
+
+必须完成：
+
+`review due --json`
+
+structured due review rows
+
+invalid schedule rows
+
+as-of / priority filter metadata
+
+read-only no-write behavior
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review due --project <project> --as-of 2026-06-07 --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_due_review`、`project`、`as_of`、`priority_filter`、`due_count`、`invalid_count`、`due_reviews` 和 `invalid_reviews`。
+- 每个 due row 包含 concept、scheduled date、priority、reason 与 repair suggestion text；每个 invalid row 包含 concept、scheduled date 和 `status: invalid_scheduled_for`。
+- `--priority high --json` 只过滤 due rows，仍会显式报告 invalid persisted schedule rows。
+- 这不是 scheduler、repair command、exercise generator、planner、tutor、report refresh、LLM call 或 learning-state mutation；它只是 persisted due-review reader 的 structured output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
