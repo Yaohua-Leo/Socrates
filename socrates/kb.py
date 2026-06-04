@@ -115,7 +115,7 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
                 object_count=0,
                 status="invalid",
             )
-        if not _valid_reference_index_schema(index):
+        if not _valid_reference_index_schema(index, context.root):
             return ReferenceKbStatus(
                 index_path=index_path,
                 object_count=0,
@@ -371,21 +371,66 @@ def read_reference_index(
         raise ValueError(_reference_index_rebuild_message(project_root, "is missing")) from exc
     except json.JSONDecodeError as exc:
         raise ValueError(_reference_index_rebuild_message(project_root, "is invalid")) from exc
-    if not _valid_reference_index_schema(index):
+    if not _valid_reference_index_schema(index, project_root):
         raise ValueError(_reference_index_rebuild_message(project_root, "has invalid schema"))
     return index
 
 
-def _valid_reference_index_schema(index: object) -> bool:
+def _valid_reference_index_schema(index: object, project_root: Path | None = None) -> bool:
     if not isinstance(index, dict) or index.get("schema_version") != 1:
         return False
     objects = index.get("objects")
     chunks = index.get("chunks")
     if not isinstance(objects, list) or not isinstance(chunks, list):
         return False
-    return all(isinstance(item, dict) for item in objects) and all(
+    if not all(isinstance(item, dict) for item in objects) or not all(
         isinstance(item, dict) for item in chunks
-    )
+    ):
+        return False
+    if project_root is None:
+        return True
+    return _valid_reference_index_provenance(project_root, objects, chunks)
+
+
+def _valid_reference_index_provenance(
+    project_root: Path,
+    objects: list[object],
+    chunks: list[object],
+) -> bool:
+    for item in objects:
+        if not isinstance(item, dict):
+            return False
+        source = item.get("source")
+        if not isinstance(source, dict):
+            return False
+        source_path = source.get("path")
+        if not isinstance(source_path, str) or not _valid_curated_source_file(
+            project_root,
+            source_path,
+        ):
+            return False
+    for chunk in chunks:
+        if not isinstance(chunk, dict):
+            return False
+        metadata = chunk.get("metadata")
+        if not isinstance(metadata, dict):
+            return False
+        source = metadata.get("source")
+        if not isinstance(source, dict):
+            return False
+        source_path = source.get("path")
+        metadata_source_path = metadata.get("source_path")
+        if not isinstance(source_path, str) or not _valid_curated_source_file(
+            project_root,
+            source_path,
+        ):
+            return False
+        if not isinstance(metadata_source_path, str) or not _valid_curated_source_file(
+            project_root,
+            metadata_source_path,
+        ):
+            return False
+    return True
 
 
 def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
