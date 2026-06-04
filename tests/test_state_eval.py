@@ -455,6 +455,7 @@ class StateEvalTests(unittest.TestCase):
                 user_answer="Normal means central.",
                 analysis="Confuses normality with centrality.",
                 repair_suggestion="Compare normality with the center.",
+                follow_up_exercises=["normal_subgroup_review_01"],
             )
 
             update_learning_state(
@@ -476,6 +477,15 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("- Due: next_session", schedule_text)
             self.assertIn("- Scheduled for: 2026-06-04", schedule_text)
             self.assertIn("- Reason: mastery 0.41; active misconception normal_equals_central x2", schedule_text)
+            self.assertIn("### Repair Context", schedule_text)
+            self.assertIn("- Misconception: normal_equals_central (x2)", schedule_text)
+            self.assertIn("  - Last session: session-001", schedule_text)
+            self.assertIn("  - Analysis: Confuses normality with centrality.", schedule_text)
+            self.assertIn(
+                "  - Repair suggestion: Compare normality with the center.",
+                schedule_text,
+            )
+            self.assertIn("  - Follow-up exercises: normal_subgroup_review_01", schedule_text)
             self.assertNotIn("## subgroup", schedule_text)
 
             learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
@@ -487,6 +497,16 @@ class StateEvalTests(unittest.TestCase):
                     "due": "next_session",
                     "scheduled_for": "2026-06-04",
                     "reason": "mastery 0.41; active misconception normal_equals_central x2",
+                    "repair_context": [
+                        {
+                            "misconception_id": "normal_equals_central",
+                            "count": 2,
+                            "last_session_id": "session-001",
+                            "analysis": "Confuses normality with centrality.",
+                            "repair_suggestion": "Compare normality with the center.",
+                            "follow_up_exercises": ["normal_subgroup_review_01"],
+                        }
+                    ],
                 },
             )
 

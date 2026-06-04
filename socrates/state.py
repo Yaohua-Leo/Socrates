@@ -54,6 +54,7 @@ class ReviewScheduleItem:
     due: str
     scheduled_for: str
     reason: str
+    repair_context: tuple[dict[str, object], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -144,16 +145,7 @@ def build_review_schedule(
         mastery_threshold=mastery_threshold,
         as_of=as_of or date.today(),
     )
-    state["review_schedule"] = [
-        {
-            "concept": item.concept,
-            "priority": item.priority,
-            "due": item.due,
-            "scheduled_for": item.scheduled_for,
-            "reason": item.reason,
-        }
-        for item in items
-    ]
+    state["review_schedule"] = [_review_item_record(item) for item in items]
     write_json(context.learning_state, state)
 
     schedule_path = context.learning_plan_dir / "review_schedule.md"
@@ -170,16 +162,7 @@ def repair_review_schedule(
 
     state = _learning_state_dict(context.learning_state)
     repaired_count, items = _repaired_review_items(state, as_of=as_of or date.today())
-    state["review_schedule"] = [
-        {
-            "concept": item.concept,
-            "priority": item.priority,
-            "due": item.due,
-            "scheduled_for": item.scheduled_for,
-            "reason": item.reason,
-        }
-        for item in items
-    ]
+    state["review_schedule"] = [_review_item_record(item) for item in items]
     write_json(context.learning_state, state)
 
     schedule_path = context.learning_plan_dir / "review_schedule.md"
@@ -333,6 +316,7 @@ def _review_items(
 ) -> list[ReviewScheduleItem]:
     concept_reasons: dict[str, list[str]] = {}
     concept_priorities: dict[str, str] = {}
+    concept_repair_context: dict[str, list[dict[str, object]]] = {}
 
     concept_mastery = state.get("concept_mastery", {})
     if isinstance(concept_mastery, dict):
@@ -356,6 +340,9 @@ def _review_items(
             concept_reasons.setdefault(concept, []).append(
                 f"active misconception {misconception_id} x{count}"
             )
+            concept_repair_context.setdefault(concept, []).append(
+                _misconception_repair_context(misconception_id, value, count)
+            )
             if count > 1 or concept_priorities.get(concept) != "high":
                 concept_priorities[concept] = "high" if count > 1 else "medium"
 
@@ -370,6 +357,7 @@ def _review_items(
                 due=due,
                 scheduled_for=_scheduled_review_date(priority, as_of),
                 reason="; ".join(concept_reasons[concept]),
+                repair_context=tuple(concept_repair_context.get(concept, [])),
             )
         )
     return sorted(items, key=lambda item: (item.scheduled_for, item.concept))
@@ -408,6 +396,7 @@ def _repaired_review_items(
                 due=due,
                 scheduled_for=scheduled_for,
                 reason=str(raw_item.get("reason", "review scheduled")),
+                repair_context=_repair_context_tuple(raw_item.get("repair_context", [])),
             )
         )
     return (
@@ -430,6 +419,74 @@ def _is_iso_date(value: str) -> bool:
     except ValueError:
         return False
     return True
+
+
+def _review_item_record(item: ReviewScheduleItem) -> dict[str, object]:
+    record: dict[str, object] = {
+        "concept": item.concept,
+        "priority": item.priority,
+        "due": item.due,
+        "scheduled_for": item.scheduled_for,
+        "reason": item.reason,
+    }
+    if item.repair_context:
+        record["repair_context"] = [
+            _repair_context_record(context) for context in item.repair_context
+        ]
+    return record
+
+
+def _misconception_repair_context(
+    misconception_id: object,
+    value: dict[object, object],
+    count: int,
+) -> dict[str, object]:
+    context: dict[str, object] = {
+        "misconception_id": str(misconception_id),
+        "count": count,
+    }
+    for source_key, target_key in (
+        ("last_session_id", "last_session_id"),
+        ("analysis", "analysis"),
+        ("repair_suggestion", "repair_suggestion"),
+    ):
+        text = str(value.get(source_key, "")).strip()
+        if text:
+            context[target_key] = text
+    follow_up_exercises = value.get("follow_up_exercises", [])
+    if isinstance(follow_up_exercises, list):
+        exercises = [str(item).strip() for item in follow_up_exercises if str(item).strip()]
+        if exercises:
+            context["follow_up_exercises"] = exercises
+    return context
+
+
+def _repair_context_tuple(value: object) -> tuple[dict[str, object], ...]:
+    if not isinstance(value, list):
+        return ()
+    contexts: list[dict[str, object]] = []
+    for raw_context in value:
+        if not isinstance(raw_context, dict):
+            continue
+        misconception_id = str(raw_context.get("misconception_id", "")).strip()
+        if not misconception_id:
+            continue
+        contexts.append(
+            _misconception_repair_context(
+                misconception_id,
+                raw_context,
+                _safe_count(raw_context.get("count", 1)) or 1,
+            )
+        )
+    return tuple(contexts)
+
+
+def _repair_context_record(context: dict[str, object]) -> dict[str, object]:
+    record = dict(context)
+    follow_up_exercises = record.get("follow_up_exercises", [])
+    if isinstance(follow_up_exercises, tuple):
+        record["follow_up_exercises"] = list(follow_up_exercises)
+    return record
 
 
 def _safe_count(value: object) -> int:
@@ -497,6 +554,30 @@ def _review_schedule_markdown(items: list[ReviewScheduleItem]) -> str:
                 "",
             ]
         )
+        if item.repair_context:
+            lines.extend(["### Repair Context", ""])
+            for context in item.repair_context:
+                misconception_id = str(context.get("misconception_id", "")).strip()
+                count = _safe_count(context.get("count", 1)) or 1
+                if not misconception_id:
+                    continue
+                lines.append(f"- Misconception: {misconception_id} (x{count})")
+                last_session_id = str(context.get("last_session_id", "")).strip()
+                if last_session_id:
+                    lines.append(f"  - Last session: {last_session_id}")
+                analysis = str(context.get("analysis", "")).strip()
+                if analysis:
+                    lines.append(f"  - Analysis: {analysis}")
+                repair_suggestion = str(context.get("repair_suggestion", "")).strip()
+                if repair_suggestion:
+                    lines.append(f"  - Repair suggestion: {repair_suggestion}")
+                follow_up_exercises = context.get("follow_up_exercises", [])
+                if isinstance(follow_up_exercises, list) and follow_up_exercises:
+                    lines.append(
+                        "  - Follow-up exercises: "
+                        + ", ".join(str(item) for item in follow_up_exercises)
+                    )
+            lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
 
