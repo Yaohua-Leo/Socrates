@@ -94,6 +94,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
             benchmark_snapshot=_read_benchmark_snapshot(context.root),
+            session_score_snapshot=_read_session_score_snapshot(context.root),
             state=state,
         ),
     )
@@ -217,6 +218,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "06_kb" / "chunks" / "reference_index.json",
             project_root / "07_exports" / "obsidian",
             project_root / "08_evals" / "benchmark_manifest.json",
+            project_root / "08_evals" / "session_score_manifest.json",
             project_root / "08_evals" / "ingestion_quality_manifest.json",
             project_root / "08_evals" / "note_quality_manifest.json",
             project_root / "08_evals" / "exercise_quality_manifest.json",
@@ -364,6 +366,7 @@ def _project_summary_text(
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
     benchmark_snapshot: dict[str, object],
+    session_score_snapshot: dict[str, object],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -396,6 +399,10 @@ def _project_summary_text(
         "## Benchmark Snapshot",
         "",
         *_benchmark_snapshot_lines(benchmark_snapshot),
+        "",
+        "## Session Score Snapshot",
+        "",
+        *_session_score_snapshot_lines(session_score_snapshot),
         "",
         "## Artifact Quality Snapshot",
         "",
@@ -556,6 +563,37 @@ def _read_benchmark_snapshot(project_root: Path) -> dict[str, object]:
         return {"status": "invalid"}
     return {
         "status": "ready",
+        "score": score,
+        "passed_gates": passed_gates,
+        "total_gates": total_gates,
+        "failed_gates": _failed_benchmark_gates(gates),
+    }
+
+
+def _read_session_score_snapshot(project_root: Path) -> dict[str, object]:
+    manifest_path = project_root / "08_evals" / "session_score_manifest.json"
+    if not manifest_path.exists():
+        return {"status": "not_run"}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    session_id = manifest.get("session_id")
+    score = manifest.get("score")
+    passed_gates = manifest.get("passed_gates")
+    total_gates = manifest.get("total_gates")
+    gates = manifest.get("gates", [])
+    if not isinstance(session_id, str):
+        return {"status": "invalid"}
+    if not all(isinstance(value, int) for value in (score, passed_gates, total_gates)):
+        return {"status": "invalid"}
+    if not isinstance(gates, list) or len(gates) != total_gates:
+        return {"status": "invalid"}
+    return {
+        "status": "ready",
+        "session_id": session_id,
         "score": score,
         "passed_gates": passed_gates,
         "total_gates": total_gates,
@@ -737,6 +775,27 @@ def _benchmark_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
         f"- Gates passed: {snapshot['passed_gates']}/{snapshot['total_gates']}",
         f"- Failed gates: {failed_text}",
         "- Manifest: 08_evals/benchmark_manifest.json",
+    ]
+
+
+def _session_score_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
+    status = snapshot.get("status")
+    if status == "not_run":
+        return ["- not run"]
+    if status != "ready":
+        return ["- invalid session score manifest"]
+    failed_gates = snapshot.get("failed_gates", [])
+    failed_text = (
+        ", ".join(str(name) for name in failed_gates)
+        if isinstance(failed_gates, list) and failed_gates
+        else "none"
+    )
+    return [
+        f"- Session: {snapshot['session_id']}",
+        f"- Score: {snapshot['score']}/100",
+        f"- Gates passed: {snapshot['passed_gates']}/{snapshot['total_gates']}",
+        f"- Failed gates: {failed_text}",
+        "- Manifest: 08_evals/session_score_manifest.json",
     ]
 
 

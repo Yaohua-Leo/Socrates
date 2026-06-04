@@ -160,6 +160,11 @@ class StatusQualitySummaryTests(unittest.TestCase):
                 encoding="utf-8",
                 newline="\n",
             )
+            (evals / "session_score_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
 
             status = subprocess.run(
                 [sys.executable, "-m", "socrates", "status", "--project", str(project)],
@@ -175,6 +180,7 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Exercise quality check: invalid", status.stdout)
             self.assertIn("Tutoring quality check: not run", status.stdout)
             self.assertIn("Tool verification check: invalid", status.stdout)
+            self.assertIn("Session score: invalid", status.stdout)
 
     def test_status_cli_counts_reviewed_notes_pending_obsidian_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

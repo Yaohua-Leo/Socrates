@@ -522,6 +522,8 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
             "Learning reports": _has_learning_reports(context.root),
             "Artifact quality": _has_clean_artifact_quality_manifests(context.root),
             "LLM suggestion drafts": _has_valid_llm_suggestion_manifest(context.root),
+            "Session score report": _has_session_score_report(context.root),
+            "Session score manifest": _has_session_score_manifest(context.root),
             "Benchmark report": _has_benchmark_report(context.root),
             "Benchmark manifest": _has_benchmark_manifest(context.root),
             "Tool verification records": _has_tool_verification_records(context.root),
@@ -2187,6 +2189,28 @@ def _has_learning_reports(project_root: Path) -> bool:
     return all((reports_dir / name).exists() for name in required)
 
 
+def _has_session_score_report(project_root: Path) -> bool:
+    report_path = project_root / "08_evals" / "session_score_report.md"
+    if not report_path.exists():
+        return False
+    if "- Session score: 100/100" not in report_path.read_text(encoding="utf-8"):
+        return False
+    return _latest_benchmark_input_mtime(project_root) <= report_path.stat().st_mtime_ns
+
+
+def _has_session_score_manifest(project_root: Path) -> bool:
+    manifest_path = project_root / "08_evals" / "session_score_manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not _valid_session_score_manifest(project_root, manifest):
+        return False
+    return _latest_benchmark_input_mtime(project_root) <= manifest_path.stat().st_mtime_ns
+
+
 def _has_benchmark_report(project_root: Path) -> bool:
     report_path = project_root / "08_evals" / "benchmark_report.md"
     if not report_path.exists():
@@ -2385,6 +2409,61 @@ def _valid_benchmark_manifest(project_root: Path, manifest: object) -> bool:
             return False
         if gate["passed"]:
             passed_count += 1
+    return passed_count == passed_gates
+
+
+def _valid_session_score_manifest(project_root: Path, manifest: object) -> bool:
+    if not isinstance(manifest, dict):
+        return False
+    if manifest.get("schema_version") != 1:
+        return False
+    if not isinstance(manifest.get("session_id"), str) or not manifest["session_id"]:
+        return False
+    if manifest.get("status") != "pass":
+        return False
+    if manifest.get("quality_boundary") != "advisory_checklist":
+        return False
+    total_gates = manifest.get("total_gates")
+    passed_gates = manifest.get("passed_gates")
+    score = manifest.get("score")
+    gates = manifest.get("gates")
+    if not isinstance(total_gates, int) or total_gates <= 0:
+        return False
+    if not isinstance(passed_gates, int) or passed_gates < 0:
+        return False
+    if not isinstance(score, int) or score < 0:
+        return False
+    if passed_gates != total_gates or score != 100:
+        return False
+    if not isinstance(gates, list) or len(gates) != total_gates:
+        return False
+    expected_gates = {
+        "Ingestion",
+        "Note quality",
+        "Exercise quality",
+        "Exercise validation",
+        "Tutoring quality",
+    }
+    gate_names = {str(gate.get("name", "")) for gate in gates if isinstance(gate, dict)}
+    if gate_names != expected_gates:
+        return False
+    passed_count = 0
+    for gate in gates:
+        if not isinstance(gate, dict):
+            return False
+        if gate.get("passed") is not True:
+            return False
+        if not isinstance(gate.get("score"), int):
+            return False
+        if not isinstance(gate.get("checked"), int):
+            return False
+        if not isinstance(gate.get("failed"), int):
+            return False
+        if not _manifest_artifact_exists(project_root, gate.get("report_path")):
+            return False
+        if not _manifest_artifact_exists(project_root, gate.get("manifest_path")):
+            return False
+        passed_count += 1
     return passed_count == passed_gates
 
 

@@ -94,6 +94,26 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 356 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 356 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
 
+## v0.5 Teaching quality evaluation alpha
+
+- Added `socrates/session_score.py` and `python -m socrates session score` to write `08_evals/session_score_report.md` plus `08_evals/session_score_manifest.json`.
+- Session scoring composes the existing deterministic gates: ingestion, note quality, exercise quality, exercise validation, and tutoring quality.
+- `status` now reports session score, gates, and failed gates from the persisted manifest with conservative invalid/not-run handling.
+- Project summary reports now include a Session Score Snapshot and become stale when the session score manifest changes.
+- Lifecycle audit now requires both a fresh session score report and a valid passing session score manifest before claiming a complete learning loop.
+- Safety boundary: v0.5 session scores are deterministic checklist summaries. They are not LLM judge outputs, formal proof of mathematical correctness, or automatic learner-state/trust mutation.
+- Verification evidence:
+  - `python -m unittest tests.test_session_score` passed.
+  - `python -m unittest tests.test_status_quality_summary` passed.
+  - `python -m unittest tests.test_reports` passed.
+  - `python -m unittest tests.test_lifecycle_audit` passed.
+  - `python -m unittest tests.test_benchmark tests.test_tutoring_quality` passed.
+  - `python -m unittest discover -s tests` passed with 359 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 359 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 359 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -130,7 +150,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，但不等同于数学正确性证明。PDF/OCR 后端、LLM judge、全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，但二者都不等同于数学正确性证明或 LLM judge。PDF/OCR 后端、LLM judge、全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

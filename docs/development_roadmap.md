@@ -1079,6 +1079,13 @@ eval reports
 
 系统具备最初的 benchmark 能力
 
+当前实现状态（2026-06-04，v0.5-alpha）
+
+- 已有 ingestion、note quality、exercise quality、exercise validation 和 tutoring quality 的确定性质量报告。
+- 新增 `session score` 报告，将上述五个 gate 组合为单次教学 session 的 0-100 分报告和 manifest。
+- `status`、project summary 和 lifecycle audit 已能读取 session score manifest，并对缺失、损坏或未通过的 score 保守失败。
+- LLM judge rubric 仍未接入；当前 v0.5 是 deterministic checklist baseline，不是形式化教学质量证明。
+
 Phase 10：高级数学工具集成
 目标
 

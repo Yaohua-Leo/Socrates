@@ -978,6 +978,61 @@ class ReportTests(unittest.TestCase):
                 report_text,
             )
 
+    def test_project_summary_includes_session_score_snapshot_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            (project / "08_evals" / "session_score_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "session_id": "session_0001",
+                        "status": "pass",
+                        "score": 100,
+                        "passed_gates": 5,
+                        "total_gates": 5,
+                        "gates": [
+                            {"name": "Ingestion", "passed": True},
+                            {"name": "Note quality", "passed": True},
+                            {"name": "Exercise quality", "passed": True},
+                            {"name": "Exercise validation", "passed": True},
+                            {"name": "Tutoring quality", "passed": True},
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Session Score Snapshot", report_text)
+            self.assertIn("- Session: session_0001", report_text)
+            self.assertIn("- Score: 100/100", report_text)
+            self.assertIn("- Gates passed: 5/5", report_text)
+            self.assertIn("- Failed gates: none", report_text)
+            self.assertIn("- Manifest: 08_evals/session_score_manifest.json", report_text)
+
     def test_project_summary_marks_stale_reference_kb_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

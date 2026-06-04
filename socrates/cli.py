@@ -92,6 +92,7 @@ from .reports import (
     generate_weekly_report,
     list_learning_reports,
 )
+from .session_score import score_teaching_session
 from .state import (
     EvalReportUpdate,
     LearningScoreSummary,
@@ -794,6 +795,13 @@ def build_parser() -> argparse.ArgumentParser:
     session_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     session_check_parser.add_argument("--session-id", required=True, help="Session identifier.")
     session_check_parser.set_defaults(func=_handle_session_check)
+    session_score_parser = session_subparsers.add_parser(
+        "score",
+        help="Write a session score report from deterministic quality gates.",
+    )
+    session_score_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_score_parser.add_argument("--session-id", required=True, help="Session identifier.")
+    session_score_parser.set_defaults(func=_handle_session_score)
     session_suggest_parser = session_subparsers.add_parser(
         "suggest-next",
         help="Ask the configured LLM for a draft next Socratic question.",
@@ -1292,6 +1300,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     )
     tool_verification_quality = _read_tool_verification_quality_status(context.root)
     benchmark_status = _read_benchmark_status(context.root)
+    session_score_status = _read_session_score_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
     )
@@ -1364,6 +1373,9 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Tutoring quality check: {_quality_manifest_status_text(tutoring_quality)}")
     print(f"Tool verification records: {tool_verification_count}")
     print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
+    print(f"Session score: {_session_score_status_text(session_score_status)}")
+    print(f"Session score gates: {_session_score_gates_text(session_score_status)}")
+    print(f"Session score failed gates: {_session_score_failed_gates_text(session_score_status)}")
     if benchmark_status is None:
         print("Benchmark score: none")
         print("Benchmark gates: none")
@@ -1997,6 +2009,15 @@ def _handle_session_check(args: argparse.Namespace) -> int:
     print(f"Checked session {result.session_id}: {result.status}")
     print(f"Tutoring quality report: {result.report_path}")
     print(f"Tutoring quality manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_score(args: argparse.Namespace) -> int:
+    result = score_teaching_session(args.project, session_id=args.session_id)
+    print(f"Scored session {result.session_id}: {result.score}/100")
+    print(f"Session score gates: {result.passed_gates}/{result.total_gates}")
+    print(f"Session score report: {result.report_path}")
+    print(f"Session score manifest: {result.manifest_path}")
     return 0
 
 
@@ -2673,6 +2694,70 @@ def _read_benchmark_status(project_root: Path) -> dict[str, object] | None:
         "total_gates": total_gates,
         "failed_gates": _failed_benchmark_gates(manifest.get("gates")),
     }
+
+
+def _read_session_score_status(project_root: Path) -> dict[str, object] | None:
+    manifest_path = project_root / "08_evals" / "session_score_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    score = manifest.get("score")
+    passed_gates = manifest.get("passed_gates")
+    total_gates = manifest.get("total_gates")
+    gates = manifest.get("gates")
+    if not all(isinstance(value, int) for value in (score, passed_gates, total_gates)):
+        return {"status": "invalid"}
+    if score < 0 or passed_gates < 0 or total_gates <= 0:
+        return {"status": "invalid"}
+    if not isinstance(gates, list) or len(gates) != total_gates:
+        return {"status": "invalid"}
+    return {
+        "status": str(manifest.get("status", "unknown")),
+        "score": score,
+        "passed_gates": passed_gates,
+        "total_gates": total_gates,
+        "failed_gates": _failed_benchmark_gates(gates),
+    }
+
+
+def _session_score_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['score']}/100"
+
+
+def _session_score_gates_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['passed_gates']}/{value['total_gates']}"
+
+
+def _session_score_failed_gates_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    failed_gates = value.get("failed_gates", [])
+    if isinstance(failed_gates, list) and failed_gates:
+        return ", ".join(str(name) for name in failed_gates)
+    passed_gates = value.get("passed_gates")
+    total_gates = value.get("total_gates")
+    if (
+        isinstance(passed_gates, int)
+        and isinstance(total_gates, int)
+        and passed_gates < total_gates
+    ):
+        return "unknown"
+    return "none"
 
 
 def _failed_benchmark_gates(value: object) -> list[str]:
