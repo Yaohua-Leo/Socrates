@@ -55,10 +55,12 @@ from .quality import (
     run_project_benchmark,
 )
 from .references import (
+    CorrectionPatchSummary,
     SourceSummary,
     create_correction_patch,
     curate_reference,
     import_reference,
+    list_correction_patches,
     list_source_registry,
 )
 from .reports import (
@@ -211,6 +213,23 @@ def build_parser() -> argparse.ArgumentParser:
         help="Risk level for applying this correction; defaults to low.",
     )
     patch_parser.set_defaults(func=_handle_patch)
+
+    patches_parser = subparsers.add_parser(
+        "patches",
+        help="Inspect patch-only correction proposals.",
+    )
+    patches_subparsers = patches_parser.add_subparsers(dest="patches_command", required=True)
+    patches_list_parser = patches_subparsers.add_parser(
+        "list",
+        help="List correction patches awaiting human review.",
+    )
+    patches_list_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    patches_list_parser.add_argument(
+        "--source-id",
+        default=None,
+        help="Filter by source registry id.",
+    )
+    patches_list_parser.set_defaults(func=_handle_patches_list)
 
     plan_parser = subparsers.add_parser(
         "plan",
@@ -872,6 +891,27 @@ def _handle_patch(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_patches_list(args: argparse.Namespace) -> int:
+    patches = list_correction_patches(args.project, source_id=args.source_id)
+    print(_correction_patches_text(patches), end="")
+    return 0
+
+
+def _correction_patches_text(patches: list[CorrectionPatchSummary]) -> str:
+    lines = ["# Correction Patches", ""]
+    if not patches:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        (
+            f"- {patch.patch_id} | {patch.source_id} | {patch.risk_level} | "
+            f"{patch.location} | {patch.path}"
+        )
+        for patch in patches
+    )
+    return "\n".join(lines) + "\n"
+
+
 def _handle_plan(args: argparse.Namespace) -> int:
     written = create_learning_plan(args.project)
     print(f"Created {len(written)} learning plan files")
@@ -940,6 +980,7 @@ def _handle_status(args: argparse.Namespace) -> int:
         context.source_registry,
         "conversion_pending",
     )
+    correction_patch_count = len(list_correction_patches(context.root))
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_object_count = _count_kb_objects(context.root)
     reviewed_count = _count_reviewed_notes(context.root)
@@ -982,6 +1023,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Imported sources: {source_count}")
     print(f"Converted references: {converted_count}")
     print(f"Conversion pending references: {conversion_pending_count}")
+    print(f"Correction patches: {correction_patch_count}")
     print(f"Curated references: {curated_count}")
     print(f"KB objects: {kb_object_count}")
     print(f"Latest session: {latest_session}")

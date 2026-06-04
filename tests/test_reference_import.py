@@ -459,6 +459,88 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertEqual(converted.read_text(encoding="utf-8"), converted_before)
             self.assertEqual(curated.read_text(encoding="utf-8"), curated_before)
 
+    def test_patches_list_and_status_show_pending_correction_patches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.md"
+            source.write_text(
+                "### Definition: Normal Subgroup\n"
+                "Let G he a group. A subgroup N is normal when gNg^{-1}=N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normality OCR Notes",
+            )
+            curate_reference(project, record.id)
+            patch_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patch",
+                    "--project",
+                    str(project),
+                    "--source-id",
+                    record.id,
+                    "--location",
+                    "Definition paragraph 1",
+                    "--original",
+                    "Let G he a group.",
+                    "--proposed-correction",
+                    "Let G be a group.",
+                    "--reason",
+                    "OCR likely misread be as he.",
+                    "--risk-level",
+                    "low",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            list_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patches",
+                    "list",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            status_result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(patch_result.returncode, 0, patch_result.stderr)
+            self.assertEqual(list_result.returncode, 0, list_result.stderr)
+            self.assertIn("# Correction Patches", list_result.stdout)
+            self.assertIn(
+                (
+                    "- normality_ocr_notes_patch_001 | normality_ocr_notes | "
+                    "low | Definition paragraph 1 | "
+                    "01_references/converted/patches/normality_ocr_notes_patch_001.patch.md"
+                ),
+                list_result.stdout,
+            )
+            self.assertEqual(status_result.returncode, 0, status_result.stderr)
+            self.assertIn("Correction patches: 1", status_result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

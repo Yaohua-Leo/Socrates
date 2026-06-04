@@ -37,6 +37,17 @@ class SourceSummary:
     notes: str
 
 
+@dataclass(frozen=True)
+class CorrectionPatchSummary:
+    """A correction patch proposal prepared for CLI display."""
+
+    patch_id: str
+    source_id: str
+    risk_level: str
+    location: str
+    path: str
+
+
 def import_reference(
     project_path: Path | str,
     source_path: Path | str,
@@ -166,6 +177,27 @@ def create_correction_patch(
         f"Wrote correction patch {patch_path.name} for reference {source_id}.",
     )
     return patch_path
+
+
+def list_correction_patches(
+    project_path: Path | str,
+    *,
+    source_id: str | None = None,
+) -> list[CorrectionPatchSummary]:
+    """List persisted patch-only correction proposals."""
+
+    context = load_project(project_path)
+    patch_dir = context.references_dir / "converted" / "patches"
+    if not patch_dir.exists():
+        return []
+
+    summaries: list[CorrectionPatchSummary] = []
+    for patch_path in sorted(patch_dir.glob("*.patch.md"), key=lambda path: path.name):
+        summary = _correction_patch_summary(context.root, patch_path)
+        if source_id is not None and summary.source_id != source_id:
+            continue
+        summaries.append(summary)
+    return summaries
 
 
 def _reference_type(source: Path) -> tuple[str, str]:
@@ -366,6 +398,42 @@ def _correction_patch_markdown(
         "### Risk Level\n\n"
         f"{risk_level}\n"
     )
+
+
+def _correction_patch_summary(project_root: Path, patch_path: Path) -> CorrectionPatchSummary:
+    text = patch_path.read_text(encoding="utf-8")
+    return CorrectionPatchSummary(
+        patch_id=patch_path.stem.removesuffix(".patch"),
+        source_id=_patch_source_id(text),
+        risk_level=_patch_section_value(text, "Risk Level") or "unknown",
+        location=_patch_section_value(text, "Location") or "unknown",
+        path=patch_path.relative_to(project_root).as_posix(),
+    )
+
+
+def _patch_source_id(text: str) -> str:
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- source_id:"):
+            return stripped.removeprefix("- source_id:").strip()
+    return "unknown"
+
+
+def _patch_section_value(text: str, heading: str) -> str:
+    marker = f"### {heading}"
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != marker:
+            continue
+        values: list[str] = []
+        for value in lines[index + 1 :]:
+            if value.startswith("### "):
+                break
+            stripped = value.strip()
+            if stripped:
+                values.append(stripped)
+        return " ".join(values)
+    return ""
 
 
 def _fenced_text(value: str) -> str:
