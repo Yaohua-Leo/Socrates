@@ -1133,6 +1133,60 @@ class ReportTests(unittest.TestCase):
                 report_text,
             )
 
+    def test_monthly_report_counts_reviewed_notes_pending_obsidian_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "quotient_group")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "monthly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("- Reviewed notes: 2", report_text)
+            self.assertIn("- Obsidian exports: 1", report_text)
+            self.assertIn("- Obsidian exports to run: 1", report_text)
+
     def test_monthly_report_cli_recovers_malformed_misconception_count(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
