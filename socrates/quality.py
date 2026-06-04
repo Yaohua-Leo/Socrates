@@ -569,7 +569,9 @@ def _exercise_counterexample_search(project_root: Path, exercise_path: Path) -> 
 
     try:
         matches = find_counterexamples(project_root, concept, limit=3)
-    except (FileNotFoundError, json.JSONDecodeError):
+    except (FileNotFoundError, json.JSONDecodeError, ValueError) as exc:
+        if isinstance(exc, ValueError) and "Reference KB index" not in str(exc):
+            raise
         return {
             "file": exercise_path.name,
             "concept": concept,

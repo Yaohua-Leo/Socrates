@@ -1403,6 +1403,62 @@ class ExerciseQualityTests(unittest.TestCase):
                 },
             )
 
+    def test_exercise_check_cli_tolerates_corrupt_reference_kb_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.parent.mkdir(parents=True, exist_ok=True)
+            index_path.write_text("{not valid json", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Checked 5 exercise drafts: 5 passed, 0 failed", result.stdout)
+            self.assertNotIn("Expecting property name", result.stderr)
+            report_text = (project / "08_evals" / "exercise_quality_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(
+                "- normal_subgroup_01.md | Normal Subgroup | not_run | "
+                "reference KB index unreadable",
+                report_text,
+            )
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(
+                manifest["exercises"][0]["counterexample_search"],
+                {
+                    "status": "not_run",
+                    "reason": "reference KB index unreadable",
+                    "match_count": 0,
+                    "matches": [],
+                },
+            )
+
     def test_exercise_check_cli_reports_linked_tool_verification_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
