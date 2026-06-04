@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .context import load_project, read_json
+from .project import slugify_topic
 
 
 @dataclass(frozen=True)
@@ -22,6 +23,7 @@ class LearningQueue:
     """Actionable artifact groups for CLI queue display."""
 
     notes_to_review: list[QueueItem]
+    misconception_notes_to_draft: list[QueueItem]
     scheduled_reviews: list[QueueItem]
     exercise_drafts_to_approve: list[QueueItem]
     exercises_to_attempt: list[QueueItem]
@@ -34,6 +36,7 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
     context = load_project(project_path)
     return LearningQueue(
         notes_to_review=_notes_to_review(context.root),
+        misconception_notes_to_draft=_misconception_notes_to_draft(context.root),
         scheduled_reviews=_scheduled_reviews(context.root),
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
         exercises_to_attempt=_exercises_to_attempt(context.root),
@@ -46,6 +49,9 @@ def format_learning_queue(queue: LearningQueue) -> str:
 
     lines = ["# Learning Queue", ""]
     lines.extend(_section("Notes To Review", queue.notes_to_review))
+    lines.extend(
+        _section("Misconception Notes To Draft", queue.misconception_notes_to_draft)
+    )
     lines.extend(_section("Scheduled Reviews", queue.scheduled_reviews))
     lines.extend(_section("Exercise Drafts To Approve", queue.exercise_drafts_to_approve))
     lines.extend(_section("Exercises To Attempt", queue.exercises_to_attempt))
@@ -79,6 +85,50 @@ def _reviewed_note_ids(project_root: Path) -> set[str]:
             if _frontmatter_value(text, "reviewed_by_user") == "true":
                 reviewed.add(note_path.stem)
     return reviewed
+
+
+def _misconception_notes_to_draft(project_root: Path) -> list[QueueItem]:
+    learning_state = project_root / "00_meta" / "learning_state.json"
+    if not learning_state.exists():
+        return []
+    state = read_json(learning_state)
+    if not isinstance(state, dict):
+        return []
+    misconceptions = state.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return []
+
+    covered_ids = _covered_note_ids(project_root)
+    items: list[QueueItem] = []
+    for misconception_id, value in sorted(
+        misconceptions.items(),
+        key=lambda item: str(item[0]),
+    ):
+        if not isinstance(value, dict):
+            continue
+        note_id = slugify_topic(str(misconception_id))
+        if note_id in covered_ids:
+            continue
+        concept = str(value.get("concept", "general"))
+        items.append(
+            QueueItem(
+                item_id=note_id,
+                path=learning_state.relative_to(project_root).as_posix(),
+                detail=(
+                    f"concept: {concept}; "
+                    "draft with: socrates note draft-misconceptions"
+                ),
+            )
+        )
+    return items
+
+
+def _covered_note_ids(project_root: Path) -> set[str]:
+    covered = set(_reviewed_note_ids(project_root))
+    draft_dir = project_root / "04_atomic_notes" / "drafts"
+    if draft_dir.exists():
+        covered.update(path.stem for path in draft_dir.glob("*.md"))
+    return covered
 
 
 def _exercise_drafts_to_approve(project_root: Path) -> list[QueueItem]:

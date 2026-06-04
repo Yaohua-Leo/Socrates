@@ -157,6 +157,44 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_lists_misconception_notes_to_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        )
+                    ],
+                ),
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Misconception Notes To Draft", result.stdout)
+            self.assertIn(
+                (
+                    "- normal_equals_central | 00_meta/learning_state.json | "
+                    "concept: normal_subgroup; draft with: socrates note draft-misconceptions"
+                ),
+                result.stdout,
+            )
+
     def test_queue_cli_orders_scheduled_reviews_by_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
