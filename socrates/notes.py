@@ -256,6 +256,7 @@ def _obsidian_link_target_id(value: str) -> str:
     if text.startswith("[[") and text.endswith("]]"):
         text = text[2:-2]
     target = text.split("|", 1)[0].split("#", 1)[0].split("^", 1)[0].strip()
+    target = target.replace("\\", "/").rsplit("/", 1)[-1].strip()
     return slugify_topic(target)
 
 

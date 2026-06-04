@@ -567,6 +567,76 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn("## Socrates Backlinks", normal_text)
             self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
 
+    def test_export_reviewed_notes_resolves_folder_wikilinks_for_backlinks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            definitions = project / "04_atomic_notes" / "definitions"
+            normal_note = definitions / "normal_subgroup.md"
+            quotient_note = definitions / "quotient_group.md"
+            normal_note.write_text(
+                "---\n"
+                "status: reviewed\n"
+                "review_status: approved\n"
+                "reviewed_by_user: true\n"
+                "type: definition\n"
+                "topic: group_theory\n"
+                "concept: Normal Subgroup\n"
+                "created_by: socrates\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - normal-subgroup\n"
+                "related: [[Subgroup]]\n"
+                "---\n\n"
+                "# Normal Subgroup\n\n"
+                "A normal subgroup is stable under conjugation.\n\n"
+                "## Key Examples\n\n"
+                "- A3 in S3.\n\n"
+                "## Non-Examples\n\n"
+                "- A transposition subgroup in S3.\n\n"
+                "## Common Mistakes\n\n"
+                "- Confusing normal with central.\n\n"
+                "## Review Questions\n\n"
+                "- What conjugation condition must be checked?\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            quotient_note.write_text(
+                "---\n"
+                "status: reviewed\n"
+                "review_status: approved\n"
+                "reviewed_by_user: true\n"
+                "type: definition\n"
+                "topic: group_theory\n"
+                "concept: Quotient Group\n"
+                "created_by: socrates\n"
+                "source_id: df\n"
+                "tags:\n"
+                "  - quotient-group\n"
+                "related: [[Subgroup]]\n"
+                "---\n\n"
+                "# Quotient Group\n\n"
+                "Compare quotient multiplication with "
+                "[[Algebra/Normal Subgroup|normality]].\n\n"
+                "## Key Examples\n\n"
+                "- Z / nZ.\n\n"
+                "## Non-Examples\n\n"
+                "- Cosets of a non-normal subgroup do not form a group.\n\n"
+                "## Common Mistakes\n\n"
+                "- Forgetting well-defined multiplication.\n\n"
+                "## Review Questions\n\n"
+                "- Why is normality required?\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            export_reviewed_notes_to_obsidian(project)
+
+            normal_text = (
+                project / "07_exports" / "obsidian" / "normal_subgroup.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Socrates Backlinks", normal_text)
+            self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
+
     def test_export_reviewed_notes_to_obsidian_prunes_stale_manifest_files(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
