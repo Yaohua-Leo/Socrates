@@ -578,7 +578,25 @@ def _review_lines(value: object) -> list[str]:
         reason = str(item.get("reason", "review scheduled"))
         date_label = f", {scheduled_for}" if scheduled_for else ""
         lines.append(f"- {concept}: {priority}, {due}{date_label} - {reason}")
+        for suggestion in _review_repair_suggestions(item.get("repair_context", [])):
+            lines.append(f"  - Repair suggestion: {suggestion}")
     return lines or ["- none scheduled"]
+
+
+def _review_repair_suggestions(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for raw_context in value:
+        if not isinstance(raw_context, dict):
+            continue
+        suggestion = str(raw_context.get("repair_suggestion", "")).strip()
+        if not suggestion or suggestion in seen:
+            continue
+        seen.add(suggestion)
+        suggestions.append(suggestion)
+    return suggestions
 
 
 def _kb_snapshot_lines(snapshot: list[dict[str, str]]) -> list[str]:

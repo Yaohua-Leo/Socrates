@@ -690,6 +690,11 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- quotient_group: 0.42", report_text)
             self.assertIn("## Recommended Next Steps", report_text)
             self.assertIn("- quotient_group: high, next_session", report_text)
+            self.assertIn("- normal_subgroup: medium, within_3_days", report_text)
+            self.assertIn(
+                "  - Repair suggestion: Compare N normal with N contained in Z(G).",
+                report_text,
+            )
 
     def _create_report_fixture(self, root: Path) -> Path:
         project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
