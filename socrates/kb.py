@@ -433,7 +433,7 @@ def _valid_chapter_index_artifact(project_root: Path, artifact: dict[str, object
         for section in sections:
             if not _has_nonempty_string_fields(section, ("title", "source_path")):
                 return False
-            if not _valid_project_file(project_root, str(section["source_path"])):
+            if not _valid_curated_source_file(project_root, str(section["source_path"])):
                 return False
             objects = section.get("objects")
             if not isinstance(objects, list) or not all(
@@ -446,7 +446,7 @@ def _valid_chapter_index_artifact(project_root: Path, artifact: dict[str, object
                     ("id", "type", "title", "source_path"),
                 ):
                     return False
-                if not _valid_project_file(project_root, str(item["source_path"])):
+                if not _valid_curated_source_file(project_root, str(item["source_path"])):
                     return False
     return True
 
@@ -455,10 +455,12 @@ def _has_nonempty_string_fields(item: dict[str, object], fields: tuple[str, ...]
     return all(isinstance(item.get(field), str) and item[field].strip() for field in fields)
 
 
-def _valid_project_file(project_root: Path, relative_path: str) -> bool:
+def _valid_curated_source_file(project_root: Path, relative_path: str) -> bool:
     path = project_root / relative_path
+    curated_dir = project_root / "01_references" / "curated"
     try:
         path.resolve().relative_to(project_root.resolve())
+        path.resolve().relative_to(curated_dir.resolve())
     except ValueError:
         return False
     return path.is_file()
