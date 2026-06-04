@@ -1489,10 +1489,12 @@ def _atomic_notes_text(notes: list[AtomicNoteSummary]) -> str:
     if not notes:
         lines.append("- none")
         return "\n".join(lines) + "\n"
-    lines.extend(
-        f"- {note.note_id} | {note.status} | {note.note_type} | {note.concept} | {note.path}"
-        for note in notes
-    )
+    for note in notes:
+        lines.append(
+            f"- {note.note_id} | {note.status} | {note.note_type} | {note.concept} | {note.path}"
+        )
+        if note.quality_status:
+            lines.append(f"  - quality: {note.quality_status}")
     return "\n".join(lines) + "\n"
 
 

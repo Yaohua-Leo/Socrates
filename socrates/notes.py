@@ -33,6 +33,7 @@ class AtomicNoteSummary:
     note_type: str
     concept: str
     path: str
+    quality_status: str | None = None
 
 
 def review_atomic_note(project_path: Path | str, note_id: str) -> Path:
@@ -143,9 +144,10 @@ def list_atomic_notes(
 
     context = load_project(project_path)
     exported_ids = _exported_note_ids(context.root)
-    reviewed = _reviewed_note_summaries(context.root, exported_ids)
+    quality_by_path = _note_quality_by_path(context.root)
+    reviewed = _reviewed_note_summaries(context.root, exported_ids, quality_by_path)
     reviewed_ids = {item.note_id for item in reviewed}
-    pending = _pending_note_summaries(context.root, reviewed_ids)
+    pending = _pending_note_summaries(context.root, reviewed_ids, quality_by_path)
     items = [*pending, *reviewed]
     if status != "all":
         items = [item for item in items if item.status == status]
@@ -314,6 +316,7 @@ def _with_obsidian_backlinks(
 def _pending_note_summaries(
     project_root: Path,
     reviewed_ids: set[str],
+    quality_by_path: dict[str, str],
 ) -> list[AtomicNoteSummary]:
     draft_dir = project_root / "04_atomic_notes" / "drafts"
     if not draft_dir.exists():
@@ -329,6 +332,7 @@ def _pending_note_summaries(
                 note_path=note_path,
                 status="pending",
                 text=text,
+                quality_by_path=quality_by_path,
             )
         )
     return items
@@ -337,6 +341,7 @@ def _pending_note_summaries(
 def _reviewed_note_summaries(
     project_root: Path,
     exported_ids: set[str],
+    quality_by_path: dict[str, str],
 ) -> list[AtomicNoteSummary]:
     notes_root = project_root / "04_atomic_notes"
     if not notes_root.exists():
@@ -356,6 +361,7 @@ def _reviewed_note_summaries(
                     note_path=note_path,
                     status=status,
                     text=text,
+                    quality_by_path=quality_by_path,
                 )
             )
     return items
@@ -367,14 +373,40 @@ def _note_summary(
     note_path: Path,
     status: str,
     text: str,
+    quality_by_path: dict[str, str],
 ) -> AtomicNoteSummary:
+    relative_path = note_path.relative_to(project_root).as_posix()
     return AtomicNoteSummary(
         note_id=note_path.stem,
         status=status,
         note_type=_frontmatter_value(text, "type") or "definition",
         concept=_frontmatter_value(text, "concept") or note_path.stem,
-        path=note_path.relative_to(project_root).as_posix(),
+        path=relative_path,
+        quality_status=quality_by_path.get(relative_path),
     )
+
+
+def _note_quality_by_path(project_root: Path) -> dict[str, str]:
+    manifest_path = project_root / "08_evals" / "note_quality_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    notes = manifest.get("notes", []) if isinstance(manifest, dict) else []
+    if not isinstance(notes, list):
+        return {}
+
+    quality_by_path: dict[str, str] = {}
+    for item in notes:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "")).strip()
+        quality_status = str(item.get("quality_status", "")).strip()
+        if path and quality_status:
+            quality_by_path[path] = quality_status
+    return quality_by_path
 
 
 def _exported_note_ids(project_root: Path) -> set[str]:

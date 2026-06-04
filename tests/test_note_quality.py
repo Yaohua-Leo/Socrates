@@ -614,6 +614,62 @@ class NoteQualityTests(unittest.TestCase):
             self.assertEqual(manifest["notes"][0]["sections"]["review_question_count"], 1)
             self.assertEqual(manifest["notes"][0]["sections"]["has_reference_context"], True)
 
+    def test_note_list_cli_shows_checked_quality_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation.\n\n"
+                    "## Review Questions\n\n"
+                    "- How is normality different from commutativity?\n"
+                ),
+                source_id="df-1",
+            )
+
+            check = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            notes = subprocess.run(
+                [sys.executable, "-m", "socrates", "note", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(check.returncode, 0, check.stderr)
+            self.assertEqual(notes.returncode, 0, notes.stderr)
+            self.assertIn(
+                "- normal_subgroup | pending | definition | Normal Subgroup | "
+                "04_atomic_notes/drafts/normal_subgroup.md",
+                notes.stdout,
+            )
+            self.assertIn("  - quality: pass", notes.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
