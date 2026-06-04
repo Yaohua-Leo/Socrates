@@ -634,12 +634,22 @@ def _valid_curated_source_statement(
         return False
     if line > len(lines):
         return False
-    source_suffix = "\n".join(lines[line - 1 :])
-    return normalized_statement in _normalize_reference_text(source_suffix)
+    source_block = "\n".join(_object_block_from_source_line(lines, line))
+    return normalized_statement in _normalize_reference_text(source_block)
 
 
 def _normalize_reference_text(value: str) -> str:
     return " ".join(value.split())
+
+
+def _object_block_from_source_line(lines: list[str], line: int) -> list[str]:
+    start = line - 1
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].startswith("### "):
+            end = index
+            break
+    return lines[start:end]
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:

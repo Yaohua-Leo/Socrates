@@ -406,6 +406,49 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Current phase: references_curated", status.stdout)
             self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
 
+    def test_status_cli_rejects_reference_index_statement_from_later_object(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n\n"
+                "### Theorem: Kernels are Normal\n"
+                "The kernel of a homomorphism is a normal subgroup.\n"
+                "Depends: kernel, homomorphism\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            later_statement = "The kernel of a homomorphism is a normal subgroup."
+            index["objects"][0]["statement"] = later_statement
+            index["chunks"][0]["text"] = later_statement
+            index_path.write_text(
+                json.dumps(index, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Curated references: 1", status.stdout)
+            self.assertIn("KB objects: 0", status.stdout)
+            self.assertIn("Reference KB status: invalid", status.stdout)
+            self.assertIn("Current phase: references_curated", status.stdout)
+            self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
+
     def test_status_cli_requires_reference_kb_derived_indexes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
