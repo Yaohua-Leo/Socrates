@@ -68,7 +68,10 @@ from .planning import (
 )
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
-from .project_brief_refresh import format_project_brief_refresh
+from .project_brief_refresh import (
+    format_project_brief_refresh,
+    refresh_project_briefs_payload,
+)
 from .project_index import (
     build_cross_project_reference_graph,
     find_project_references,
@@ -503,6 +506,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--root",
         required=True,
         help="SocratesProjects root directory.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the project brief refresh result as deterministic JSON.",
     )
     projects_refresh_briefs_parser.set_defaults(func=_handle_projects_refresh_briefs)
     projects_resume_parser = projects_subparsers.add_parser(
@@ -1716,7 +1724,16 @@ def _handle_projects_graph(args: argparse.Namespace) -> int:
 
 
 def _handle_projects_refresh_briefs(args: argparse.Namespace) -> int:
-    print(format_project_brief_refresh(args.root), end="")
+    if args.json:
+        print(
+            json.dumps(
+                refresh_project_briefs_payload(args.root),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    else:
+        print(format_project_brief_refresh(args.root), end="")
     return 0
 
 

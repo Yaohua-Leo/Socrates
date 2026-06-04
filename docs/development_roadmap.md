@@ -2204,6 +2204,28 @@ write only child study brief artifacts
 - 命令不会写入 root `socrates_projects.json`。
 - 这不是 scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit collection writer for study brief artifacts。
 
+v0.36：multi-project brief refresh JSON
+
+建议目标：
+
+让 collection refresh-briefs writer 的结果可被未来 UI/plugin/wrapper 直接消费，而不用解析 Markdown summary。
+
+必须完成：
+
+`projects refresh-briefs --json`
+
+structured refreshed/skipped rows
+
+same writer side effects as Markdown mode
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects refresh-briefs --root <root> --json` 已输出 deterministic JSON。
+- Payload 已记录 `schema_version: 1`、`quality_boundary: deterministic_project_brief_refresh`、root、refreshed/skipped counts、refreshed rows 和 skipped rows。
+- JSON mode 仍会执行与 Markdown mode 相同的 selected child brief writes。
+- Ready projects 仍被 skip，且不会重复追加 `Generated study brief.` project-log entry。
+- 这不是 dry-run、read-only command、新 selection policy、scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit writer result 的 structured output。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

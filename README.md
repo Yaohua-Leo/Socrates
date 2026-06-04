@@ -6,13 +6,13 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.35-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.36-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, batch-refreshable commands-output command-summarized filterable readiness-counted
+long-term report-surface refresh, structured batch-refreshable commands-output command-summarized filterable readiness-counted
 machine-readable and Markdown read-only multi-project resume indexes,
 machine-readable read-only project resume state, read-only project resume
 cards, read-only study dashboards, generated
@@ -87,6 +87,7 @@ python -m socrates projects resume --root ".\projects" --json
 python -m socrates projects resume --root ".\projects" --state refresh_brief
 python -m socrates projects resume --root ".\projects" --state refresh_brief --commands
 python -m socrates projects refresh-briefs --root ".\projects"
+python -m socrates projects refresh-briefs --root ".\projects" --json
 python -m socrates brief generate --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory"
 python -m socrates status --project ".\projects\group_theory"
@@ -208,6 +209,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.35 `projects refresh-briefs --root <root>` explicitly generates study
   briefs only for child projects whose current resume state is `refresh_brief`;
   ready projects are skipped.
+- v0.36 `projects refresh-briefs --json` emits the same explicit collection
+  writer result as structured JSON for wrappers without changing side effects or
+  selection policy.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -313,6 +317,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   projects only; it must skip ready projects and must not write the root index,
   refresh reports, run repairs, call an LLM, score learning, tutor, or mutate
   learning-state truth.
+- `projects refresh-briefs --json` changes only the output format of that writer.
+  It is not a dry-run, read-only command, new selection policy, scanner, report
+  refresh, repair runner, LLM call, score, tutor, approval, or readiness gate.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

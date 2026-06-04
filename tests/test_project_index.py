@@ -891,6 +891,101 @@ class ProjectIndexTests(unittest.TestCase):
             self.assertEqual(ready_log.count("Generated study brief."), 1)
             self.assertFalse((root / "socrates_projects.json").exists())
 
+    def test_projects_refresh_briefs_json_reports_written_and_skipped_projects(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "refresh-briefs",
+                    "--root",
+                    str(root),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_project_brief_refresh",
+            )
+            self.assertEqual(payload["root"], str(root.resolve()))
+            self.assertEqual(payload["refreshed_count"], 1)
+            self.assertEqual(payload["skipped_count"], 1)
+            self.assertEqual(
+                payload["refreshed"],
+                [
+                    {
+                        "id": "ring_theory",
+                        "title": "Ring Theory",
+                        "path": "ring_theory",
+                        "resume_state": "refresh_brief",
+                        "brief_path": "07_exports/briefs/study_brief.md",
+                    }
+                ],
+            )
+            self.assertEqual(
+                payload["skipped"],
+                [
+                    {
+                        "id": "group_theory",
+                        "title": "Group Theory",
+                        "path": "group_theory",
+                        "resume_state": "ready",
+                        "reason": "resume_state_ready",
+                    }
+                ],
+            )
+            self.assertTrue(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertTrue(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+            ready_log = (ready_project / "00_meta" / "project_log.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(ready_log.count("Generated study brief."), 1)
+            self.assertFalse((root / "socrates_projects.json").exists())
+
     def test_projects_refs_finds_reviewed_notes_across_projects(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "SocratesProjects"
