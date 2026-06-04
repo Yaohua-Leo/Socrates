@@ -106,6 +106,50 @@ class LifecycleAuditTests(unittest.TestCase):
             )
             self.assertIn("- Obsidian export: fail", report_text)
 
+    def test_lifecycle_audit_falls_back_when_obsidian_manifest_is_corrupt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            (project / "07_exports" / "obsidian" / "export_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1, result.stderr)
+            report_path = project / "08_evals" / "lifecycle_eval.md"
+            self.assertTrue(report_path.exists(), result.stderr)
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("- Obsidian export: pass", report_text)
+
     def test_lifecycle_audit_rejects_stale_benchmark_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

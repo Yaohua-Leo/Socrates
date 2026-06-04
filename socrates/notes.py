@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
+from .obsidian import obsidian_exported_note_ids
 from .project import slugify_topic
 from .quality import atomic_note_quality_issues, check_atomic_note_quality
 
@@ -309,28 +310,7 @@ def _note_summary(
 
 
 def _exported_note_ids(project_root: Path) -> set[str]:
-    obsidian_dir = project_root / "07_exports" / "obsidian"
-    manifest_path = obsidian_dir / "export_manifest.json"
-    if manifest_path.exists():
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            manifest = None
-        if isinstance(manifest, dict):
-            exported_notes = manifest.get("exported_notes", [])
-            if isinstance(exported_notes, list):
-                return {
-                    str(item.get("note_id"))
-                    for item in exported_notes
-                    if isinstance(item, dict) and item.get("note_id")
-                }
-    if not obsidian_dir.exists():
-        return set()
-    return {
-        path.stem
-        for path in obsidian_dir.glob("*.md")
-        if path.name != "_socrates_index.md"
-    }
+    return obsidian_exported_note_ids(project_root)
 
 
 def _note_status_order(status: str) -> int:

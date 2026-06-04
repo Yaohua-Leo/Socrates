@@ -10,6 +10,7 @@ import re
 
 from .context import load_project, write_json, write_text
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
+from .obsidian import obsidian_export_count
 from .project import slugify_topic
 
 
@@ -474,7 +475,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
         )
     checks.update(
         {
-            "Obsidian export": _obsidian_export_count(context.root) > 0,
+            "Obsidian export": obsidian_export_count(context.root) > 0,
             "Generated exercises": _markdown_count(context.generated_exercises_dir) >= 5,
             "Exercise attempts": _markdown_count(context.root / "05_exercises" / "attempted") > 0,
             "Graded exercises": _markdown_count(context.root / "05_exercises" / "graded") > 0,
@@ -2009,22 +2010,6 @@ def _markdown_count(path: Path) -> int:
     if not path.exists():
         return 0
     return len(list(path.glob("*.md")))
-
-
-def _obsidian_export_count(project_root: Path) -> int:
-    obsidian_dir = project_root / "07_exports" / "obsidian"
-    manifest_path = obsidian_dir / "export_manifest.json"
-    if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
-        return len(exported_notes) if isinstance(exported_notes, list) else 0
-    return len(
-        [
-            path
-            for path in obsidian_dir.glob("*.md")
-            if path.name != "_socrates_index.md"
-        ]
-    )
 
 
 def _has_review_schedule(project_root: Path, state: dict[str, object]) -> bool:

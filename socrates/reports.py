@@ -8,6 +8,10 @@ from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
 from .kb import reference_kb_status
+from .obsidian import (
+    obsidian_backlink_count,
+    obsidian_export_count,
+)
 from .tool_verification import ToolVerificationSummary, list_tool_verification_records
 
 
@@ -68,8 +72,8 @@ def generate_project_summary(project_path: Path | str) -> Path:
             kb_snapshot=_read_kb_snapshot(context.root),
             sessions_completed=_count_dirs(context.sessions_dir),
             reviewed_notes=_count_reviewed_notes(context.root),
-            obsidian_exports=_count_obsidian_exports(context.root),
-            obsidian_backlinks=_count_obsidian_backlinks(context.root),
+            obsidian_exports=obsidian_export_count(context.root),
+            obsidian_backlinks=obsidian_backlink_count(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
@@ -95,7 +99,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
         _monthly_report_text(
             reviewed_notes=_count_reviewed_notes(context.root),
             draft_notes=_count_markdown(context.atomic_note_drafts_dir),
-            obsidian_exports=_count_obsidian_exports(context.root),
+            obsidian_exports=obsidian_export_count(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
@@ -404,48 +408,6 @@ def _count_markdown(path: Path) -> int:
     if not path.exists():
         return 0
     return len(list(path.glob("*.md")))
-
-
-def _count_obsidian_exports(project_root: Path) -> int:
-    obsidian_dir = project_root / "07_exports" / "obsidian"
-    manifest_path = obsidian_dir / "export_manifest.json"
-    if manifest_path.exists():
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            manifest = None
-        if isinstance(manifest, dict):
-            exported_notes = manifest.get("exported_notes", [])
-            if isinstance(exported_notes, list):
-                return len(exported_notes)
-    return len(
-        [
-            path
-            for path in obsidian_dir.glob("*.md")
-            if path.name != "_socrates_index.md"
-        ]
-    )
-
-
-def _count_obsidian_backlinks(project_root: Path) -> int:
-    manifest_path = project_root / "07_exports" / "obsidian" / "export_manifest.json"
-    if not manifest_path.exists():
-        return 0
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return 0
-    exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
-    if not isinstance(exported_notes, list):
-        return 0
-    backlink_count = 0
-    for note in exported_notes:
-        if not isinstance(note, dict):
-            continue
-        backlinks = note.get("backlinks", [])
-        if isinstance(backlinks, list):
-            backlink_count += len(backlinks)
-    return backlink_count
 
 
 def _count_reviewed_notes(project_root: Path) -> int:

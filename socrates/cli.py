@@ -38,6 +38,10 @@ from .notes import (
     list_atomic_notes,
     review_atomic_note,
 )
+from .obsidian import (
+    obsidian_backlink_count as count_obsidian_backlinks,
+    obsidian_export_count as count_obsidian_exports,
+)
 from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
@@ -1036,8 +1040,8 @@ def _handle_status(args: argparse.Namespace) -> int:
     kb_status = reference_kb_status(context.root)
     kb_object_count = kb_status.object_count
     reviewed_count = _count_reviewed_notes(context.root)
-    obsidian_export_count = _count_obsidian_exports(context.root)
-    obsidian_backlink_count = _count_obsidian_backlinks(context.root)
+    obsidian_export_count = count_obsidian_exports(context.root)
+    obsidian_backlink_count = count_obsidian_backlinks(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     next_review = _next_scheduled_review(context.learning_state)
     report_count = _count_learning_reports(context.root)
@@ -2327,48 +2331,6 @@ def _count_approved_exercises(project_root: Path) -> int:
         if 'status: "approved"' in text and "reviewed_by_user: true" in text:
             approved += 1
     return approved
-
-
-def _count_obsidian_exports(project_root: Path) -> int:
-    obsidian_dir = project_root / "07_exports" / "obsidian"
-    manifest_path = obsidian_dir / "export_manifest.json"
-    if manifest_path.exists():
-        try:
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        except json.JSONDecodeError:
-            manifest = None
-        if isinstance(manifest, dict):
-            exported_notes = manifest.get("exported_notes", [])
-            if isinstance(exported_notes, list):
-                return len(exported_notes)
-    return len(
-        [
-            path
-            for path in obsidian_dir.glob("*.md")
-            if path.name != "_socrates_index.md"
-        ]
-    )
-
-
-def _count_obsidian_backlinks(project_root: Path) -> int:
-    manifest_path = project_root / "07_exports" / "obsidian" / "export_manifest.json"
-    if not manifest_path.exists():
-        return 0
-    try:
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return 0
-    exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
-    if not isinstance(exported_notes, list):
-        return 0
-    backlink_count = 0
-    for note in exported_notes:
-        if not isinstance(note, dict):
-            continue
-        backlinks = note.get("backlinks", [])
-        if isinstance(backlinks, list):
-            backlink_count += len(backlinks)
-    return backlink_count
 
 
 def _count_scheduled_reviews(learning_state: Path) -> int:
