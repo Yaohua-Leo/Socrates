@@ -1179,6 +1179,58 @@ class ExerciseQualityTests(unittest.TestCase):
 
             self.assertIn("missing source id", issues)
 
+    def test_exercise_quality_requires_targeted_review_schedule_metadata(self) -> None:
+        from socrates.quality import exercise_quality_issues
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            exercise = project / "05_exercises" / "generated" / "review_missing_schedule.md"
+            exercise.write_text(
+                "---\n"
+                "status: draft\n"
+                "review_status: needs_review\n"
+                "type: targeted_review_exercise\n"
+                "concept: Normal Subgroup\n"
+                "difficulty: 2\n"
+                "reference_kb_status: missing\n"
+                "---\n\n"
+                "# Review Exercise: Normal Subgroup\n\n"
+                "## Target Weakness\n\n"
+                "Concept mastery is below threshold.\n\n"
+                "## Target Training Point\n\n"
+                "Repair the scheduled weakness by distinguishing the definition from slogans.\n\n"
+                "## Concepts\n\n"
+                "- Normal Subgroup\n\n"
+                "## Prerequisites\n\n"
+                "- subgroup\n"
+                "- conjugation\n\n"
+                "## Review Prompt\n\n"
+                "State the definition, then give one example and one non-example.\n\n"
+                "## Hints\n\n"
+                "- Hint 1 (definition): Start from the exact definition.\n"
+                "- Hint 2 (example): Test a borderline example.\n"
+                "- Hint 3 (repair): Explain why the non-example fails.\n\n"
+                "## Solution Outline\n\n"
+                "- Step 1: State the definition.\n"
+                "- Step 2: Give an example satisfying it.\n"
+                "- Step 3: Give a non-example and identify the failed condition.\n\n"
+                "## Rubric\n\n"
+                "- Definition: 3 pts\n"
+                "- Example: 3 pts\n"
+                "- Non-example: 4 pts\n"
+                "Total: 10 pts\n\n"
+                "## Common Mistakes\n\n"
+                "- Treating normality as commutativity.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            issues = exercise_quality_issues(exercise)
+
+            self.assertIn("missing targeted review priority", issues)
+            self.assertIn("missing targeted review due", issues)
+            self.assertIn("missing targeted review scheduled_for", issues)
+
     def test_exercise_quality_requires_nonempty_concept_tags(self) -> None:
         from socrates.quality import exercise_quality_issues
 

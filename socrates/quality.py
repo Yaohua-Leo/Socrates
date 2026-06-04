@@ -522,6 +522,13 @@ def exercise_quality_issues(path: Path) -> list[str]:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
     if _is_generated_exercise(text) and _missing_source_id(text):
         issues.append("missing source id")
+    if _is_targeted_review_exercise(text):
+        if _missing_frontmatter_value(text, "priority"):
+            issues.append("missing targeted review priority")
+        if _missing_frontmatter_value(text, "due"):
+            issues.append("missing targeted review due")
+        if _missing_frontmatter_value(text, "scheduled_for"):
+            issues.append("missing targeted review scheduled_for")
     if "difficulty:" in text and not _has_valid_exercise_difficulty(text):
         issues.append("invalid difficulty")
     if not _has_statement_or_review_prompt(text):
@@ -1149,8 +1156,16 @@ def _is_generated_exercise(text: str) -> bool:
     return _frontmatter_value(text, "type") == "generated_exercise"
 
 
+def _is_targeted_review_exercise(text: str) -> bool:
+    return _frontmatter_value(text, "type") == "targeted_review_exercise"
+
+
 def _missing_source_id(text: str) -> bool:
-    value = _frontmatter_value(text, "source_id")
+    return _missing_frontmatter_value(text, "source_id")
+
+
+def _missing_frontmatter_value(text: str, key: str) -> bool:
+    value = _frontmatter_value(text, key)
     return value is None or value in {"", "null"}
 
 
