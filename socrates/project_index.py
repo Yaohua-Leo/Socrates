@@ -32,7 +32,10 @@ def list_projects(root_path: Path | str) -> list[dict[str, str]]:
     root = Path(root_path).expanduser().resolve()
     index_path = root / INDEX_FILENAME
     if index_path.exists():
-        index = json.loads(index_path.read_text(encoding="utf-8"))
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return discover_projects(root)
         projects = index.get("projects", []) if isinstance(index, dict) else []
         return [project for project in projects if _is_project_record(project)]
     return discover_projects(root)
