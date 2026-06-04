@@ -512,6 +512,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Print the project brief refresh result as deterministic JSON.",
     )
+    projects_refresh_briefs_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview selected project brief refreshes without writing artifacts.",
+    )
     projects_refresh_briefs_parser.set_defaults(func=_handle_projects_refresh_briefs)
     projects_resume_parser = projects_subparsers.add_parser(
         "resume",
@@ -1727,13 +1732,13 @@ def _handle_projects_refresh_briefs(args: argparse.Namespace) -> int:
     if args.json:
         print(
             json.dumps(
-                refresh_project_briefs_payload(args.root),
+                refresh_project_briefs_payload(args.root, dry_run=args.dry_run),
                 indent=2,
                 sort_keys=True,
             )
         )
     else:
-        print(format_project_brief_refresh(args.root), end="")
+        print(format_project_brief_refresh(args.root, dry_run=args.dry_run), end="")
     return 0
 
 

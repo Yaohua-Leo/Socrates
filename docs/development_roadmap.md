@@ -2226,6 +2226,32 @@ same writer side effects as Markdown mode
 - Ready projects 仍被 skip，且不会重复追加 `Generated study brief.` project-log entry。
 - 这不是 dry-run、read-only command、新 selection policy、scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit writer result 的 structured output。
 
+v0.37：multi-project brief refresh dry-run preview
+
+建议目标：
+
+让 collection refresh-briefs writer 在实际写入前可被 operator/UI/plugin/wrapper 预览，避免为了确认 selection 而先修改 child projects。
+
+必须完成：
+
+`projects refresh-briefs --dry-run`
+
+Markdown + JSON preview
+
+same selection policy as writer mode
+
+no child-project or root writes
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects refresh-briefs --root <root> --dry-run` 已输出 deterministic Markdown preview。
+- `python -m socrates projects refresh-briefs --root <root> --dry-run --json` 已输出 deterministic JSON preview。
+- Payload 已记录 `mode: dry_run`、`dry_run: true`、selected/refreshed/skipped counts、selected rows、empty refreshed rows 和 skipped rows。
+- Dry-run mode 不会写入 selected child projects 的 `07_exports/briefs/study_brief.md`、manifest 或 project-log entry。
+- Ready child projects 仍被 skip，且 selection policy 与 writer mode 相同。
+- 命令不会写入 root `socrates_projects.json`。
+- 这不是 read-only resume command、新 selector、scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit writer selection 的 no-write preview。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

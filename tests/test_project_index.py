@@ -944,6 +944,9 @@ class ProjectIndexTests(unittest.TestCase):
                 "deterministic_project_brief_refresh",
             )
             self.assertEqual(payload["root"], str(root.resolve()))
+            self.assertEqual(payload["mode"], "write")
+            self.assertFalse(payload["dry_run"])
+            self.assertEqual(payload["selected_count"], 1)
             self.assertEqual(payload["refreshed_count"], 1)
             self.assertEqual(payload["skipped_count"], 1)
             self.assertEqual(
@@ -958,6 +961,7 @@ class ProjectIndexTests(unittest.TestCase):
                     }
                 ],
             )
+            self.assertEqual(payload["selected"], payload["refreshed"])
             self.assertEqual(
                 payload["skipped"],
                 [
@@ -977,6 +981,187 @@ class ProjectIndexTests(unittest.TestCase):
                 (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
             )
             self.assertIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+            ready_log = (ready_project / "00_meta" / "project_log.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(ready_log.count("Generated study brief."), 1)
+            self.assertFalse((root / "socrates_projects.json").exists())
+
+    def test_projects_refresh_briefs_dry_run_reports_selected_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "refresh-briefs",
+                    "--root",
+                    str(root),
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("# Project Brief Refresh", result.stdout)
+            self.assertIn("- Mode: dry_run", result.stdout)
+            self.assertIn("- Selected: 1", result.stdout)
+            self.assertIn("- Refreshed: 0", result.stdout)
+            self.assertIn("- Skipped: 1", result.stdout)
+            self.assertIn(
+                (
+                    "ring_theory | Ring Theory | refresh_brief | "
+                    "07_exports/briefs/study_brief.md"
+                ),
+                result.stdout,
+            )
+            self.assertIn("## Refreshed Projects\n\n- none", result.stdout)
+            self.assertIn(
+                "group_theory | Group Theory | ready | resume_state_ready",
+                result.stdout,
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+            ready_log = (ready_project / "00_meta" / "project_log.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(ready_log.count("Generated study brief."), 1)
+            self.assertFalse((root / "socrates_projects.json").exists())
+
+    def test_projects_refresh_briefs_dry_run_json_reports_selected_without_writing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "refresh-briefs",
+                    "--root",
+                    str(root),
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_project_brief_refresh",
+            )
+            self.assertEqual(payload["root"], str(root.resolve()))
+            self.assertEqual(payload["mode"], "dry_run")
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["selected_count"], 1)
+            self.assertEqual(payload["refreshed_count"], 0)
+            self.assertEqual(payload["skipped_count"], 1)
+            self.assertEqual(
+                payload["selected"],
+                [
+                    {
+                        "id": "ring_theory",
+                        "title": "Ring Theory",
+                        "path": "ring_theory",
+                        "resume_state": "refresh_brief",
+                        "brief_path": "07_exports/briefs/study_brief.md",
+                    }
+                ],
+            )
+            self.assertEqual(payload["refreshed"], [])
+            self.assertEqual(
+                payload["skipped"],
+                [
+                    {
+                        "id": "group_theory",
+                        "title": "Group Theory",
+                        "path": "group_theory",
+                        "resume_state": "ready",
+                        "reason": "resume_state_ready",
+                    }
+                ],
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
                 "Generated study brief.",
                 (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
             )

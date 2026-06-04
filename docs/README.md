@@ -7,8 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.36-alpha structured batch-refreshable
-  commands-output command-summarized filterable readiness-counted multi-project resume indexes, over v0.35
+- Current implementation baseline: v0.37-alpha dry-run-previewable structured
+  batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, over v0.36
+  structured batch-refreshable commands-output command-summarized filterable
+  readiness-counted multi-project resume indexes, v0.35
   batch-refreshable commands-output
   command-summarized filterable readiness-counted multi-project resume indexes, v0.34
   commands-output command-summarized
@@ -110,3 +112,6 @@ from the source planning conversation.
 - `superpowers/plans/2026-06-04-v36-projects-refresh-briefs-json.md`:
   executable v0.36 plan for structured JSON output from the multi-project
   refresh-briefs writer.
+- `superpowers/plans/2026-06-04-v37-projects-refresh-briefs-dry-run.md`:
+  executable v0.37 plan for dry-run previews of selected multi-project
+  refresh-briefs writes.
