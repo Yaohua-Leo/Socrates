@@ -1145,6 +1145,19 @@ def _handle_status(args: argparse.Namespace) -> int:
     next_review = _next_scheduled_review(context.learning_state)
     report_count = _count_learning_reports(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
+    ingestion_quality = _read_quality_manifest_status(
+        context.root,
+        "ingestion_quality_manifest.json",
+    )
+    note_quality = _read_quality_manifest_status(context.root, "note_quality_manifest.json")
+    exercise_quality = _read_quality_manifest_status(
+        context.root,
+        "exercise_quality_manifest.json",
+    )
+    tutoring_quality = _read_quality_manifest_status(
+        context.root,
+        "tutoring_quality_manifest.json",
+    )
     tool_verification_quality = _read_tool_verification_quality_status(context.root)
     benchmark_status = _read_benchmark_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
@@ -1204,6 +1217,10 @@ def _handle_status(args: argparse.Namespace) -> int:
         if repair:
             print(f"Next repair: {repair}")
     print(f"Learning reports: {report_count}")
+    print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
+    print(f"Note quality check: {_quality_manifest_status_text(note_quality)}")
+    print(f"Exercise quality check: {_quality_manifest_status_text(exercise_quality)}")
+    print(f"Tutoring quality check: {_quality_manifest_status_text(tutoring_quality)}")
     print(f"Tool verification records: {tool_verification_count}")
     print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
     if benchmark_status is None:
@@ -2308,6 +2325,53 @@ def _count_tool_verification_records(project_root: Path) -> int:
         return 0
     records = manifest.get("records", []) if isinstance(manifest, dict) else []
     return len(records) if isinstance(records, list) else 0
+
+
+def _read_quality_manifest_status(
+    project_root: Path,
+    manifest_name: str,
+) -> dict[str, object] | None:
+    manifest_path = project_root / "08_evals" / manifest_name
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return {"status": "invalid"}
+    if checked < 0 or passed < 0 or failed < 0 or passed + failed != checked:
+        return {"status": "invalid"}
+    if failed > 0:
+        status = "fail"
+    elif checked == 0:
+        status = "empty"
+    elif passed == checked:
+        status = "pass"
+    else:
+        status = "partial"
+    return {
+        "status": status,
+        "checked": checked,
+        "passed": passed,
+        "failed": failed,
+    }
+
+
+def _quality_manifest_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return (
+        f"{value['status']} "
+        f"({value['passed']}/{value['checked']} passed, {value['failed']} failed)"
+    )
 
 
 def _read_tool_verification_quality_status(project_root: Path) -> dict[str, object] | None:
