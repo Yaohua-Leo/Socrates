@@ -181,6 +181,57 @@ class LifecycleAuditTests(unittest.TestCase):
             report_text = report_path.read_text(encoding="utf-8")
             self.assertIn("- Obsidian export: pass", report_text)
 
+    def test_lifecycle_audit_rejects_reviewed_notes_pending_obsidian_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What condition distinguishes normality from centrality?\n"
+                ),
+                source_id="df-1",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- Why must the subgroup be normal?\n"
+                ),
+                source_id="df-1",
+            )
+            review_atomic_note(project, "quotient_group")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_path = project / "08_evals" / "lifecycle_eval.md"
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("- Obsidian export: pass", report_text)
+            self.assertIn("- Obsidian export completeness: fail", report_text)
+
     def test_lifecycle_audit_rejects_stale_benchmark_report(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -797,7 +848,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 17/17 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 18/18 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -805,6 +856,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Tutoring session artifacts: pass", report_text)
             self.assertIn("- Misconception notes: pass", report_text)
             self.assertIn("- Obsidian export: pass", report_text)
+            self.assertIn("- Obsidian export completeness: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
             self.assertIn("- Artifact quality: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)

@@ -17,6 +17,7 @@ from .contracts import (
     REVIEW_ALLOWED_PRIORITIES,
 )
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
+from .learning_queue import collect_learning_queue
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
 from .state import ensure_learning_state_readable
@@ -473,21 +474,29 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
     )
     state = _read_learning_state(context.learning_state)
     kb_status = reference_kb_status(context.root)
+    reviewed_note_count = _reviewed_note_count(context.root)
+    obsidian_exports = obsidian_export_count(context.root)
+    queue = collect_learning_queue(context.root)
     checks = {
         "Project metadata": context.project_file.exists() and context.learning_state.exists(),
         "Reference KB": kb_status.object_count > 0 and kb_status.status == "current",
         "Learning plans": _has_learning_plans(context.root),
         "Tutoring session artifacts": _has_complete_session(context.sessions_dir),
-        "Reviewed atomic notes": _reviewed_note_count(context.root) > 0,
+        "Reviewed atomic notes": reviewed_note_count > 0,
     }
     if _has_misconception_records(state):
         checks["Misconception notes"] = _has_reviewed_misconception_notes(
             context.root,
             state,
         )
+    obsidian_checks = {"Obsidian export": obsidian_exports > 0}
+    if reviewed_note_count > 0 or obsidian_exports > 0:
+        obsidian_checks["Obsidian export completeness"] = (
+            len(queue.obsidian_exports_to_run) == 0
+        )
     checks.update(
         {
-            "Obsidian export": obsidian_export_count(context.root) > 0,
+            **obsidian_checks,
             "Generated exercises": _markdown_count(context.generated_exercises_dir) >= 5,
             "Exercise attempts": _markdown_count(context.root / "05_exercises" / "attempted") > 0,
             "Graded exercises": _markdown_count(context.root / "05_exercises" / "graded") > 0,
