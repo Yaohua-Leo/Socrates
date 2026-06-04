@@ -8,7 +8,11 @@ import sys
 import tempfile
 import unittest
 
-from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
+from socrates.artifacts import (
+    generate_atomic_note_draft,
+    generate_exercise_drafts,
+    generate_misconception_note_drafts,
+)
 from socrates.context import load_project
 from socrates.exercises import (
     approve_exercise_draft,
@@ -25,7 +29,12 @@ from socrates.reports import (
     generate_project_summary,
     generate_weekly_report,
 )
-from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+from socrates.state import (
+    LearningStatePatch,
+    MistakeRecord,
+    build_review_schedule,
+    update_learning_state,
+)
 from socrates.tool_verification import generate_lean_statement_skeleton
 from socrates.tutoring import run_scripted_tutoring_session
 
@@ -288,6 +297,48 @@ class LifecycleAuditTests(unittest.TestCase):
             )
             self.assertIn("- Tool verification records: fail", report_text)
 
+    def test_lifecycle_audit_requires_misconception_note_when_mistakes_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        )
+                    ],
+                ),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Misconception notes: fail", report_text)
+
     def test_lifecycle_audit_cli_reports_complete_learning_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -344,9 +395,24 @@ class LifecycleAuditTests(unittest.TestCase):
             context = load_project(project)
             update_learning_state(
                 context,
-                LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
+                LearningStatePatch(
+                    concept_mastery={"quotient_group": 0.42},
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session_0001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        )
+                    ],
+                ),
             )
             build_review_schedule(context)
+            generate_misconception_note_drafts(project)
+            review_atomic_note(project, "normal_equals_central")
+            export_reviewed_notes_to_obsidian(project)
             generate_lean_statement_skeleton(project, object_id="normal_subgroup")
             generate_weekly_report(project)
             generate_monthly_report(project)
@@ -370,12 +436,13 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 15/15 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 16/16 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
             self.assertIn("- Reference KB: pass", report_text)
             self.assertIn("- Tutoring session artifacts: pass", report_text)
+            self.assertIn("- Misconception notes: pass", report_text)
             self.assertIn("- Obsidian export: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)

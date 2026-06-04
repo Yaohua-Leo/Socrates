@@ -10,6 +10,7 @@ import re
 
 from .context import load_project, write_json, write_text
 from .kb import find_counterexamples, parse_object_heading
+from .project import slugify_topic
 
 
 @dataclass(frozen=True)
@@ -464,17 +465,26 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
         "Learning plans": _has_learning_plans(context.root),
         "Tutoring session artifacts": _has_complete_session(context.sessions_dir),
         "Reviewed atomic notes": _reviewed_note_count(context.root) > 0,
-        "Obsidian export": _obsidian_export_count(context.root) > 0,
-        "Generated exercises": _markdown_count(context.generated_exercises_dir) >= 5,
-        "Exercise attempts": _markdown_count(context.root / "05_exercises" / "attempted") > 0,
-        "Graded exercises": _markdown_count(context.root / "05_exercises" / "graded") > 0,
-        "Learning state": bool(state.get("concept_mastery")),
-        "Review schedule": _has_review_schedule(context.root, state),
-        "Learning reports": _has_learning_reports(context.root),
-        "Benchmark report": _has_benchmark_report(context.root),
-        "Benchmark manifest": _has_benchmark_manifest(context.root),
-        "Tool verification records": _has_tool_verification_records(context.root),
     }
+    if _has_misconception_records(state):
+        checks["Misconception notes"] = _has_reviewed_misconception_notes(
+            context.root,
+            state,
+        )
+    checks.update(
+        {
+            "Obsidian export": _obsidian_export_count(context.root) > 0,
+            "Generated exercises": _markdown_count(context.generated_exercises_dir) >= 5,
+            "Exercise attempts": _markdown_count(context.root / "05_exercises" / "attempted") > 0,
+            "Graded exercises": _markdown_count(context.root / "05_exercises" / "graded") > 0,
+            "Learning state": bool(state.get("concept_mastery")),
+            "Review schedule": _has_review_schedule(context.root, state),
+            "Learning reports": _has_learning_reports(context.root),
+            "Benchmark report": _has_benchmark_report(context.root),
+            "Benchmark manifest": _has_benchmark_manifest(context.root),
+            "Tool verification records": _has_tool_verification_records(context.root),
+        }
+    )
     report_path = context.evals_dir / "lifecycle_eval.md"
     write_text(report_path, _lifecycle_report(checks))
     return LifecycleAuditResult(
@@ -1965,6 +1975,42 @@ def _reviewed_note_count(project_root: Path) -> int:
             if "reviewed_by_user: true" in note_path.read_text(encoding="utf-8"):
                 reviewed += 1
     return reviewed
+
+
+def _has_misconception_records(state: dict[str, object]) -> bool:
+    misconceptions = state.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return False
+    return any(isinstance(value, dict) for value in misconceptions.values())
+
+
+def _has_reviewed_misconception_notes(
+    project_root: Path,
+    state: dict[str, object],
+) -> bool:
+    misconceptions = state.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return False
+    expected_note_ids = {
+        slugify_topic(str(misconception_id))
+        for misconception_id, value in misconceptions.items()
+        if isinstance(value, dict)
+    }
+    if not expected_note_ids:
+        return False
+
+    notes_dir = project_root / "04_atomic_notes" / "misconceptions"
+    if not notes_dir.exists():
+        return False
+    reviewed_ids: set[str] = set()
+    for note_path in notes_dir.glob("*.md"):
+        text = note_path.read_text(encoding="utf-8")
+        if _frontmatter_value(text, "type") != "misconception":
+            continue
+        if _frontmatter_value(text, "reviewed_by_user") != "true":
+            continue
+        reviewed_ids.add(note_path.stem)
+    return bool(expected_note_ids & reviewed_ids)
 
 
 def _markdown_count(path: Path) -> int:
