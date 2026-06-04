@@ -42,6 +42,7 @@ class CorrectionPatchSummary:
     """A correction patch proposal prepared for CLI display."""
 
     patch_id: str
+    status: str
     source_id: str
     risk_level: str
     location: str
@@ -198,6 +199,27 @@ def list_correction_patches(
             continue
         summaries.append(summary)
     return summaries
+
+
+def review_correction_patch(
+    project_path: Path | str,
+    patch_id: str,
+    *,
+    decision: str,
+    note: str = "",
+) -> Path:
+    """Record a human review decision on a correction patch proposal."""
+
+    context = load_project(project_path)
+    normalized_id = patch_id.removesuffix(".patch.md").removesuffix(".patch")
+    patch_path = context.references_dir / "converted" / "patches" / f"{normalized_id}.patch.md"
+    if not patch_path.exists():
+        raise FileNotFoundError(f"Correction patch does not exist: {patch_path}")
+
+    text = patch_path.read_text(encoding="utf-8")
+    write_text(patch_path, _with_review_decision(text, decision=decision, note=note))
+    append_project_log(context, f"Reviewed correction patch {normalized_id}: {decision}.")
+    return patch_path
 
 
 def _reference_type(source: Path) -> tuple[str, str]:
@@ -404,6 +426,7 @@ def _correction_patch_summary(project_root: Path, patch_path: Path) -> Correctio
     text = patch_path.read_text(encoding="utf-8")
     return CorrectionPatchSummary(
         patch_id=patch_path.stem.removesuffix(".patch"),
+        status=_patch_review_status(text),
         source_id=_patch_source_id(text),
         risk_level=_patch_section_value(text, "Risk Level") or "unknown",
         location=_patch_section_value(text, "Location") or "unknown",
@@ -434,6 +457,49 @@ def _patch_section_value(text: str, heading: str) -> str:
                 values.append(stripped)
         return " ".join(values)
     return ""
+
+
+def _patch_review_status(text: str) -> str:
+    decision = _patch_review_field(text, "decision")
+    return decision if decision else "pending"
+
+
+def _patch_review_field(text: str, key: str) -> str:
+    in_review = False
+    prefix = f"- {key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "### Review Decision":
+            in_review = True
+            continue
+        if in_review and line.startswith("### "):
+            return ""
+        if in_review and stripped.startswith(prefix):
+            return stripped.removeprefix(prefix).strip()
+    return ""
+
+
+def _with_review_decision(text: str, *, decision: str, note: str) -> str:
+    decision_block = _review_decision_markdown(decision=decision, note=note)
+    marker = "\n### Review Decision\n"
+    if marker not in text:
+        return text.rstrip() + "\n\n" + decision_block
+    before, _, existing_tail = text.partition(marker)
+    _, separator, after = existing_tail.partition("\n### ")
+    if separator:
+        return before.rstrip() + "\n\n" + decision_block.rstrip() + "\n\n### " + after
+    return before.rstrip() + "\n\n" + decision_block
+
+
+def _review_decision_markdown(*, decision: str, note: str) -> str:
+    lines = [
+        "### Review Decision",
+        "",
+        f"- decision: {decision}",
+    ]
+    if note.strip():
+        lines.append(f"- note: {note.strip()}")
+    return "\n".join(lines).rstrip() + "\n"
 
 
 def _fenced_text(value: str) -> str:

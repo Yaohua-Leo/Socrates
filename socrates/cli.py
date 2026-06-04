@@ -62,6 +62,7 @@ from .references import (
     import_reference,
     list_correction_patches,
     list_source_registry,
+    review_correction_patch,
 )
 from .reports import (
     ReportSummary,
@@ -230,6 +231,24 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by source registry id.",
     )
     patches_list_parser.set_defaults(func=_handle_patches_list)
+    patches_review_parser = patches_subparsers.add_parser(
+        "review",
+        help="Record a human review decision on a correction patch.",
+    )
+    patches_review_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    patches_review_parser.add_argument("--patch", required=True, help="Patch id, without .patch.md.")
+    patches_review_parser.add_argument(
+        "--decision",
+        choices=("accepted", "rejected"),
+        required=True,
+        help="Human review decision for this patch.",
+    )
+    patches_review_parser.add_argument(
+        "--note",
+        default="",
+        help="Optional review note.",
+    )
+    patches_review_parser.set_defaults(func=_handle_patches_review)
 
     plan_parser = subparsers.add_parser(
         "plan",
@@ -897,6 +916,17 @@ def _handle_patches_list(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_patches_review(args: argparse.Namespace) -> int:
+    review_correction_patch(
+        args.project,
+        args.patch,
+        decision=args.decision,
+        note=args.note,
+    )
+    print(f"Reviewed correction patch {args.patch}: {args.decision}")
+    return 0
+
+
 def _correction_patches_text(patches: list[CorrectionPatchSummary]) -> str:
     lines = ["# Correction Patches", ""]
     if not patches:
@@ -904,8 +934,8 @@ def _correction_patches_text(patches: list[CorrectionPatchSummary]) -> str:
         return "\n".join(lines) + "\n"
     lines.extend(
         (
-            f"- {patch.patch_id} | {patch.source_id} | {patch.risk_level} | "
-            f"{patch.location} | {patch.path}"
+            f"- {patch.patch_id} | {patch.status} | {patch.source_id} | "
+            f"{patch.risk_level} | {patch.location} | {patch.path}"
         )
         for patch in patches
     )
@@ -980,7 +1010,11 @@ def _handle_status(args: argparse.Namespace) -> int:
         context.source_registry,
         "conversion_pending",
     )
-    correction_patch_count = len(list_correction_patches(context.root))
+    correction_patches = list_correction_patches(context.root)
+    correction_patch_count = len(correction_patches)
+    pending_correction_patch_count = sum(
+        1 for patch in correction_patches if patch.status == "pending"
+    )
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_object_count = _count_kb_objects(context.root)
     reviewed_count = _count_reviewed_notes(context.root)
@@ -1024,6 +1058,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Converted references: {converted_count}")
     print(f"Conversion pending references: {conversion_pending_count}")
     print(f"Correction patches: {correction_patch_count}")
+    print(f"Pending correction patches: {pending_correction_patch_count}")
     print(f"Curated references: {curated_count}")
     print(f"KB objects: {kb_object_count}")
     print(f"Latest session: {latest_session}")
