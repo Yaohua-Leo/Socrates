@@ -518,6 +518,80 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Current phase: references_curated", status.stdout)
             self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
 
+    def test_status_cli_rejects_reference_kb_graph_missing_required_fields(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            graph_path = project / "06_kb" / "concept_graph.json"
+            graph = json.loads(graph_path.read_text(encoding="utf-8"))
+            graph["nodes"][0].pop("label")
+            graph_path.write_text(
+                json.dumps(graph, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Curated references: 1", status.stdout)
+            self.assertIn("KB objects: 0", status.stdout)
+            self.assertIn("Reference KB status: invalid", status.stdout)
+            self.assertIn("Current phase: references_curated", status.stdout)
+            self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
+
+    def test_status_cli_rejects_dependency_graph_non_prerequisite_edges(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            graph_path = project / "06_kb" / "dependency_graph.json"
+            graph = json.loads(graph_path.read_text(encoding="utf-8"))
+            graph["edges"][0]["relationship"] = "example_of"
+            graph_path.write_text(
+                json.dumps(graph, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Curated references: 1", status.stdout)
+            self.assertIn("KB objects: 0", status.stdout)
+            self.assertIn("Reference KB status: invalid", status.stdout)
+            self.assertIn("Current phase: references_curated", status.stdout)
+            self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
+
     def test_status_cli_rejects_malformed_reference_kb_nested_artifact_rows(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

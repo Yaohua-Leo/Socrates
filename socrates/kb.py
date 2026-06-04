@@ -539,6 +539,16 @@ def _reference_kb_artifacts_status(
                 isinstance(item, dict) for item in rows
             ):
                 return ("invalid", 0)
+        if filename == "concept_graph.json" and not _valid_graph_artifact(
+            artifact,
+            allowed_relationships={"prerequisite", *CONCEPT_RELATIONSHIP_TYPES},
+        ):
+            return ("invalid", 0)
+        if filename == "dependency_graph.json" and not _valid_graph_artifact(
+            artifact,
+            allowed_relationships={"prerequisite"},
+        ):
+            return ("invalid", 0)
         if filename == "chapter_index.json" and not _valid_chapter_index_artifact(
             project_root,
             artifact,
@@ -562,6 +572,37 @@ def _reference_kb_artifacts_status(
             return ("invalid", 0)
         mtimes.append(path.stat().st_mtime_ns)
     return ("current", min(mtimes) if mtimes else 0)
+
+
+def _valid_graph_artifact(
+    artifact: dict[str, object],
+    *,
+    allowed_relationships: set[str],
+) -> bool:
+    nodes = artifact.get("nodes")
+    edges = artifact.get("edges")
+    if not isinstance(nodes, list) or not isinstance(edges, list):
+        return False
+    node_ids: set[str] = set()
+    for node in nodes:
+        if not isinstance(node, dict):
+            return False
+        if not _has_nonempty_string_fields(node, ("id", "label", "type")):
+            return False
+        node_id = str(node["id"])
+        if node_id in node_ids:
+            return False
+        node_ids.add(node_id)
+    for edge in edges:
+        if not isinstance(edge, dict):
+            return False
+        if not _has_nonempty_string_fields(edge, ("source", "target", "relationship")):
+            return False
+        if edge["relationship"] not in allowed_relationships:
+            return False
+        if edge["source"] not in node_ids or edge["target"] not in node_ids:
+            return False
+    return True
 
 
 def _valid_reference_object_index_artifact(
