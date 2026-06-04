@@ -491,6 +491,54 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_lists_tool_quality_records_with_missing_status_to_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            manifest_path = project / "08_evals" / "tool_verification_quality_manifest.json"
+            manifest_path.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "records": [
+                            {
+                                "object_id": "kernel_normality",
+                                "record_status": "unchecked_skeleton",
+                                "artifact_path": (
+                                    "08_evals/tool_verification/kernel_normality_statement.lean"
+                                ),
+                                "report_path": (
+                                    "08_evals/tool_verification/kernel_normality_statement_report.md"
+                                ),
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Tool Verifications To Fix", result.stdout)
+            self.assertIn(
+                (
+                    "- kernel_normality | "
+                    "08_evals/tool_verification_quality_manifest.json | "
+                    "quality: fail; status: invalid_quality_status; "
+                    "issues: missing tool-verification quality status; "
+                    "rerun with: socrates tool check --project <project>"
+                ),
+                result.stdout,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

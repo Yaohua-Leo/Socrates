@@ -280,26 +280,52 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
                 )
             )
             continue
-        if str(record.get("quality_status", "")).strip() != "fail":
+        quality_status = str(record.get("quality_status", "")).strip()
+        if not quality_status:
+            items.append(
+                _tool_quality_record_item(
+                    project_root,
+                    manifest_path,
+                    item_id=str(record.get("object_id") or f"record_{index}"),
+                    record_status="invalid_quality_status",
+                    issues=["missing tool-verification quality status"],
+                )
+            )
+            continue
+        if quality_status != "fail":
             continue
         object_id = str(record.get("object_id") or f"record_{index}")
         record_status = str(record.get("record_status") or "unknown")
-        issues = _tool_verification_issue_text(
-            _tool_verification_issue_items(record.get("issues", []))
-        )
-        detail = (
-            f"quality: fail; status: {record_status}; "
-            f"issues: {issues}; "
-            "rerun with: socrates tool check --project <project>"
-        )
         items.append(
-            QueueItem(
+            _tool_quality_record_item(
+                project_root,
+                queue_path,
                 item_id=object_id,
-                path=queue_path.relative_to(project_root).as_posix(),
-                detail=detail,
+                record_status=record_status,
+                issues=_tool_verification_issue_items(record.get("issues", [])),
             )
         )
     return items
+
+
+def _tool_quality_record_item(
+    project_root: Path,
+    path: Path,
+    *,
+    item_id: str,
+    record_status: str,
+    issues: list[str],
+) -> QueueItem:
+    return QueueItem(
+        item_id=item_id,
+        path=path.relative_to(project_root).as_posix(),
+        detail=(
+            "quality: fail; "
+            f"status: {record_status}; "
+            f"issues: {_tool_verification_issue_text(issues)}; "
+            "rerun with: socrates tool check --project <project>"
+        ),
+    )
 
 
 def _tool_quality_manifest_item(
