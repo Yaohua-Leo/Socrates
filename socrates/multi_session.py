@@ -15,6 +15,7 @@ MULTI_SESSION_REGRESSION_REPORT_PATH = Path("08_evals") / "multi_session_regress
 MULTI_SESSION_REGRESSION_MANIFEST_PATH = (
     Path("08_evals") / "multi_session_regression_manifest.json"
 )
+PROJECT_SUMMARY_REPORT_PATH = Path("07_exports") / "reports" / "project_summary.md"
 
 SESSION_ARTIFACTS = (
     "transcript.md",
@@ -22,6 +23,17 @@ SESSION_ARTIFACTS = (
     "detected_misconceptions.md",
     "summary.md",
     "next_actions.md",
+)
+LONG_TERM_PROJECT_SUMMARY_SECTIONS = (
+    "## Priority Actions",
+    "## Recommended Focus",
+    "## Action Summary",
+    "## Repair Paths",
+    "## Risk Summary",
+    "## Trend Summary",
+    "## Report History Snapshot",
+    "## Session Score Snapshot",
+    "## Next Session Handoff Snapshot",
 )
 
 
@@ -37,6 +49,7 @@ class MultiSessionRegressionResult:
     issues: list[str]
     report_path: Path
     manifest_path: Path
+    project_summary_path: Path
 
 
 def run_multi_session_regression(project_path: Path | str) -> MultiSessionRegressionResult:
@@ -46,49 +59,39 @@ def run_multi_session_regression(project_path: Path | str) -> MultiSessionRegres
     closeout = read_session_closeout_status(context.root)
     closeout_session_id = _string_value(closeout, "session_id")
     next_session_id = _string_value(closeout, "next_session_id")
-    checks = _regression_checks(
+    core_checks = _core_regression_checks(
         context.root,
         closeout=closeout,
         closeout_session_id=closeout_session_id,
         next_session_id=next_session_id,
     )
-    passed_checks = sum(1 for check in checks if check["passed"] is True)
-    total_checks = len(checks)
-    issues = [
-        str(issue)
-        for check in checks
-        for issue in check.get("issues", [])
-        if isinstance(issue, str)
-    ]
-    status = "pass" if passed_checks == total_checks else "fail"
     report_path = context.root / MULTI_SESSION_REGRESSION_REPORT_PATH
     manifest_path = context.root / MULTI_SESSION_REGRESSION_MANIFEST_PATH
-    write_text(
-        report_path,
-        _regression_report(
-            status=status,
-            closeout_session_id=closeout_session_id,
-            next_session_id=next_session_id,
-            passed_checks=passed_checks,
-            total_checks=total_checks,
-            checks=checks,
-            issues=issues,
-        ),
+    project_summary_path = context.root / PROJECT_SUMMARY_REPORT_PATH
+    _write_regression_artifacts(
+        project_root=context.root,
+        closeout_session_id=closeout_session_id,
+        next_session_id=next_session_id,
+        checks=core_checks,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        project_summary_path=project_summary_path,
     )
-    write_json(
-        manifest_path,
-        {
-            "schema_version": 1,
-            "quality_boundary": MULTI_SESSION_REGRESSION_BOUNDARY,
-            "status": status,
-            "closeout_session_id": closeout_session_id,
-            "next_session_id": next_session_id,
-            "passed_checks": passed_checks,
-            "total_checks": total_checks,
-            "checks": checks,
-            "issues": issues,
-            "report_path": MULTI_SESSION_REGRESSION_REPORT_PATH.as_posix(),
-        },
+    project_summary_path = _refresh_project_summary(context.root)
+    checks = [
+        *core_checks,
+        _check_project_summary(context.root),
+        _check_project_summary_surfaces(context.root),
+        _check_report_history_artifact(context.root),
+    ]
+    status, passed_checks, total_checks, issues = _write_regression_artifacts(
+        project_root=context.root,
+        closeout_session_id=closeout_session_id,
+        next_session_id=next_session_id,
+        checks=checks,
+        report_path=report_path,
+        manifest_path=manifest_path,
+        project_summary_path=project_summary_path,
     )
     append_project_log(context, "Ran deterministic multi-session regression.")
     return MultiSessionRegressionResult(
@@ -100,6 +103,7 @@ def run_multi_session_regression(project_path: Path | str) -> MultiSessionRegres
         issues=issues,
         report_path=report_path,
         manifest_path=manifest_path,
+        project_summary_path=project_summary_path,
     )
 
 
@@ -127,7 +131,7 @@ def has_passing_multi_session_regression(project_path: Path | str) -> bool:
     return status is not None and status.get("status") == "pass"
 
 
-def _regression_checks(
+def _core_regression_checks(
     project_root: Path,
     *,
     closeout: dict[str, object] | None,
@@ -149,7 +153,6 @@ def _regression_checks(
             missing_label="missing next session artifacts",
         ),
         _check_next_session_handoff(project_root, next_session_id),
-        _check_project_summary(project_root),
     ]
 
 
@@ -211,6 +214,92 @@ def _check_project_summary(project_root: Path) -> dict[str, object]:
     return {"name": "Project summary refresh", "passed": not issues, "issues": issues}
 
 
+def _check_project_summary_surfaces(project_root: Path) -> dict[str, object]:
+    path = project_root / PROJECT_SUMMARY_REPORT_PATH
+    issues: list[str] = []
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        text = ""
+    missing = [section for section in LONG_TERM_PROJECT_SUMMARY_SECTIONS if section not in text]
+    if missing:
+        issues.append("missing project summary surfaces: " + ", ".join(missing))
+    return {
+        "name": "Project summary long-term surfaces",
+        "passed": not issues,
+        "issues": issues,
+    }
+
+
+def _check_report_history_artifact(project_root: Path) -> dict[str, object]:
+    from .reports import summarize_report_history
+
+    summary = summarize_report_history(project_root)
+    issues: list[str] = []
+    if summary.status != "current":
+        issues.append(f"report history status: {summary.status}")
+    elif summary.total_snapshots < 1:
+        issues.append("report history snapshots: 0")
+    return {"name": "Report history artifact", "passed": not issues, "issues": issues}
+
+
+def _refresh_project_summary(project_root: Path) -> Path:
+    from .reports import generate_project_summary
+
+    return generate_project_summary(project_root)
+
+
+def _write_regression_artifacts(
+    *,
+    project_root: Path,
+    closeout_session_id: str,
+    next_session_id: str,
+    checks: list[dict[str, object]],
+    report_path: Path,
+    manifest_path: Path,
+    project_summary_path: Path,
+) -> tuple[str, int, int, list[str]]:
+    passed_checks = sum(1 for check in checks if check["passed"] is True)
+    total_checks = len(checks)
+    issues = [
+        str(issue)
+        for check in checks
+        for issue in check.get("issues", [])
+        if isinstance(issue, str)
+    ]
+    status = "pass" if passed_checks == total_checks else "fail"
+    write_text(
+        report_path,
+        _regression_report(
+            status=status,
+            closeout_session_id=closeout_session_id,
+            next_session_id=next_session_id,
+            passed_checks=passed_checks,
+            total_checks=total_checks,
+            checks=checks,
+            issues=issues,
+            project_summary_path=project_summary_path.relative_to(project_root).as_posix(),
+        ),
+    )
+    write_json(
+        manifest_path,
+        {
+            "schema_version": 1,
+            "quality_boundary": MULTI_SESSION_REGRESSION_BOUNDARY,
+            "status": status,
+            "closeout_session_id": closeout_session_id,
+            "next_session_id": next_session_id,
+            "passed_checks": passed_checks,
+            "total_checks": total_checks,
+            "checks": checks,
+            "issues": issues,
+            "report_path": MULTI_SESSION_REGRESSION_REPORT_PATH.as_posix(),
+            "project_summary_path": project_summary_path.relative_to(project_root).as_posix(),
+        },
+    )
+    return status, passed_checks, total_checks, issues
+
+
 def _normalized_regression_status(
     project_root: Path,
     manifest: dict[str, object],
@@ -265,6 +354,7 @@ def _regression_report(
     total_checks: int,
     checks: list[dict[str, object]],
     issues: list[str],
+    project_summary_path: str,
 ) -> str:
     lines = [
         "# Multi-Session Regression",
@@ -275,6 +365,7 @@ def _regression_report(
         f"- Closeout session: {closeout_session_id or 'unknown'}",
         f"- Next session: {next_session_id or 'unknown'}",
         f"- Checks: {passed_checks}/{total_checks}",
+        f"- Project summary: {project_summary_path}",
         "",
         "## Checks",
         "",

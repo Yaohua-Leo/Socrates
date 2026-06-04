@@ -1839,6 +1839,24 @@ v0.21：真实多 session fixture 与长期使用回归
 
 用更接近真实学习节奏的 multi-session fixture 覆盖 source -> plan -> sessions -> closeout -> regression -> reports -> status 的长链路，检查 v0.12-v0.20 的 action/report/status surfaces 是否在连续使用中保持一致。
 
+必须完成：
+
+regression manifest 写入后刷新 project summary
+
+long-term project-summary section check
+
+report-history artifact health check
+
+status/report workflow consistency after regression pass
+
+当前状态（2026-06-04）：
+
+- `lifecycle regression` 已先写 preliminary regression manifest，再刷新 project summary，最后写入 final regression report/manifest。
+- Multi-session regression checks 已从 5 项扩展到 7 项，新增 project-summary long-term section check 和 report-history artifact health check。
+- Regression manifest 已记录 `project_summary_path`，CLI 已显示 refreshed project summary 路径。
+- 真实 closeout -> regression fixture 已验证通过后 `Workflow actions: 0`、`Multi-session regression checks: 7/7` 与 `Report history: current` 同时可见。
+- 这不是 autonomous tutoring、score、prediction、proof、readiness shortcut 或 learning-state truth；它只是长期使用链路的确定性 artifact/report/status 一致性证据。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

@@ -1532,6 +1532,7 @@ def _handle_lifecycle_regression(args: argparse.Namespace) -> int:
     print(f"Regression issues: {issues}")
     print(f"Regression report: {result.report_path}")
     print(f"Regression manifest: {result.manifest_path}")
+    print(f"Project summary: {result.project_summary_path}")
     return 0 if result.status == "pass" else 1
 
 

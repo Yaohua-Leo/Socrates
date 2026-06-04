@@ -41,25 +41,35 @@ class MultiSessionRegressionTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Multi-session regression: pass", result.stdout)
-            self.assertIn("Regression checks: 5/5", result.stdout)
+            self.assertIn("Regression checks: 7/7", result.stdout)
             self.assertIn("Regression issues: none", result.stdout)
+            self.assertIn("Project summary:", result.stdout)
             manifest_path = project / "08_evals" / "multi_session_regression_manifest.json"
             report_path = project / "08_evals" / "multi_session_regression.md"
+            project_summary_path = project / "07_exports" / "reports" / "project_summary.md"
             self.assertTrue(report_path.exists())
             self.assertTrue(manifest_path.exists())
+            self.assertTrue(project_summary_path.exists())
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
             self.assertEqual(manifest["schema_version"], 1)
             self.assertEqual(manifest["quality_boundary"], "deterministic_multi_session_regression")
             self.assertEqual(manifest["status"], "pass")
             self.assertEqual(manifest["closeout_session_id"], "session_0001")
             self.assertEqual(manifest["next_session_id"], "session_0002")
-            self.assertEqual(manifest["passed_checks"], 5)
-            self.assertEqual(manifest["total_checks"], 5)
+            self.assertEqual(manifest["passed_checks"], 7)
+            self.assertEqual(manifest["total_checks"], 7)
+            self.assertEqual(manifest["project_summary_path"], "07_exports/reports/project_summary.md")
             self.assertEqual(manifest["issues"], [])
             report_text = report_path.read_text(encoding="utf-8")
             self.assertIn("# Multi-Session Regression", report_text)
             self.assertIn("- Session closeout manifest: pass", report_text)
             self.assertIn("- Next session artifacts: pass", report_text)
+            self.assertIn("- Project summary refresh: pass", report_text)
+            self.assertIn("- Project summary long-term surfaces: pass", report_text)
+            self.assertIn("- Report history artifact: pass", report_text)
+            summary_text = project_summary_path.read_text(encoding="utf-8")
+            self.assertIn("## Report History Snapshot", summary_text)
+            self.assertNotIn("workflow:multi_session_regression", summary_text)
 
             status = subprocess.run(
                 [sys.executable, "-m", "socrates", "status", "--project", str(project)],
@@ -71,8 +81,11 @@ class MultiSessionRegressionTests(unittest.TestCase):
 
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Multi-session regression: pass", status.stdout)
-            self.assertIn("Multi-session regression checks: 5/5", status.stdout)
+            self.assertIn("Multi-session regression checks: 7/7", status.stdout)
             self.assertIn("Multi-session regression issues: none", status.stdout)
+            self.assertIn("Workflow actions: 0", status.stdout)
+            self.assertIn("Report history: current", status.stdout)
+            self.assertIn("Latest report history: #3 project-summary attention", status.stdout)
 
     def test_lifecycle_regression_cli_fails_when_next_session_is_missing(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -96,7 +109,7 @@ class MultiSessionRegressionTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("Multi-session regression: fail", result.stdout)
-            self.assertIn("Regression checks: 4/5", result.stdout)
+            self.assertIn("Regression checks: 6/7", result.stdout)
             self.assertIn("missing next session artifacts: session_0002", result.stdout)
             manifest = json.loads(
                 (project / "08_evals" / "multi_session_regression_manifest.json").read_text(
@@ -104,6 +117,8 @@ class MultiSessionRegressionTests(unittest.TestCase):
                 )
             )
             self.assertEqual(manifest["status"], "fail")
+            self.assertEqual(manifest["passed_checks"], 6)
+            self.assertEqual(manifest["total_checks"], 7)
             self.assertEqual(manifest["issues"], ["missing next session artifacts: session_0002"])
 
     def test_status_reports_invalid_multi_session_regression_manifest(self) -> None:

@@ -6,9 +6,9 @@
 
 ## 当前阶段
 
-Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.20-alpha 的 report-history audit 层。
+Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.21-alpha 的 long-term multi-session regression 层。
 
-当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.20 report-history audit：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作、阻塞项、可继续学习项、人工审核项、修复路径、当前风险压力、同类型报告之间的风险变化和 report history artifact 健康状态也必须清楚可见，并进入 status/复盘报告。
+当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.21 long-term regression：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作、阻塞项、可继续学习项、人工审核项、修复路径、当前风险压力、同类型报告之间的风险变化、report history artifact 健康状态，以及 regression manifest 写入后的报告/status 一致性也必须清楚可见。
 
 ## v0.2 收口基线
 
@@ -349,6 +349,23 @@ Verification evidence:
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 400 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 400 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
 
+## v0.21 Long-term multi-session regression alpha
+
+- `python -m socrates lifecycle regression` now writes a preliminary regression manifest, refreshes project-summary output, then writes the final regression report/manifest.
+- The final regression now checks seven items: ready closeout, completed session artifacts, next session artifacts, next-session handoff, project summary refresh, long-term project-summary sections, and report-history artifact health.
+- The regression manifest records `project_summary_path`, and the CLI prints `Project summary: <path>` alongside the regression report and manifest paths.
+- A passing realistic closeout -> regression fixture now leaves `status` with `Workflow actions: 0`, `Multi-session regression checks: 7/7`, and current report-history evidence.
+- Safety boundary: v0.21 long-term regression is deterministic product-loop evidence. It refreshes and audits report/status surfaces, but it is not autonomous tutoring, scoring, prediction, proof, a readiness shortcut, or learning-state truth.
+
+Verification evidence:
+  - `python -m unittest tests.test_multi_session_regression` passed with 3 tests OK after the RED run failed on the old 5-check regression output.
+  - `python -m unittest tests.test_multi_session_regression tests.test_reports tests.test_status_quality_summary tests.test_learning_queue tests.test_session_closeout tests.test_lifecycle_audit` passed with 115 tests OK.
+  - `python -m unittest discover -s tests` passed with 400 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 400 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 400 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -385,7 +402,7 @@ Verification evidence:
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，v0.13 已增加 priority action queue navigation，v0.14 已增加 report priority action snapshots，v0.15 已增加 recommended focus report summaries，v0.16 已增加 action summary queue/report summaries，v0.17 已增加 repair path queue/report summaries，v0.18 已增加 current-state risk summary report snapshots，v0.19 已增加 bounded risk trend report snapshots，v0.20 已增加 report-history audit visibility，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend、prediction/scoring 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，v0.13 已增加 priority action queue navigation，v0.14 已增加 report priority action snapshots，v0.15 已增加 recommended focus report summaries，v0.16 已增加 action summary queue/report summaries，v0.17 已增加 repair path queue/report summaries，v0.18 已增加 current-state risk summary report snapshots，v0.19 已增加 bounded risk trend report snapshots，v0.20 已增加 report-history audit visibility，v0.21 已增加 long-term multi-session regression refresh，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend、prediction/scoring 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

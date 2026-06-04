@@ -6,17 +6,18 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.20-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.21-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
-status/lifecycle visibility, deterministic multi-session regression, workflow
-action queue visibility, priority action queue navigation, priority action
-snapshots in reports, recommended focus report summaries, action summary
-queue/report summaries, repair path queue/report summaries, risk summary report
-snapshots, risk trend report summaries, report-history audit visibility, and an
-opt-in LLM provider layer for reviewable draft suggestions, including
+status/lifecycle visibility, deterministic multi-session regression with
+long-term report-surface refresh, workflow action queue visibility, priority
+action queue navigation, priority action snapshots in reports, recommended focus
+report summaries, action summary queue/report summaries, repair path
+queue/report summaries, risk summary report snapshots, risk trend report
+summaries, report-history audit visibility, and an opt-in LLM provider layer for
+reviewable draft suggestions, including
 review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
 tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
 remain future work.
@@ -145,6 +146,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.20 report-history audit rows in `status` and project-summary reports,
   exposing risk-history health, snapshot count, and latest snapshot without
   requiring users to inspect raw JSON.
+- v0.21 long-term multi-session regression refreshes project-summary output
+  after the regression manifest is written, verifies long-term report sections
+  and report-history artifacts, and leaves status/report views aligned after a
+  realistic closeout -> regression cycle.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -177,9 +182,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   closeout manifest for human follow-up, and lifecycle audit treats that as not
   ready.
 - Multi-session regression is deterministic artifact evidence. It checks the
-  persisted closeout, completed/next session artifacts, handoff manifest, and
-  project summary visibility; it is not an LLM judge, mathematical proof, grade,
-  or learning-state truth source.
+  persisted closeout, completed/next session artifacts, handoff manifest,
+  project summary visibility, long-term report sections, and report-history
+  artifact health; it is not an LLM judge, mathematical proof, prediction,
+  grade, autonomous tutor, or learning-state truth source.
 - Workflow action queue entries are operational prompts. They do not create a
   new readiness gate, mutate project state, or replace lifecycle/regression
   checks.
