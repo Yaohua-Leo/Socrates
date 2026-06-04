@@ -433,6 +433,189 @@ class LearningPlanTests(unittest.TestCase):
                 short_term_plan,
             )
 
+    def test_review_adjust_plan_dry_run_reports_preview_without_rewriting_plan(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            create_learning_plan(project)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={"normal_subgroup": 0.41},
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context)
+            short_term_path = project / "02_learning_plan" / "short_term_plan.md"
+            original_short_term_plan = short_term_path.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "adjust-plan",
+                    "--project",
+                    str(project),
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                f"Plan adjustment preview: 1 review adjustment would be written to {short_term_path}",
+                result.stdout,
+            )
+            self.assertIn(
+                (
+                    f"- normal_subgroup | {date.today().isoformat()} | high | "
+                    "next_session | mastery 0.41; active misconception "
+                    "normal_equals_central x1 | repair: Compare gNg^-1=N with gn=ng."
+                ),
+                result.stdout,
+            )
+            self.assertNotIn("Adjusted short-term plan", result.stdout)
+            self.assertEqual(
+                short_term_path.read_text(encoding="utf-8"),
+                original_short_term_plan,
+            )
+
+    def test_review_adjust_plan_dry_run_json_reports_preview_without_rewriting_plan(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            create_learning_plan(project)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={"normal_subgroup": 0.41},
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context)
+            short_term_path = project / "02_learning_plan" / "short_term_plan.md"
+            original_short_term_plan = short_term_path.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "adjust-plan",
+                    "--project",
+                    str(project),
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("Plan adjustment preview", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_review_adjust_plan_preview",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["short_term_plan_path"], str(short_term_path))
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["adjustment_count"], 1)
+            self.assertEqual(
+                payload["review_adjustments"],
+                [
+                    {
+                        "concept": "normal_subgroup",
+                        "scheduled_for": date.today().isoformat(),
+                        "priority": "high",
+                        "due": "next_session",
+                        "reason": (
+                            "mastery 0.41; active misconception "
+                            "normal_equals_central x1"
+                        ),
+                        "repair": "Compare gNg^-1=N with gn=ng.",
+                    }
+                ],
+            )
+            self.assertEqual(
+                short_term_path.read_text(encoding="utf-8"),
+                original_short_term_plan,
+            )
+
+    def test_review_adjust_plan_dry_run_json_rejects_corrupt_learning_state_without_rewriting_plan(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            create_learning_plan(project)
+            short_term_path = project / "02_learning_plan" / "short_term_plan.md"
+            original_short_term_plan = short_term_path.read_text(encoding="utf-8")
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "adjust-plan",
+                    "--project",
+                    str(project),
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid learning_state.json", result.stderr)
+            self.assertIn("repair the JSON before adjusting review plans", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+            self.assertEqual(
+                short_term_path.read_text(encoding="utf-8"),
+                original_short_term_plan,
+            )
+
     def test_review_adjust_plan_json_rejects_corrupt_learning_state_without_rewriting_plan(
         self,
     ) -> None:

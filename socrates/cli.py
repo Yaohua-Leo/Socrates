@@ -754,6 +754,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Emit deterministic JSON instead of prose.",
     )
+    review_adjust_plan_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview short-term plan adjustments without writing the plan.",
+    )
     review_adjust_plan_parser.set_defaults(func=_handle_review_adjust_plan)
     review_due_parser = review_subparsers.add_parser(
         "due",
@@ -2179,6 +2184,28 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
 
 def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
     context = load_project(args.project)
+    short_term_plan = context.learning_plan_dir / "short_term_plan.md"
+    if args.dry_run:
+        ensure_learning_state_readable(
+            context.learning_state,
+            action="adjusting review plans",
+        )
+        rows = _review_schedule_records(context.learning_state)
+        if args.json:
+            print(
+                json.dumps(
+                    _review_adjust_plan_preview_payload(
+                        context,
+                        short_term_plan,
+                        rows,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        print(_review_adjust_plan_preview_text(short_term_plan, rows), end="")
+        return 0
     short_term_plan = adjust_short_term_plan_from_review_schedule(context.root)
     if args.json:
         print(
@@ -3854,6 +3881,52 @@ def _review_adjust_plan_payload(
         "adjustment_count": len(rows),
         "review_adjustments": rows,
     }
+
+
+def _review_adjust_plan_preview_payload(
+    context: ProjectContext,
+    short_term_plan_path: Path,
+    rows: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_adjust_plan_preview",
+        "project": str(context.root),
+        "short_term_plan_path": str(short_term_plan_path),
+        "dry_run": True,
+        "adjustment_count": len(rows),
+        "review_adjustments": rows,
+    }
+
+
+def _review_adjust_plan_preview_text(
+    short_term_plan_path: Path,
+    rows: list[dict[str, str]],
+) -> str:
+    noun = "adjustment" if len(rows) == 1 else "adjustments"
+    lines = [
+        (
+            f"Plan adjustment preview: {len(rows)} review {noun} "
+            f"would be written to {short_term_plan_path}"
+        ),
+        "",
+    ]
+    if not rows:
+        lines.append("- none")
+    else:
+        lines.extend(_review_adjustment_row_text(row) for row in rows)
+    return "\n".join(lines) + "\n"
+
+
+def _review_adjustment_row_text(row: dict[str, str]) -> str:
+    line = (
+        f"- {row['concept']} | {row['scheduled_for']} | "
+        f"{row['priority']} | {row['due']} | {row['reason']}"
+    )
+    repair = row.get("repair", "")
+    if repair:
+        line = f"{line} | repair: {repair}"
+    return line
 
 
 def _review_schedule_repair_payload(

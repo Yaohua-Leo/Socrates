@@ -2521,6 +2521,30 @@ review adjustment rows
 - 腐坏 `learning_state.json` 在 JSON mode 下仍 clean fail，且不会重写 short-term plan。
 - 这不是 dry-run、scheduler、exercise generator、tutor、report refresh、LLM call、plan approval 或 learning-state mutation；它只是现有 short-term-plan adjustment writer 的 structured result output mode。
 
+v0.49：review adjust-plan dry-run
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以在重写 short-term plan 前预览同一 review-adjustment rows。
+
+必须完成：
+
+`review adjust-plan --dry-run`
+
+`review adjust-plan --dry-run --json`
+
+no short-term plan rewrite
+
+preview adjustment rows
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review adjust-plan --project <project> --dry-run` 已输出 no-write prose preview。
+- `--dry-run --json` 已输出 `quality_boundary: deterministic_review_adjust_plan_preview`、`dry_run: true`、target short-term plan path、`adjustment_count` 和 would-be review adjustment rows。
+- dry-run mode 不会重写 `02_learning_plan/short_term_plan.md`。
+- 腐坏 `learning_state.json` 在 dry-run mode 下仍 clean fail，且不会重写 short-term plan。
+- 这不是 writer、scheduler、exercise generator、tutor、report refresh、LLM call、plan approval 或 learning-state mutation；它只是现有 short-term-plan adjustment writer evidence 的 no-write preview output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
