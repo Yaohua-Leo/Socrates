@@ -7,9 +7,7 @@ from pathlib import Path
 from .context import append_project_log, load_project, write_text
 from .dashboard import format_study_dashboard, project_title
 from .learning_queue import QueueItem, collect_learning_queue, priority_queue_items
-
-
-STUDY_BRIEF_RELATIVE_PATH = Path("07_exports") / "briefs" / "study_brief.md"
+from .study_brief_status import STUDY_BRIEF_RELATIVE_PATH
 
 
 def format_study_brief(project_path: Path | str) -> str:

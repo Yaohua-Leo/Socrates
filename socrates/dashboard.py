@@ -14,6 +14,7 @@ from .learning_queue import (
 )
 from .multi_session import read_multi_session_regression_status
 from .reports import ReportSummary, list_learning_reports, summarize_report_history
+from .study_brief_status import summarize_study_brief
 from .workflow_manifest import read_session_closeout_status
 
 
@@ -29,6 +30,7 @@ def format_study_dashboard(project_path: Path | str) -> str:
     report_history = summarize_report_history(context.root)
     closeout = read_session_closeout_status(context.root)
     regression = read_multi_session_regression_status(context.root)
+    study_brief = summarize_study_brief(context.root)
     priority_actions = priority_queue_items(queue)[:TOP_PRIORITY_LIMIT]
     report_counts = _report_counts(reports)
 
@@ -44,6 +46,9 @@ def format_study_dashboard(project_path: Path | str) -> str:
         f"- Multi-session regression: {_status_label(regression)}",
         f"- Report history: {report_history.status}",
         f"- Report history snapshots: {report_history.total_snapshots}",
+        f"- Study brief: {study_brief.status}",
+        f"- Study brief recorded next action: {study_brief.recorded_next_action}",
+        f"- Study brief current next action: {study_brief.current_next_action}",
         f"- Reports generated: {report_counts['generated']}",
         f"- Reports stale: {report_counts['stale']}",
         f"- Reports missing: {report_counts['missing']}",

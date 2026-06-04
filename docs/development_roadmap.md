@@ -1909,6 +1909,32 @@ clear boundary that only the brief artifact and project log are written
 - Dashboard evidence 以降级 Markdown heading 嵌入，使 artifact 同时保存 snapshot、action summary、top priority actions 与 report health。
 - 这不是 repair runner、report generator、LLM call、approval、score、tutor、prediction、readiness gate 或 learning-state truth mutation；除 brief artifact 与 project log entry 外不改项目真值。
 
+v0.24：study brief 新鲜度可见性
+
+建议目标：
+
+让 dashboard 和 status 显示 `study_brief.md` 是否仍对得上当前 priority queue 的 first next action，避免用户拿着旧启动 brief 继续学习。
+
+必须完成：
+
+study brief status reader
+
+dashboard study brief status rows
+
+status study brief status rows
+
+stale detection when current first priority action differs from recorded brief action
+
+missing/current/invalid fallback rows
+
+当前状态（2026-06-04）：
+
+- `socrates.study_brief_status.summarize_study_brief(project_path)` 已读取 `07_exports/briefs/study_brief.md` 并返回 `not_run`、`current`、`stale` 或 `invalid`。
+- Dashboard snapshot 已显示 `Study brief`、`Study brief recorded next action` 和 `Study brief current next action`。
+- `status` CLI 已显示同样三行，便于在长期 artifact 健康检查中看到旧 brief。
+- 当 brief 记录的是 `none` 但当前 priority queue 出现新 draft note 时，dashboard/status 显示 `Study brief: stale`。
+- 这不是完整 report freshness、readiness gate、score、tutor、planner 或 mutation；它只比较 brief 记录的 next action 与当前 priority queue first action。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

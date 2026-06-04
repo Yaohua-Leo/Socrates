@@ -6,18 +6,19 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.23-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.24-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
 long-term report-surface refresh, read-only study dashboards, generated
-study-start briefs, workflow action queue visibility, priority action queue
-navigation, priority action snapshots in reports, recommended focus report
-summaries, action summary queue/report summaries, repair path queue/report
-summaries, risk summary report snapshots, risk trend report summaries,
-report-history audit visibility, and an opt-in LLM provider layer for
+study-start briefs with next-action freshness visibility, workflow action queue
+visibility, priority action queue navigation, priority action snapshots in
+reports, recommended focus report summaries, action summary queue/report
+summaries, repair path queue/report summaries, risk summary report snapshots,
+risk trend report summaries, report-history audit visibility, and an opt-in LLM
+provider layer for
 reviewable draft suggestions, including
 review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
 tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
@@ -159,6 +160,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.23 generated study-start briefs write `07_exports/briefs/study_brief.md`
   from existing dashboard and queue evidence so the next action can be saved
   before starting a learning session.
+- v0.24 study brief status rows in `dashboard` and `status` show whether the
+  brief's recorded next action is current, stale, missing, or invalid compared
+  with the current priority queue first action.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -226,6 +230,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   brief and a project-log entry, they do not run repairs, refresh reports, call
   an LLM, approve artifacts, score learning, tutor, predict, or mutate
   learning-state truth.
+- Study brief status is a next-action freshness check. It compares the brief's
+  recorded next action with the current priority queue first action; it is not
+  a full report freshness system, readiness gate, score, tutor, or project
+  mutation.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

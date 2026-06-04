@@ -122,6 +122,7 @@ from .state import (
     update_learning_state,
 )
 from .study_brief import generate_study_brief
+from .study_brief_status import summarize_study_brief
 from .tool_verification import (
     check_tool_verification_records,
     check_lean_file,
@@ -1375,6 +1376,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     next_review = _next_scheduled_review(context.learning_state)
     report_count = _count_learning_reports(context.root)
     report_history = summarize_report_history(context.root)
+    study_brief_status = summarize_study_brief(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
     ingestion_quality = _read_quality_manifest_status(
         context.root,
@@ -1462,6 +1464,9 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Report history: {report_history.status}")
     print(f"Report history snapshots: {report_history.total_snapshots}")
     print(f"Latest report history: {_latest_report_history_text(report_history)}")
+    print(f"Study brief: {study_brief_status.status}")
+    print(f"Study brief recorded next action: {study_brief_status.recorded_next_action}")
+    print(f"Study brief current next action: {study_brief_status.current_next_action}")
     print(f"Workflow actions: {workflow_action_count}")
     print(f"Quality checks to fix: {quality_checks_to_fix_count}")
     print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")

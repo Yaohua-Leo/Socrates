@@ -71,6 +71,73 @@ class StudyBriefTests(unittest.TestCase):
             self.assertIn("### Top Priority Actions", text)
             self.assertIn("- none", text)
 
+    def test_dashboard_and_status_show_missing_study_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            dashboard = self._run_socrates("dashboard", "--project", str(project))
+            status = self._run_socrates("status", "--project", str(project))
+
+            self.assertEqual(dashboard.returncode, 0, dashboard.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("- Study brief: not_run", dashboard.stdout)
+            self.assertIn("- Study brief recorded next action: none", dashboard.stdout)
+            self.assertIn("- Study brief current next action: none", dashboard.stdout)
+            self.assertIn("Study brief: not_run", status.stdout)
+            self.assertIn("Study brief recorded next action: none", status.stdout)
+            self.assertIn("Study brief current next action: none", status.stdout)
+
+    def test_dashboard_and_status_show_current_study_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+
+            brief = self._run_socrates("brief", "--project", str(project))
+            dashboard = self._run_socrates("dashboard", "--project", str(project))
+            status = self._run_socrates("status", "--project", str(project))
+
+            self.assertEqual(brief.returncode, 0, brief.stderr)
+            self.assertEqual(dashboard.returncode, 0, dashboard.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("- Study brief: current", dashboard.stdout)
+            self.assertIn(f"- Study brief recorded next action: {next_action}", dashboard.stdout)
+            self.assertIn(f"- Study brief current next action: {next_action}", dashboard.stdout)
+            self.assertIn("Study brief: current", status.stdout)
+            self.assertIn(f"Study brief recorded next action: {next_action}", status.stdout)
+            self.assertIn(f"Study brief current next action: {next_action}", status.stdout)
+
+    def test_dashboard_and_status_mark_study_brief_stale_after_queue_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            brief = self._run_socrates("brief", "--project", str(project))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+            dashboard = self._run_socrates("dashboard", "--project", str(project))
+            status = self._run_socrates("status", "--project", str(project))
+
+            self.assertEqual(brief.returncode, 0, brief.stderr)
+            self.assertEqual(dashboard.returncode, 0, dashboard.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("- Study brief: stale", dashboard.stdout)
+            self.assertIn("- Study brief recorded next action: none", dashboard.stdout)
+            self.assertIn(f"- Study brief current next action: {next_action}", dashboard.stdout)
+            self.assertIn("Study brief: stale", status.stdout)
+            self.assertIn("Study brief recorded next action: none", status.stdout)
+            self.assertIn(f"Study brief current next action: {next_action}", status.stdout)
+
+    def _run_socrates(self, *args: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [sys.executable, "-m", "socrates", *args],
+            cwd=REPO_ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

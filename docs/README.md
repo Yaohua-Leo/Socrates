@@ -7,8 +7,9 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.23-alpha generated study-start briefs,
-  over v0.22 read-only study dashboards, v0.21 long-term multi-session
+- Current implementation baseline: v0.24-alpha study brief next-action
+  freshness visibility, over v0.23 generated study-start briefs, v0.22
+  read-only study dashboards, v0.21 long-term multi-session
   regression refresh, v0.20 report-history audit
   visibility, v0.19 risk trend report summaries, v0.18 risk summary report
   snapshots, v0.17 repair paths in queue and reports, v0.16 action summaries,
@@ -63,3 +64,5 @@ from the source planning conversation.
   plan for a read-only operator dashboard over existing deterministic evidence.
 - `superpowers/plans/2026-06-04-v23-study-brief.md`: executable v0.23 plan
   for generated study-start briefs over existing dashboard and queue evidence.
+- `superpowers/plans/2026-06-04-v24-study-brief-status.md`: executable v0.24
+  plan for study brief next-action freshness visibility in dashboard/status.
