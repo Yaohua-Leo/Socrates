@@ -73,6 +73,22 @@ class LearningQueueTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            notes_only = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "notes",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("## Notes To Review", result.stdout)
@@ -93,6 +109,14 @@ class LearningQueueTests(unittest.TestCase):
                 ),
                 result.stdout,
             )
+
+            self.assertEqual(notes_only.returncode, 0, notes_only.stderr)
+            self.assertIn("## Notes To Review", notes_only.stdout)
+            self.assertIn("- group_action | 04_atomic_notes/drafts/group_action.md", notes_only.stdout)
+            self.assertNotIn("## Exercise Drafts To Approve", notes_only.stdout)
+            self.assertNotIn("## Exercises To Attempt", notes_only.stdout)
+            self.assertNotIn("## Attempts To Grade", notes_only.stdout)
+            self.assertNotIn("normal_subgroup_03", notes_only.stdout)
 
     def test_queue_cli_lists_scheduled_reviews(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

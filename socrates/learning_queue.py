@@ -10,6 +10,19 @@ from .context import load_project, read_json
 from .project import slugify_topic
 
 
+QUEUE_SECTIONS = frozenset(
+    {
+        "notes",
+        "misconceptions",
+        "reviews",
+        "exercise-drafts",
+        "exercises",
+        "attempts",
+        "tool-verifications",
+    }
+)
+
+
 @dataclass(frozen=True)
 class QueueItem:
     """One actionable project artifact."""
@@ -47,20 +60,31 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
     )
 
 
-def format_learning_queue(queue: LearningQueue) -> str:
+def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
     """Render a stable CLI queue summary."""
 
+    if section != "all" and section not in QUEUE_SECTIONS:
+        allowed = ", ".join(sorted({"all", *QUEUE_SECTIONS}))
+        raise ValueError(f"Unknown queue section {section!r}; expected one of: {allowed}")
+
     lines = ["# Learning Queue", ""]
-    lines.extend(_section("Notes To Review", queue.notes_to_review))
-    lines.extend(
-        _section("Misconception Notes To Draft", queue.misconception_notes_to_draft)
-    )
-    lines.extend(_section("Scheduled Reviews", queue.scheduled_reviews))
-    lines.extend(_section("Exercise Drafts To Approve", queue.exercise_drafts_to_approve))
-    lines.extend(_section("Exercises To Attempt", queue.exercises_to_attempt))
-    lines.extend(_section("Attempts To Grade", queue.attempts_to_grade))
-    lines.extend(_section("Tool Verifications To Fix", queue.tool_verifications_to_fix))
+    for section_id, title, items in _queue_sections(queue):
+        if section != "all" and section != section_id:
+            continue
+        lines.extend(_section(title, items))
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem]]]:
+    return [
+        ("notes", "Notes To Review", queue.notes_to_review),
+        ("misconceptions", "Misconception Notes To Draft", queue.misconception_notes_to_draft),
+        ("reviews", "Scheduled Reviews", queue.scheduled_reviews),
+        ("exercise-drafts", "Exercise Drafts To Approve", queue.exercise_drafts_to_approve),
+        ("exercises", "Exercises To Attempt", queue.exercises_to_attempt),
+        ("attempts", "Attempts To Grade", queue.attempts_to_grade),
+        ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
+    ]
 
 
 def _notes_to_review(project_root: Path) -> list[QueueItem]:

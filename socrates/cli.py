@@ -35,7 +35,7 @@ from .kb import (
     read_reference_chapter_index,
     search_reference_kb,
 )
-from .learning_queue import collect_learning_queue, format_learning_queue
+from .learning_queue import QUEUE_SECTIONS, collect_learning_queue, format_learning_queue
 from .notes import (
     AtomicNoteSummary,
     NOTE_TYPES,
@@ -308,6 +308,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="List actionable notes and exercises for a Socrates project.",
     )
     queue_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    queue_parser.add_argument(
+        "--section",
+        choices=("all", *sorted(QUEUE_SECTIONS)),
+        default="all",
+        help="Show one queue section; defaults to all.",
+    )
     queue_parser.set_defaults(func=_handle_queue)
 
     lifecycle_parser = subparsers.add_parser(
@@ -1197,7 +1203,13 @@ def _handle_status(args: argparse.Namespace) -> int:
 
 
 def _handle_queue(args: argparse.Namespace) -> int:
-    print(format_learning_queue(collect_learning_queue(args.project)), end="")
+    print(
+        format_learning_queue(
+            collect_learning_queue(args.project),
+            section=args.section,
+        ),
+        end="",
+    )
     return 0
 
 
