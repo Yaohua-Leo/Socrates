@@ -149,6 +149,16 @@ class ExerciseQualityTests(unittest.TestCase):
                 prerequisites=["subgroup", "conjugation"],
                 count=5,
             )
+            proof_exercise = project / "05_exercises" / "generated" / "normal_subgroup_05.md"
+            proof_exercise.write_text(
+                proof_exercise.read_text(encoding="utf-8").replace(
+                    'type: "generated_exercise"',
+                    'type: "proof"',
+                    1,
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
             approve_exercise_draft(project, "normal_subgroup_01")
             approve_exercise_draft(project, "normal_subgroup_02")
             approve_exercise_draft(project, "normal_subgroup_03")
@@ -197,6 +207,23 @@ class ExerciseQualityTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            proof_exercises = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--type",
+                    "proof",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(all_exercises.returncode, 0, all_exercises.stderr)
             draft = (
@@ -216,11 +243,16 @@ class ExerciseQualityTests(unittest.TestCase):
                 "05_exercises/generated/normal_subgroup_03.md | "
                 "normal_subgroup_03_attempt_001, score 0.8"
             )
+            proof = (
+                "- normal_subgroup_05 | draft | proof | Normal Subgroup | "
+                "05_exercises/generated/normal_subgroup_05.md"
+            )
             self.assertIn("# Exercises", all_exercises.stdout)
             self.assertIn(draft, all_exercises.stdout)
             self.assertIn(approved, all_exercises.stdout)
             self.assertIn(attempted, all_exercises.stdout)
             self.assertIn(graded, all_exercises.stdout)
+            self.assertIn(proof, all_exercises.stdout)
             self.assertLess(all_exercises.stdout.index(draft), all_exercises.stdout.index(approved))
             self.assertLess(all_exercises.stdout.index(approved), all_exercises.stdout.index(attempted))
             self.assertLess(all_exercises.stdout.index(attempted), all_exercises.stdout.index(graded))
@@ -234,6 +266,11 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertIn(graded, graded_exercises.stdout)
             self.assertNotIn("normal_subgroup_01", graded_exercises.stdout)
             self.assertNotIn("normal_subgroup_02", graded_exercises.stdout)
+
+            self.assertEqual(proof_exercises.returncode, 0, proof_exercises.stderr)
+            self.assertIn(proof, proof_exercises.stdout)
+            self.assertNotIn("normal_subgroup_01", proof_exercises.stdout)
+            self.assertNotIn("normal_subgroup_04", proof_exercises.stdout)
 
     def test_record_exercise_attempt_rejects_unapproved_exercise(self) -> None:
         from socrates.exercises import record_exercise_attempt

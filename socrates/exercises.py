@@ -19,6 +19,20 @@ from .state import (
 
 
 REVIEW_MASTERY_THRESHOLD = 0.7
+EXERCISE_TYPES = frozenset(
+    {
+        "generated_exercise",
+        "targeted_review_exercise",
+        "definition_check",
+        "example_construction",
+        "counterexample_construction",
+        "calculation",
+        "proof",
+        "debug_proof",
+        "concept_comparison",
+        "mixed_review",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -62,13 +76,19 @@ def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
     return exercise_path
 
 
-def list_exercises(project_path: Path | str, *, status: str = "all") -> list[ExerciseSummary]:
-    """List generated exercises by their current learner/reviewer state."""
+def list_exercises(
+    project_path: Path | str, *, status: str = "all", exercise_type: str = "all"
+) -> list[ExerciseSummary]:
+    """List generated exercises by their current learner/reviewer state and type."""
 
     allowed_statuses = {"all", "draft", "approved", "attempted", "graded"}
     if status not in allowed_statuses:
         allowed = ", ".join(sorted(allowed_statuses))
         raise ValueError(f"Unknown exercise status {status!r}; expected one of: {allowed}")
+    allowed_types = {"all", *EXERCISE_TYPES}
+    if exercise_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(f"Unknown exercise type {exercise_type!r}; expected one of: {allowed}")
 
     context = load_project(project_path)
     attempts_by_exercise = _attempts_by_exercise(context.root)
@@ -94,6 +114,8 @@ def list_exercises(project_path: Path | str, *, status: str = "all") -> list[Exe
         )
     if status != "all":
         summaries = [summary for summary in summaries if summary.status == status]
+    if exercise_type != "all":
+        summaries = [summary for summary in summaries if summary.exercise_type == exercise_type]
     return sorted(summaries, key=lambda summary: (_exercise_status_order(summary.status), summary.exercise_id))
 
 

@@ -17,6 +17,7 @@ from .artifacts import (
 )
 from .context import load_project
 from .exercises import (
+    EXERCISE_TYPES,
     ExerciseSummary,
     approve_exercise_draft,
     grade_exercise_attempt,
@@ -612,6 +613,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "draft", "approved", "attempted", "graded"),
         default="all",
         help="Filter exercises by lifecycle status; defaults to all.",
+    )
+    exercise_list_parser.add_argument(
+        "--type",
+        choices=("all", *sorted(EXERCISE_TYPES)),
+        default="all",
+        help="Filter exercises by exercise type; defaults to all.",
     )
     exercise_list_parser.set_defaults(func=_handle_exercise_list)
     exercise_check_parser = exercise_subparsers.add_parser(
@@ -1610,7 +1617,7 @@ def _learning_scores_text(scores: list[LearningScoreSummary]) -> str:
 
 
 def _handle_exercise_list(args: argparse.Namespace) -> int:
-    exercises = list_exercises(args.project, status=args.status)
+    exercises = list_exercises(args.project, status=args.status, exercise_type=args.type)
     print(_exercises_text(exercises), end="")
     return 0
 
