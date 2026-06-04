@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+import math
 from pathlib import Path
 
 from socrates.context import ProjectContext, read_json, write_json, write_text
@@ -524,9 +525,10 @@ def _score_summaries(
 
 def _safe_score(value: object) -> float:
     try:
-        return float(value)
+        score = float(value)
     except (TypeError, ValueError):
         return 0.0
+    return score if math.isfinite(score) else 0.0
 
 
 def _score_status_order(status: str) -> int:
