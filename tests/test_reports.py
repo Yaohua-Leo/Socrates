@@ -496,6 +496,37 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Reference KB status: stale", report_text)
             self.assertIn("## Reference KB Snapshot", report_text)
 
+    def test_project_summary_continues_with_invalid_reference_kb_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+            report = project / "07_exports" / "reports" / "project_summary.md"
+            report_text = report.read_text(encoding="utf-8")
+            self.assertIn("- Reference KB status: invalid", report_text)
+            self.assertIn("## Reference KB Snapshot", report_text)
+            self.assertIn("- none indexed", report_text)
+
     def test_project_summary_counts_obsidian_manifest_backlinks(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

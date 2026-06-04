@@ -438,7 +438,10 @@ def _read_kb_snapshot(project_root: Path, *, limit: int = 10) -> list[dict[str, 
     index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
     if not index_path.exists():
         return []
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
     objects = index.get("objects", []) if isinstance(index, dict) else []
     if not isinstance(objects, list):
         return []
