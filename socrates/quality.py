@@ -533,6 +533,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
         issues.append("invalid exercise review_status")
     if _invalid_exercise_type(text):
         issues.append("invalid exercise type")
+    if _approved_exercise_missing_user_review(text):
+        issues.append("missing exercise user review")
     if _is_generated_exercise(text) and _missing_source_id(text):
         issues.append("missing source id")
     if _is_targeted_review_exercise(text):
@@ -1200,6 +1202,17 @@ def _invalid_exercise_review_status(text: str) -> bool:
 
 def _invalid_exercise_type(text: str) -> bool:
     return _invalid_frontmatter_choice(text, "type", EXERCISE_ALLOWED_TYPES)
+
+
+def _approved_exercise_missing_user_review(text: str) -> bool:
+    approved = (
+        _frontmatter_value(text, "status") == "approved"
+        or _frontmatter_value(text, "review_status") == "approved"
+    )
+    if not approved:
+        return False
+    value = _frontmatter_value(text, "reviewed_by_user")
+    return value is None or value.casefold() != "true"
 
 
 def _hint_ladder_lines(text: str) -> list[str]:
