@@ -127,6 +127,47 @@ def curate_reference(project_path: Path | str, source_id: str) -> Path:
     return curated_path
 
 
+def create_correction_patch(
+    project_path: Path | str,
+    source_id: str,
+    *,
+    location: str,
+    original: str,
+    proposed_correction: str,
+    reason: str,
+    risk_level: str = "low",
+) -> Path:
+    """Write a patch-only correction proposal for a converted reference."""
+
+    context = load_project(project_path)
+    registry_text = context.source_registry.read_text(encoding="utf-8")
+    record = _find_registry_record(registry_text, source_id)
+    if record is None:
+        raise ValueError(f"Unknown source id: {source_id}")
+
+    patch_dir = context.references_dir / "converted" / "patches"
+    patch_dir.mkdir(parents=True, exist_ok=True)
+    patch_number = _next_patch_number(patch_dir, source_id)
+    patch_path = patch_dir / f"{source_id}_patch_{patch_number:03d}.patch.md"
+    write_text(
+        patch_path,
+        _correction_patch_markdown(
+            record,
+            patch_number=patch_number,
+            location=location,
+            original=original,
+            proposed_correction=proposed_correction,
+            reason=reason,
+            risk_level=risk_level,
+        ),
+    )
+    append_project_log(
+        context,
+        f"Wrote correction patch {patch_path.name} for reference {source_id}.",
+    )
+    return patch_path
+
+
 def _reference_type(source: Path) -> tuple[str, str]:
     return REFERENCE_TYPES.get(source.suffix.lower(), ("file", "files"))
 
@@ -282,6 +323,56 @@ def _conversion_pending_markdown(record: dict[str, str]) -> str:
         "## Pending Reason\n\n"
         "- PDF extraction requires an approved backend before curated content can be built.\n"
     )
+
+
+def _next_patch_number(patch_dir: Path, source_id: str) -> int:
+    prefix = f"{source_id}_patch_"
+    existing_numbers: list[int] = []
+    for patch_path in patch_dir.glob(f"{source_id}_patch_*.patch.md"):
+        suffix = patch_path.name.removeprefix(prefix).removesuffix(".patch.md")
+        if suffix.isdigit():
+            existing_numbers.append(int(suffix))
+    return max(existing_numbers, default=0) + 1
+
+
+def _correction_patch_markdown(
+    record: dict[str, str],
+    *,
+    patch_number: int,
+    location: str,
+    original: str,
+    proposed_correction: str,
+    reason: str,
+    risk_level: str,
+) -> str:
+    title = record.get("title", record["id"])
+    return (
+        f"# Correction Patch: {title}\n\n"
+        f"## Patch {patch_number:03d}\n\n"
+        "### Source\n\n"
+        f"- source_id: {record['id']}\n"
+        f"- title: {title}\n"
+        f"- raw_path: {record.get('local_path', 'none') or 'none'}\n"
+        f"- converted_path: {record.get('processed_paths.markdown', 'none') or 'none'}\n"
+        f"- curated_path: {record.get('processed_paths.curated', 'none') or 'none'}\n\n"
+        "### Location\n\n"
+        f"{location.strip()}\n\n"
+        "### Original\n\n"
+        f"{_fenced_text(original)}\n\n"
+        "### Proposed Correction\n\n"
+        f"{_fenced_text(proposed_correction)}\n\n"
+        "### Reason\n\n"
+        f"{reason.strip()}\n\n"
+        "### Risk Level\n\n"
+        f"{risk_level}\n"
+    )
+
+
+def _fenced_text(value: str) -> str:
+    fence = "```"
+    while fence in value:
+        fence += "`"
+    return f"{fence}text\n{value.rstrip()}\n{fence}"
 
 
 LATEX_OBJECT_TYPES = {

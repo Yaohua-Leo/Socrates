@@ -54,7 +54,13 @@ from .quality import (
     check_tutoring_session_quality,
     run_project_benchmark,
 )
-from .references import SourceSummary, curate_reference, import_reference, list_source_registry
+from .references import (
+    SourceSummary,
+    create_correction_patch,
+    curate_reference,
+    import_reference,
+    list_source_registry,
+)
 from .reports import (
     ReportSummary,
     generate_monthly_report,
@@ -175,6 +181,36 @@ def build_parser() -> argparse.ArgumentParser:
     curate_parser.add_argument("--project", required=True, help="Socrates project directory.")
     curate_parser.add_argument("--source-id", required=True, help="Source id from source_registry.yaml.")
     curate_parser.set_defaults(func=_handle_curate)
+
+    patch_parser = subparsers.add_parser(
+        "patch",
+        help="Write a patch-only correction proposal for a converted reference.",
+    )
+    patch_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    patch_parser.add_argument(
+        "--source-id",
+        required=True,
+        help="Source id from source_registry.yaml.",
+    )
+    patch_parser.add_argument(
+        "--location",
+        required=True,
+        help="Reference location for the proposed correction.",
+    )
+    patch_parser.add_argument("--original", required=True, help="Original text needing correction.")
+    patch_parser.add_argument(
+        "--proposed-correction",
+        required=True,
+        help="Proposed replacement text.",
+    )
+    patch_parser.add_argument("--reason", required=True, help="Reason for the correction proposal.")
+    patch_parser.add_argument(
+        "--risk-level",
+        choices=("low", "medium", "high"),
+        default="low",
+        help="Risk level for applying this correction; defaults to low.",
+    )
+    patch_parser.set_defaults(func=_handle_patch)
 
     plan_parser = subparsers.add_parser(
         "plan",
@@ -819,6 +855,20 @@ def _handle_curate(args: argparse.Namespace) -> int:
         print(f"Marked reference {args.source_id} conversion pending: {path}")
     else:
         print(f"Curated reference {args.source_id}: {path}")
+    return 0
+
+
+def _handle_patch(args: argparse.Namespace) -> int:
+    patch = create_correction_patch(
+        args.project,
+        args.source_id,
+        location=args.location,
+        original=args.original,
+        proposed_correction=args.proposed_correction,
+        reason=args.reason,
+        risk_level=args.risk_level,
+    )
+    print(f"Wrote correction patch for {args.source_id}: {patch}")
     return 0
 
 

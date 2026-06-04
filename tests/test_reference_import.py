@@ -372,6 +372,93 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertIn("### Definition 3.1: Normal Subgroup", converted_text)
             self.assertIn('"number": "3.1"', index)
 
+    def test_patch_command_writes_patch_only_correction_without_mutating_references(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.md"
+            source.write_text(
+                "### Definition: Normal Subgroup\n"
+                "Let G he a group. A subgroup N is normal when gNg^{-1}=N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normality OCR Notes",
+            )
+            curated = curate_reference(project, record.id)
+            raw = project / "01_references" / "raw" / "markdown" / "normal_subgroups.md"
+            converted = (
+                project
+                / "01_references"
+                / "converted"
+                / "markdown"
+                / "normality_ocr_notes.md"
+            )
+            raw_before = raw.read_text(encoding="utf-8")
+            converted_before = converted.read_text(encoding="utf-8")
+            curated_before = curated.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patch",
+                    "--project",
+                    str(project),
+                    "--source-id",
+                    record.id,
+                    "--location",
+                    "Definition paragraph 1",
+                    "--original",
+                    "Let G he a group.",
+                    "--proposed-correction",
+                    "Let G be a group.",
+                    "--reason",
+                    "OCR likely misread be as he.",
+                    "--risk-level",
+                    "low",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Wrote correction patch", result.stdout)
+            patch = (
+                project
+                / "01_references"
+                / "converted"
+                / "patches"
+                / "normality_ocr_notes_patch_001.patch.md"
+            )
+            self.assertTrue(patch.exists())
+            patch_text = patch.read_text(encoding="utf-8")
+            self.assertIn("# Correction Patch: Normality OCR Notes", patch_text)
+            self.assertIn("## Patch 001", patch_text)
+            self.assertIn("- source_id: normality_ocr_notes", patch_text)
+            self.assertIn(
+                "- converted_path: 01_references/converted/markdown/normality_ocr_notes.md",
+                patch_text,
+            )
+            self.assertIn("### Location\n\nDefinition paragraph 1", patch_text)
+            self.assertIn("### Original\n\n```text\nLet G he a group.\n```", patch_text)
+            self.assertIn(
+                "### Proposed Correction\n\n```text\nLet G be a group.\n```",
+                patch_text,
+            )
+            self.assertIn("### Reason\n\nOCR likely misread be as he.", patch_text)
+            self.assertIn("### Risk Level\n\nlow", patch_text)
+            self.assertEqual(raw.read_text(encoding="utf-8"), raw_before)
+            self.assertEqual(converted.read_text(encoding="utf-8"), converted_before)
+            self.assertEqual(curated.read_text(encoding="utf-8"), curated_before)
+
 
 if __name__ == "__main__":
     unittest.main()
