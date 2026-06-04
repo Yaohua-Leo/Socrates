@@ -10,6 +10,18 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 当前分支相对 `main` 已有大量功能提交，最近一组工作主要在收紧 Reference KB 的可靠性边界：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 `status` 的 readiness 门禁。
 
+## v0.2 收口基线
+
+本轮收口目标是把 `feature/v0.2-reference-kb-obsidian` 固化为可信的 v0.2 基线，而不是立即进入智能层大改。
+
+当前核对结果：
+
+- 当前分支：`feature/v0.2-reference-kb-obsidian`。
+- 远端同步：本地 `HEAD` 与 `origin/feature/v0.2-reference-kb-obsidian` 为 `0 ahead / 0 behind`。
+- 工作树：收口开始前干净。
+- 基线门禁：`powershell -ExecutionPolicy Bypass -File scripts\check.ps1` 通过，327 tests OK。
+- 新增跨平台门禁入口：`scripts/check.sh` 与 PowerShell 脚本执行同一组检查。
+
 ## 已完成能力
 
 ### v0.1 最小学习闭环
@@ -49,7 +61,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 ### 质量门禁
 
 - 当前全量门禁：`powershell -ExecutionPolicy Bypass -File scripts\check.ps1`
-- 最近一次结果：324 tests OK。
+- 最近一次结果：327 tests OK。
 - 最近收口提交：
   - `f49a0c2 Fail fast on invalid chapter index reads`
   - `1d61f90 Fail fast on invalid concept graph reads`
@@ -62,18 +74,37 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 - 当前工作仍在 `feature/v0.2-reference-kb-obsidian`，尚未合并回集成分支或 `main`。
 - 旧的 v0.1 多 worktree 仍存在，包括 core contracts、reference import、learning plan、tutoring session、notes/exercises、state/eval 与 integration worktree。
-- 需要一次专门的集成审计，确认 v0.1 integration 与当前 v0.2 分支的历史关系、合并策略和远程同步状态。
+- 集成审计结论：
+  - `feature/v0.2-reference-kb-obsidian` 与 `origin/feature/v0.2-reference-kb-obsidian` 同步，`0 ahead / 0 behind`。
+  - `main` 是当前 v0.2 分支的祖先；当前 v0.2 分支相对 `main` 为 `312 ahead / 0 behind`。
+  - `integration/v0.1` 也是当前 v0.2 分支的祖先；当前 v0.2 分支相对 `integration/v0.1` 为 `313 ahead / 0 behind`。
+  - 本地 `main` 相对 `integration/v0.1` 为 `1 ahead / 0 behind`。
+  - 当前远端没有可见的 `origin/main` ref。
+- 推荐合并路径：先把 v0.2 feature 分支提升到 integration 线，再决定是否快进本地 `main`。不要绕过 integration gate 直接把 v0.2 当作最终主线发布。
 
 ### v0.2 收尾
 
-- 对所有直接读取 generated artifact 的 CLI/readers 做一次覆盖审计，确保它们都不会绕过 status gate。
+- 对所有直接读取 generated artifact 的 CLI/readers 做一次覆盖审计，确保它们都不会绕过 readiness/status gate。
 - 对 Obsidian 导出做一次端到端回归：draft -> review -> export -> manifest -> backlink -> lifecycle audit。
 - 更新 README，使其不再描述为 Phase 0 skeleton，而是反映当前 CLI 原型能力。
 - 梳理 docs 中 v0.2 已完成和未完成条目，减少路线图与实现状态之间的偏差。
 
+### Generated artifact reader 审计
+
+当前 v0.2 的高风险 generated reader 主要分为四类：
+
+- Reference KB reader：`kb list/search/counterexamples/chapters/relationships` 通过 `read_reference_index`、`read_reference_chapter_index`、`read_reference_concept_graph` 等 fail-fast reader 读取生成物；测试覆盖 missing、invalid JSON、invalid schema 和 rebuild hint。
+- Obsidian reader：`note list`、`note export-obsidian`、`status`、`lifecycle audit` 通过 note/export manifest 与文件扫描组合工作；已有 corrupt manifest fallback、stale export cleanup、pending export lifecycle tests。
+- Quality/report reader：`status`、`queue`、`benchmark status`、`lifecycle audit` 对 quality manifests、reports、benchmark manifest 做 schema/mtime/cleanliness 检查，坏 manifest 不应被误报为通过。
+- Tool-verification reader：`tool list/check`、`queue`、`lifecycle audit` 检查 tool-verification manifest 与 quality manifest schema、record 字段、source manifest fingerprint 和 stale KB 状态。
+
+收口结论：Reference KB reader 的 readiness gate 最成熟；Obsidian、quality/report 与 tool-verification reader 已有 fail-fast 或 conservative-fail 行为，后续如新增 reader，应优先复用现有 reader/helper，而不是在 CLI handler 中直接 `json.loads` 生成物。
+
 ### 距离最终目标的差距
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
+
+需要明确的是：当前实现仍是确定性 CLI 原型。苏格拉底式教学、笔记生成、组题和质量评估中的“智能层”尚未接入真实 LLM/provider；PDF/OCR 后端也仍是占位边界。这些属于 v0.3+ 的架构工作，不应混入 v0.2 收口。
 
 粗略估计：
 
@@ -86,11 +117,10 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 ## 下一步建议
 
-1. 先保持当前分支干净，做 v0.2 完成度审计。
-2. 修正 README 与 docs，让公开说明匹配当前实现。
-3. 跑一次完整 Group Theory 端到端样例，记录每个 artifact 的状态。
-4. 决定是否将 `feature/v0.2-reference-kb-obsidian` 合并到 integration 分支。
-5. 开始 v0.3 的错因、学习状态、复习调度产品化清理。
+1. 完成并保持 v0.2 收口门禁：README/docs 同步、Group Theory 端到端回归、reader gate 审计、`check.ps1`/`check.sh` 通过。
+2. 将 `feature/v0.2-reference-kb-obsidian` 作为 v0.2 集成候选，优先合并到 integration 分支，再决定是否提升到 `main`。
+3. 合并前保留 v0.1 worktree 分支作为历史审计对象，不再从这些旧分支继续开发新功能。
+4. v0.3 再处理错因、学习状态、复习调度产品化清理，以及 LLM/OCR/provider 抽象设计。
 
 ## 注意事项
 

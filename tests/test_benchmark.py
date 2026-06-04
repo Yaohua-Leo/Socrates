@@ -218,6 +218,48 @@ class BenchmarkTests(unittest.TestCase):
             self.assertIn("- not run", result.stdout)
             self.assertIn("- manifest: 08_evals/benchmark_manifest.json", result.stdout)
 
+    def test_benchmark_status_cli_reports_invalid_manifest_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p")
+            )
+            (project / "08_evals" / "benchmark_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            benchmark_status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "benchmark",
+                    "status",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(benchmark_status.returncode, 0, benchmark_status.stderr)
+            self.assertIn("# Benchmark Status", benchmark_status.stdout)
+            self.assertIn("- invalid manifest", benchmark_status.stdout)
+            self.assertIn("- manifest: 08_evals/benchmark_manifest.json", benchmark_status.stdout)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Benchmark score: invalid", status.stdout)
+            self.assertIn("Benchmark gates: invalid", status.stdout)
+
     def test_status_lists_failed_benchmark_gates_from_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(

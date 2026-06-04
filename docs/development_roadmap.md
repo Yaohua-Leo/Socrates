@@ -1379,6 +1379,14 @@ Obsidian-compatible atomic notes
 
 note review workflow
 
+当前状态（2026-06-04）：
+
+- v0.2 大部分已经在 `feature/v0.2-reference-kb-obsidian` 落地。
+- Reference KB 已支持 curated Markdown 对象抽取、章节/定理/习题派生索引、concept/dependency graph、检索、counterexample/relationship 查询和 provenance 校验。
+- Obsidian 笔记流已支持 draft -> review -> export -> manifest/backlink/lifecycle audit。
+- 收尾重点不是新增智能能力，而是文档同步、端到端回归、generated artifact reader gate 审计和集成分支决策。
+- PDF/OCR 后端、LLM tutor/provider、LLM judge 和自动数学内容生成仍不属于 v0.2 完成范围。
+
 v0.3：错因与学习状态
 
 目标：

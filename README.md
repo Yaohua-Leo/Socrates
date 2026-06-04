@@ -1,25 +1,97 @@
 # Socrates
 
-Socrates is a local-first Python CLI skeleton for project-based mathematics
-learning. The current implementation focuses on Phase 0: creating a stable
-learning-project directory layout and writing initial state files.
+Socrates is a local-first Python CLI for project-based mathematics learning.
+It creates a durable learning-project directory and coordinates reference
+ingestion, curated reference knowledge-base indexing, deterministic tutoring
+sessions, atomic note review, Obsidian export, exercises, learning-state
+artifacts, reports, and quality checks.
+
+The current codebase is a v0.2 prototype. Its strongest surfaces are the
+deterministic CLI, file contracts, provenance checks, Reference KB indexing,
+and Obsidian note workflow. It is not yet a full AI tutor: LLM generation,
+OCR/PDF extraction backends, LLM judges, and product UI layers remain future
+work.
 
 ## Quick Start
+
+Create a project:
 
 ```powershell
 python -m socrates init --topic "Group Theory" --path ".\projects\group_theory" --goal "Prepare for representation theory."
 ```
 
-The command creates a Socrates learning project with metadata, reference,
-planning, session, note, exercise, knowledge-base, export, and evaluation
-directories.
+Import and curate a local Markdown or text reference:
+
+```powershell
+python -m socrates import --project ".\projects\group_theory" ".\normal_subgroups.md" --role lecture_notes --title "Normal Subgroup Notes"
+python -m socrates curate --project ".\projects\group_theory" --source-id normal_subgroup_notes
+```
+
+Build and query the Reference KB:
+
+```powershell
+python -m socrates kb build --project ".\projects\group_theory"
+python -m socrates kb search --project ".\projects\group_theory" --query "conjugation"
+python -m socrates kb chapters --project ".\projects\group_theory"
+python -m socrates kb relationships --project ".\projects\group_theory"
+```
+
+Run the deterministic learning loop and inspect status:
+
+```powershell
+python -m socrates plan --project ".\projects\group_theory"
+python -m socrates teach --project ".\projects\group_theory" --session-id session_0001 --script ".\session.script"
+python -m socrates note review --project ".\projects\group_theory" --note normal_subgroup
+python -m socrates note export-obsidian --project ".\projects\group_theory"
+python -m socrates status --project ".\projects\group_theory"
+python -m socrates lifecycle audit --project ".\projects\group_theory"
+```
+
+## Current Capabilities
+
+- Project initialization with stable metadata, reference, plan, session, note,
+  exercise, KB, export, and eval directories.
+- Local reference import, conversion-pending handling for unsupported PDFs, and
+  patch-only curation correction proposals.
+- Reference KB extraction from curated Markdown into object, chunk, chapter,
+  theorem, exercise, concept graph, and dependency graph artifacts.
+- Reader fail-fast behavior for malformed generated KB artifacts, with rebuild
+  hints instead of raw JSON errors.
+- Deterministic scripted tutoring sessions that write transcripts, summaries,
+  tutor notes, misconception records, and draft notes.
+- Atomic note review, Obsidian export, manifest generation, backlink handling,
+  stale export cleanup, and lifecycle audit integration.
+- Exercise drafting, attempts, grading, review scheduling, learning-state
+  updates, reports, tool-verification records, and checklist quality gates.
+
+## Boundaries
+
+- No runtime third-party dependencies are required.
+- PDF/OCR conversion is intentionally not implemented yet; unsupported PDFs
+  produce conversion-pending artifacts.
+- Tutoring, note, and exercise content generation is deterministic/template
+  driven in v0.2. The LLM/provider layer is a v0.3+ architecture decision.
+- Checklist quality gates are conservative heuristics, not formal mathematical
+  verification.
+- Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools
+  being installed.
 
 ## Development
 
-Run the local checks:
+Run the local checks on Windows:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/check.ps1
 ```
 
-The long-term development target and phased roadmap are stored in `docs/`.
+Run the equivalent checks from a POSIX shell:
+
+```bash
+bash scripts/check.sh
+```
+
+Both scripts run the unittest suite, compile the `socrates` package, and check
+for whitespace errors with `git diff --check`.
+
+The long-term development target, phased roadmap, and current development log
+are stored in `docs/`.

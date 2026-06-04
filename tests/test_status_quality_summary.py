@@ -134,6 +134,48 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Note quality check: fail (0/1 passed, 1 failed)", status.stdout)
             self.assertIn("Quality checks to fix: 1", status.stdout)
 
+    def test_status_cli_reports_invalid_quality_manifests_conservatively(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            evals = project / "08_evals"
+            (evals / "ingestion_quality_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "note_quality_manifest.json").write_text(
+                json.dumps({"schema_version": 1, "checked": 2, "passed": 2, "failed": 1})
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "exercise_quality_manifest.json").write_text(
+                "[]\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "tool_verification_quality_manifest.json").write_text(
+                json.dumps({"schema_version": 1, "status": "pass", "checked": "1"})
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Ingestion quality check: invalid", status.stdout)
+            self.assertIn("Note quality check: invalid", status.stdout)
+            self.assertIn("Exercise quality check: invalid", status.stdout)
+            self.assertIn("Tutoring quality check: not run", status.stdout)
+            self.assertIn("Tool verification check: invalid", status.stdout)
+
     def test_status_cli_counts_reviewed_notes_pending_obsidian_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
