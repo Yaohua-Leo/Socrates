@@ -1545,7 +1545,34 @@ CLI surface for explicit opt-in use
 - v0.8 测试覆盖 transcript、learning_state 与 deterministic session score manifest 不被 LLM judge draft 修改。
 - 这不是 trusted LLM judge、自动评分、readiness gate、数学证明、教学质量证明或 learning-state truth mutation。
 
-v0.9：长期使用回归与产品闭环打磨
+v0.9：session closeout 工作流
+
+目标：
+
+把教学 session 结束后的常见步骤合并成一个确定性产品工作流：score 当前 session，生成下一节课 handoff plan，并刷新 project summary。
+
+必须完成：
+
+session closeout command
+
+score current session
+
+create next-session plan
+
+refresh project summary
+
+write closeout manifest
+
+failed scores remain visible as needs_attention
+
+当前状态（2026-06-04）：
+
+- `session closeout` 已支持一次性运行 session score、next-session handoff plan 与 project summary refresh。
+- `08_evals/session_closeout_manifest.json` 记录 `quality_boundary: deterministic_session_closeout`、当前 session、下一 session、score status、score value 与关键 artifact paths。
+- closeout status 只有在 deterministic session score pass 时才是 `ready`；score fail 时命令仍写出 artifacts，但 manifest 标记 `needs_attention`。
+- 这不是新的评分权威、LLM judge、自动通过 gate 或 learning-state truth mutation；它只是把既有确定性步骤组合成更稳定的 post-session workflow。
+
+v0.10：真实多 session 回归与产品闭环打磨
 
 建议目标：
 

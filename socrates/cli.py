@@ -135,6 +135,7 @@ from .tool_verification import (
     verify_sympy_identity,
     write_tool_inventory,
 )
+from .workflow import close_tutoring_session
 from .tutoring import (
     TutoringSessionSummary,
     list_tutoring_sessions,
@@ -828,6 +829,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="ISO date used as the due-review cutoff; defaults to today.",
     )
     session_plan_next_parser.set_defaults(func=_handle_session_plan_next)
+    session_closeout_parser = session_subparsers.add_parser(
+        "closeout",
+        help="Run deterministic post-session score, next-plan, and summary closeout.",
+    )
+    session_closeout_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_closeout_parser.add_argument("--session-id", required=True, help="Completed tutoring session id.")
+    session_closeout_parser.add_argument("--next-session-id", required=True, help="Next tutoring session id.")
+    session_closeout_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used as the due-review cutoff; defaults to today.",
+    )
+    session_closeout_parser.set_defaults(func=_handle_session_closeout)
     session_suggest_parser = session_subparsers.add_parser(
         "suggest-next",
         help="Ask the configured LLM for a draft next Socratic question.",
@@ -2089,6 +2103,26 @@ def _handle_session_plan_next(args: argparse.Namespace) -> int:
     else:
         print("Previous session: none")
     print(f"Next-session manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_closeout(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else None
+        result = close_tutoring_session(
+            args.project,
+            session_id=args.session_id,
+            next_session_id=args.next_session_id,
+            as_of=as_of,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Session closeout: {result.status}")
+    print(f"Session score: {result.session_score}/100 ({result.session_score_status})")
+    print(f"Next-session plan: {result.next_session_plan_path}")
+    print(f"Project summary: {result.project_summary_path}")
+    print(f"Closeout manifest: {result.manifest_path}")
     return 0
 
 
