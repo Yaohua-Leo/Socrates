@@ -16,6 +16,7 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
 )
 from .context import load_project
+from .contracts import REVIEW_PRIORITY_FILTERS
 from .exercises import (
     EXERCISE_TYPES,
     ExerciseSummary,
@@ -528,7 +529,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_exercises_parser.add_argument(
         "--priority",
-        choices=("all", "high", "medium", "low"),
+        choices=REVIEW_PRIORITY_FILTERS,
         default="all",
         help="Only generate exercises for review items with this priority; defaults to all.",
     )
@@ -551,7 +552,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     review_due_parser.add_argument(
         "--priority",
-        choices=("all", "high", "medium", "low"),
+        choices=REVIEW_PRIORITY_FILTERS,
         default="all",
         help="Filter due reviews by priority; defaults to all.",
     )

@@ -22,6 +22,8 @@ EXERCISE_ALLOWED_TYPES = frozenset(
         "mixed_review",
     }
 )
+REVIEW_ALLOWED_PRIORITIES = frozenset({"high", "medium", "low"})
+REVIEW_PRIORITY_FILTERS = ("all", "high", "medium", "low")
 
 
 def yaml_scalar(value: object) -> str:

@@ -13,6 +13,7 @@ from .contracts import (
     EXERCISE_ALLOWED_REVIEW_STATUSES,
     EXERCISE_ALLOWED_STATUSES,
     EXERCISE_ALLOWED_TYPES,
+    REVIEW_ALLOWED_PRIORITIES,
 )
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .obsidian import obsidian_export_count
@@ -536,6 +537,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
     if _is_targeted_review_exercise(text):
         if _missing_frontmatter_value(text, "priority"):
             issues.append("missing targeted review priority")
+        elif _invalid_frontmatter_choice(text, "priority", REVIEW_ALLOWED_PRIORITIES):
+            issues.append("invalid targeted review priority")
         if _missing_frontmatter_value(text, "due"):
             issues.append("missing targeted review due")
         if _missing_frontmatter_value(text, "scheduled_for"):

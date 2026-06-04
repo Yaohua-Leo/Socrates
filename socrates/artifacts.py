@@ -9,7 +9,12 @@ from pathlib import Path
 import re
 
 from socrates.context import load_project, write_text
-from socrates.contracts import AtomicNoteDraft, ExerciseDraft, yaml_scalar
+from socrates.contracts import (
+    AtomicNoteDraft,
+    ExerciseDraft,
+    REVIEW_ALLOWED_PRIORITIES,
+    yaml_scalar,
+)
 from socrates.kb import reference_kb_status
 from socrates.project import slugify_topic
 from socrates.state import (
@@ -169,7 +174,7 @@ def generate_targeted_review_exercise_drafts(
 ) -> list[ExerciseDraft]:
     """Write exercises targeted at the current review schedule."""
 
-    allowed_priorities = {"all", "high", "medium", "low"}
+    allowed_priorities = {"all", *REVIEW_ALLOWED_PRIORITIES}
     if priority not in allowed_priorities:
         allowed = ", ".join(sorted(allowed_priorities))
         raise ValueError(f"Unknown review priority {priority!r}; expected one of: {allowed}")
