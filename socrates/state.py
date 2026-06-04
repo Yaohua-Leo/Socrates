@@ -9,6 +9,7 @@ import math
 from pathlib import Path
 
 from socrates.context import ProjectContext, read_json, write_json, write_text
+from socrates.project import slugify_topic
 
 
 @dataclass(frozen=True)
@@ -201,11 +202,13 @@ def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: 
     if not isinstance(misconceptions, dict):
         return 0
 
+    target_concept = slugify_topic(concept)
     resolved_ids: list[str] = []
     for misconception_id, value in misconceptions.items():
         if not isinstance(value, dict):
             continue
-        if str(value.get("concept", "")) != concept:
+        stored_concept = str(value.get("concept", ""))
+        if stored_concept != concept and slugify_topic(stored_concept) != target_concept:
             continue
         if value.get("status", "active") != "active":
             continue
