@@ -11,6 +11,7 @@ from .kb import reference_kb_status
 from .obsidian import (
     obsidian_backlink_count,
     obsidian_export_count,
+    obsidian_exported_note_ids,
 )
 from .state import coerce_learning_score, coerce_occurrence_count
 from .tool_verification import ToolVerificationSummary, list_tool_verification_records
@@ -76,6 +77,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             sessions_completed=_count_dirs(context.sessions_dir),
             reviewed_notes=_count_reviewed_notes(context.root),
             obsidian_exports=obsidian_export_count(context.root),
+            obsidian_exports_to_run=_count_obsidian_exports_to_run(context.root),
             obsidian_backlinks=obsidian_backlink_count(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
@@ -331,6 +333,7 @@ def _project_summary_text(
     sessions_completed: int,
     reviewed_notes: int,
     obsidian_exports: int,
+    obsidian_exports_to_run: int,
     obsidian_backlinks: int,
     generated_exercises: int,
     approved_exercises: int,
@@ -360,6 +363,7 @@ def _project_summary_text(
         f"- Sessions completed: {sessions_completed}",
         f"- Reviewed notes: {reviewed_notes}",
         f"- Obsidian exports: {obsidian_exports}",
+        f"- Obsidian exports to run: {obsidian_exports_to_run}",
         f"- Obsidian backlinks: {obsidian_backlinks}",
         f"- Generated exercises: {generated_exercises}",
         f"- Approved exercises: {approved_exercises}",
@@ -453,6 +457,23 @@ def _count_reviewed_notes(project_root: Path) -> int:
             if "reviewed_by_user: true" in note_path.read_text(encoding="utf-8"):
                 reviewed += 1
     return reviewed
+
+
+def _count_obsidian_exports_to_run(project_root: Path) -> int:
+    notes_root = project_root / "04_atomic_notes"
+    if not notes_root.exists():
+        return 0
+    exported_ids = obsidian_exported_note_ids(project_root)
+    pending = 0
+    for folder in notes_root.iterdir():
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in folder.glob("*.md"):
+            if note_path.stem in exported_ids:
+                continue
+            if "reviewed_by_user: true" in note_path.read_text(encoding="utf-8"):
+                pending += 1
+    return pending
 
 
 def _count_sources(registry_path: Path) -> int:
