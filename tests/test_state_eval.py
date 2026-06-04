@@ -891,6 +891,77 @@ class StateEvalTests(unittest.TestCase):
             self.assertNotIn("nan", schedule_text.casefold())
             self.assertNotIn("inf", schedule_text.casefold())
 
+    def test_review_schedule_cli_treats_out_of_range_mastery_scores_as_weak(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {
+                            "normal_subgroup": 1.25,
+                            "quotient_group": -0.2,
+                            "subgroup": 0.84,
+                        },
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Scheduled 2 review items", result.stdout)
+            state = json.loads(learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                state["review_schedule"],
+                [
+                    {
+                        "concept": "normal_subgroup",
+                        "priority": "high",
+                        "due": "next_session",
+                        "scheduled_for": "2026-06-04",
+                        "reason": "mastery 0",
+                    },
+                    {
+                        "concept": "quotient_group",
+                        "priority": "high",
+                        "due": "next_session",
+                        "scheduled_for": "2026-06-04",
+                        "reason": "mastery 0",
+                    },
+                ],
+            )
+            schedule_text = (project / "02_learning_plan" / "review_schedule.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("## normal_subgroup", schedule_text)
+            self.assertIn("## quotient_group", schedule_text)
+            self.assertNotIn("1.25", schedule_text)
+            self.assertNotIn("-0.2", schedule_text)
+
     def test_review_exercises_cli_can_generate_only_due_items(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

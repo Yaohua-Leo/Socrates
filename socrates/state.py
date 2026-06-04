@@ -528,7 +528,7 @@ def _safe_score(value: object) -> float:
         score = float(value)
     except (TypeError, ValueError):
         return 0.0
-    return score if math.isfinite(score) else 0.0
+    return score if math.isfinite(score) and 0.0 <= score <= 1.0 else 0.0
 
 
 def _score_status_order(status: str) -> int:
