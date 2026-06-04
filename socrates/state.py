@@ -231,7 +231,7 @@ def list_misconceptions(
                 misconception_id=str(misconception_id),
                 status=item_status,
                 concept=str(value.get("concept", "general")),
-                count=_safe_count(value.get("count", 0)),
+                count=coerce_occurrence_count(value.get("count", 0)),
                 last_session_id=str(value.get("last_session_id", "")),
                 analysis=str(value.get("analysis", "")),
                 repair_suggestion=str(value.get("repair_suggestion", "")),

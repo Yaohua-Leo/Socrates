@@ -430,6 +430,58 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn(resolved_line, resolved_items.stdout)
             self.assertNotIn("cosets_are_subgroups", resolved_items.stdout)
 
+    def test_review_misconceptions_cli_recovers_malformed_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "00_meta" / "learning_state.json").write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {
+                            "normal_equals_central": {
+                                "concept": "normal_subgroup",
+                                "count": "many",
+                                "status": "active",
+                                "last_session_id": "session-001",
+                                "analysis": "Confuses normality with centrality.",
+                                "repair_suggestion": "Compare normality with conjugation.",
+                                "follow_up_exercises": [],
+                            }
+                        },
+                        "review_schedule": [],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "misconceptions",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "- normal_equals_central | active | normal_subgroup | x1",
+                result.stdout,
+            )
+            self.assertNotIn("x0", result.stdout)
+            self.assertNotIn("many", result.stdout)
+
     def test_review_mastery_cli_lists_learning_scores_with_filters(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
