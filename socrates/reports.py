@@ -43,11 +43,15 @@ def generate_weekly_report(project_path: Path | str) -> Path:
     context = load_project(project_path)
     report_path = context.root / "07_exports" / "reports" / "weekly_report.md"
     state = _read_learning_state(context.learning_state)
+    queue = collect_learning_queue(context.root)
     write_text(
         report_path,
         _weekly_report_text(
             sessions_completed=_count_dirs(context.sessions_dir),
+            pending_draft_notes=len(queue.notes_to_review),
             reviewed_notes=_count_reviewed_notes(context.root),
+            obsidian_exports=obsidian_export_count(context.root),
+            obsidian_exports_to_run=len(queue.obsidian_exports_to_run),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
@@ -248,7 +252,10 @@ def _artifact_mtimes(path: Path) -> list[int]:
 def _weekly_report_text(
     *,
     sessions_completed: int,
+    pending_draft_notes: int,
     reviewed_notes: int,
+    obsidian_exports: int,
+    obsidian_exports_to_run: int,
     generated_exercises: int,
     attempted_exercises: int,
     graded_exercises: int,
@@ -260,7 +267,10 @@ def _weekly_report_text(
         "## Activity",
         "",
         f"- Sessions completed: {sessions_completed}",
+        f"- Pending draft notes: {pending_draft_notes}",
         f"- Reviewed notes: {reviewed_notes}",
+        f"- Obsidian exports: {obsidian_exports}",
+        f"- Obsidian exports to run: {obsidian_exports_to_run}",
         f"- Generated exercises: {generated_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",

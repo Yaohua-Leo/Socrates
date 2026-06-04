@@ -404,6 +404,73 @@ class ReportTests(unittest.TestCase):
             self.assertIn("## Scheduled Review", report_text)
             self.assertIn("- quotient_group: high, next_session", report_text)
 
+    def test_weekly_report_counts_note_review_and_obsidian_handoff_work(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "quotient_group")
+            generate_atomic_note_draft(
+                project,
+                concept="Group Action",
+                note_type="definition",
+                body=(
+                    "A group action sends group elements to compatible symmetries; "
+                    "compare [[Permutation]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What compatibility equation defines an action?\n"
+                ),
+                source_id="df",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("- Pending draft notes: 1", report_text)
+            self.assertIn("- Reviewed notes: 2", report_text)
+            self.assertIn("- Obsidian exports: 1", report_text)
+            self.assertIn("- Obsidian exports to run: 1", report_text)
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
