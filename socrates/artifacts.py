@@ -12,7 +12,11 @@ from socrates.context import load_project, write_text
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft, yaml_scalar
 from socrates.kb import reference_kb_status
 from socrates.project import slugify_topic
-from socrates.state import MisconceptionSummary, list_misconceptions
+from socrates.state import (
+    MisconceptionSummary,
+    ensure_learning_state_readable,
+    list_misconceptions,
+)
 
 
 def generate_atomic_note_draft(
@@ -165,6 +169,10 @@ def generate_targeted_review_exercise_drafts(
     """Write exercises targeted at the current review schedule."""
 
     context = load_project(project_path)
+    ensure_learning_state_readable(
+        context.learning_state,
+        action="generating review exercises",
+    )
     state = json.loads(context.learning_state.read_text(encoding="utf-8"))
     schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
     if not isinstance(schedule, list):

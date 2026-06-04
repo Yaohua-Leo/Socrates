@@ -389,6 +389,24 @@ class NotesExercisesTests(unittest.TestCase):
             self.assertIn("Total: 10 pts", text)
             self.assertIn("## Common Mistakes", text)
 
+    def test_generate_targeted_review_exercises_rejects_corrupt_learning_state(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "invalid learning_state.json; repair the JSON before generating review exercises",
+            ):
+                artifacts.generate_targeted_review_exercise_drafts(project)
+
+            self.assertEqual(list((project / "05_exercises" / "generated").glob("*.md")), [])
+
     def test_targeted_review_exercises_include_kb_reference_context(self) -> None:
         artifacts = self._load_artifacts_module()
         with tempfile.TemporaryDirectory() as temp_dir:
