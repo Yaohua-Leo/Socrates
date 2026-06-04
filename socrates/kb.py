@@ -148,7 +148,7 @@ def list_reference_kb_objects(
 
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index = _read_reference_index(context.root, index_path)
     objects = index.get("objects", []) if isinstance(index, dict) else []
     if not isinstance(objects, list):
         return []
@@ -177,7 +177,7 @@ def _search_reference_objects(
 ) -> list[dict[str, object]]:
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index = _read_reference_index(context.root, index_path)
     query_text = query.casefold()
     matches = []
     for item in index.get("objects", []):
@@ -191,6 +191,25 @@ def _search_reference_objects(
         if len(matches) >= limit:
             break
     return matches
+
+
+def _read_reference_index(project_root: Path, index_path: Path) -> dict[str, object]:
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(_reference_index_rebuild_message(project_root, "is missing")) from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(_reference_index_rebuild_message(project_root, "is invalid")) from exc
+    if not isinstance(index, dict):
+        raise ValueError(_reference_index_rebuild_message(project_root, "has invalid schema"))
+    return index
+
+
+def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
+    return (
+        f"Reference KB index {reason}; "
+        f"run socrates kb build --project {project_root} to rebuild it."
+    )
 
 
 def _object_source_id(item: dict[str, object]) -> str:

@@ -174,6 +174,83 @@ class V02CliFlowTests(unittest.TestCase):
 
             self.assertIn("- none", missing_source_objects)
 
+    def test_kb_list_reports_invalid_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "kb", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB index is invalid", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
+    def test_kb_search_reports_invalid_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "search",
+                    "--project",
+                    str(project),
+                    "--query",
+                    "normal",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB index is invalid", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
+    def test_kb_counterexamples_reports_invalid_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "counterexamples",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal subgroup",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB index is invalid", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
     def test_kb_counterexamples_lists_matching_reference_counterexamples(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
