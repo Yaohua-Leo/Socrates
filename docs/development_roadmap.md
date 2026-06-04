@@ -2476,6 +2476,29 @@ generated exercise rows
 - `--priority high --json` 保留 prose mode 的 priority filtering。
 - 这不是 dry-run、read-only ledger、scheduler、planner、tutor、report refresh、LLM call、exercise validation、approval、grading 或 learning-state mutation；它只是现有 targeted review exercise writer 的 structured result output mode。
 
+v0.47：targeted review exercises dry-run
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以在生成 targeted review exercise drafts 前预览同一 selection 的结果。
+
+必须完成：
+
+`review exercises --dry-run`
+
+`review exercises --dry-run --json`
+
+no generated exercise files
+
+preview exercise rows
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review exercises --project <project> --due-by 2026-06-04 --dry-run` 已输出 no-write prose preview。
+- `--dry-run --json` 已输出 `quality_boundary: deterministic_review_exercise_preview`、`dry_run: true`、filter metadata、`generated_count` 和 would-be generated exercise rows。
+- dry-run mode 不会在 `05_exercises/generated/` 下创建 exercise draft files。
+- 这不是 writer、read-only ledger、scheduler、planner、tutor、report refresh、LLM call、exercise validation、approval、grading 或 learning-state mutation；它只是现有 targeted review exercise writer selection 的 no-write preview output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

@@ -175,6 +175,37 @@ def generate_targeted_review_exercise_drafts(
 ) -> list[ExerciseDraft]:
     """Write exercises targeted at the current review schedule."""
 
+    return _targeted_review_exercise_drafts(
+        project_path,
+        due_by=due_by,
+        priority=priority,
+        write=True,
+    )
+
+
+def preview_targeted_review_exercise_drafts(
+    project_path: Path | str,
+    *,
+    due_by: date | None = None,
+    priority: str = "all",
+) -> list[ExerciseDraft]:
+    """Preview targeted review exercise drafts without writing files."""
+
+    return _targeted_review_exercise_drafts(
+        project_path,
+        due_by=due_by,
+        priority=priority,
+        write=False,
+    )
+
+
+def _targeted_review_exercise_drafts(
+    project_path: Path | str,
+    *,
+    due_by: date | None,
+    priority: str,
+    write: bool,
+) -> list[ExerciseDraft]:
     allowed_priorities = {"all", *REVIEW_ALLOWED_PRIORITIES}
     if priority not in allowed_priorities:
         allowed = ", ".join(sorted(allowed_priorities))
@@ -208,8 +239,8 @@ def generate_targeted_review_exercise_drafts(
         exercise_id = f"review_{concept_id}_{concept_counts[concept_id]:02d}"
         relative_path = Path("05_exercises") / "generated" / f"{exercise_id}.md"
         exercise_path = context.root / relative_path
-        if not exercise_path.exists():
-            difficulty = _review_exercise_difficulty(item_priority)
+        difficulty = _review_exercise_difficulty(item_priority)
+        if write and not exercise_path.exists():
             write_text(
                 exercise_path,
                 _targeted_review_exercise_text(
@@ -224,8 +255,6 @@ def generate_targeted_review_exercise_drafts(
                     kb_status=kb_status.status,
                 ),
             )
-        else:
-            difficulty = _review_exercise_difficulty(item_priority)
         drafts.append(
             ExerciseDraft(
                 id=exercise_id,

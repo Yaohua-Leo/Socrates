@@ -15,6 +15,7 @@ from .artifacts import (
     generate_exercise_drafts,
     generate_misconception_note_drafts,
     generate_targeted_review_exercise_drafts,
+    preview_targeted_review_exercise_drafts,
 )
 from .context import ProjectContext, load_project
 from .contracts import ExerciseDraft, REVIEW_PRIORITY_FILTERS
@@ -736,6 +737,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Emit deterministic JSON instead of prose.",
+    )
+    review_exercises_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview targeted review exercise rows without writing files.",
     )
     review_exercises_parser.set_defaults(func=_handle_review_exercises)
     review_adjust_plan_parser = review_subparsers.add_parser(
@@ -2112,17 +2118,41 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
         return 1
     context = load_project(args.project)
     try:
-        exercises = generate_targeted_review_exercise_drafts(
-            context.root,
-            due_by=due_by,
-            priority=args.priority,
-        )
+        if args.dry_run:
+            exercises = preview_targeted_review_exercise_drafts(
+                context.root,
+                due_by=due_by,
+                priority=args.priority,
+            )
+        else:
+            exercises = generate_targeted_review_exercise_drafts(
+                context.root,
+                due_by=due_by,
+                priority=args.priority,
+            )
     except json.JSONDecodeError:
         print(
             "error: invalid learning_state.json; repair the JSON before generating review exercises",
             file=sys.stderr,
         )
         return 1
+    if args.dry_run:
+        if args.json:
+            print(
+                json.dumps(
+                    _review_exercises_preview_payload(
+                        context,
+                        due_by=due_by,
+                        priority_filter=args.priority,
+                        exercises=exercises,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        print(_review_exercises_preview_text(exercises), end="")
+        return 0
     if args.json:
         print(
             json.dumps(
@@ -3725,6 +3755,46 @@ def _review_exercises_payload(
         "generated_count": len(rows),
         "generated_exercises": rows,
     }
+
+
+def _review_exercises_preview_payload(
+    context: ProjectContext,
+    *,
+    due_by: date | None,
+    priority_filter: str,
+    exercises: list[ExerciseDraft],
+) -> dict[str, object]:
+    rows = [_exercise_draft_record(exercise) for exercise in exercises]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_exercise_preview",
+        "project": str(context.root),
+        "due_by": due_by.isoformat() if due_by is not None else None,
+        "priority_filter": priority_filter,
+        "dry_run": True,
+        "generated_count": len(rows),
+        "generated_exercises": rows,
+    }
+
+
+def _review_exercises_preview_text(exercises: list[ExerciseDraft]) -> str:
+    noun = "exercise" if len(exercises) == 1 else "exercises"
+    lines = [
+        f"Exercise preview: {len(exercises)} targeted review {noun} would be generated",
+        "",
+    ]
+    if not exercises:
+        lines.append("- none")
+    else:
+        lines.extend(_exercise_draft_row_text(exercise) for exercise in exercises)
+    return "\n".join(lines) + "\n"
+
+
+def _exercise_draft_row_text(exercise: ExerciseDraft) -> str:
+    return (
+        f"- {exercise.id} | {exercise.type} | "
+        f"difficulty {exercise.difficulty} | {exercise.path}"
+    )
 
 
 def _exercise_draft_record(exercise: ExerciseDraft) -> dict[str, object]:

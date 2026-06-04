@@ -6,15 +6,15 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.46-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.47-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured review-exercise writer,
-dry-run-previewable structured repair-writer, schedule-writer, due-review,
-learning-mastery, and misconception-ledger JSON,
+long-term report-surface refresh, dry-run-previewable structured
+review-exercise writer, dry-run-previewable structured repair-writer,
+schedule-writer, due-review, learning-mastery, and misconception-ledger JSON,
 targeted limit-controlled dry-run-previewable structured batch-refreshable
 commands-output command-summarized filterable readiness-counted
 machine-readable and Markdown read-only multi-project resume indexes,
@@ -72,6 +72,7 @@ python -m socrates review due --project ".\projects\group_theory" --as-of 2026-0
 python -m socrates review repair-schedule --project ".\projects\group_theory" --as-of 2026-06-04 --json
 python -m socrates review repair-schedule --project ".\projects\group_theory" --as-of 2026-06-04 --dry-run --json
 python -m socrates review exercises --project ".\projects\group_theory" --due-by 2026-06-07 --json
+python -m socrates review exercises --project ".\projects\group_theory" --due-by 2026-06-07 --dry-run --json
 python -m socrates review mastery --project ".\projects\group_theory" --json
 python -m socrates review misconceptions --project ".\projects\group_theory" --json
 python -m socrates note review --project ".\projects\group_theory" --note normal_subgroup
@@ -254,6 +255,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   in prose or JSON without writing `learning_state.json` or `review_schedule.md`.
 - v0.46 `review exercises --json` emits the explicit targeted review exercise
   writer result as structured JSON, including generated draft rows and filters.
+- v0.47 `review exercises --dry-run` previews targeted review exercise rows in
+  prose or JSON without creating generated exercise files.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -341,6 +344,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   result payload. It still writes generated exercise drafts when needed; it is
   not a dry-run, read-only ledger, scheduler, planner, tutor, report refresh,
   LLM call, exercise validation, approval, grading, or learning-state mutation.
+- `review exercises --dry-run` is a no-write targeted-review exercise preview.
+  It must not create generated exercise files; it is not a writer, read-only
+  ledger, scheduler, planner, tutor, report refresh, LLM call, exercise
+  validation, approval, grading, or learning-state mutation.
 - Study dashboards are read-only compositions over existing deterministic
   evidence. They do not create new truth, run repairs, generate reports, call an
   LLM, approve artifacts, score learning, tutor, predict, or mutate project

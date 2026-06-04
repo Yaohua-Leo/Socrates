@@ -2007,6 +2007,130 @@ class StateEvalTests(unittest.TestCase):
                 (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
             )
 
+    def test_review_exercises_dry_run_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            learning_state = project / "00_meta" / "learning_state.json"
+            original_state = learning_state.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-04",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "Exercise preview: 1 targeted review exercise would be generated",
+                result.stdout,
+            )
+            self.assertIn(
+                "- review_normal_subgroup_01 | targeted_review_exercise | "
+                "difficulty 3 | 05_exercises/generated/review_normal_subgroup_01.md",
+                result.stdout,
+            )
+            self.assertNotIn("Generated 1 targeted review exercise", result.stdout)
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
+    def test_review_exercises_dry_run_json_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            learning_state = project / "00_meta" / "learning_state.json"
+            original_state = learning_state.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_exercise_preview",
+                    "project": str(project),
+                    "due_by": "2026-06-07",
+                    "priority_filter": "high",
+                    "dry_run": True,
+                    "generated_count": 1,
+                    "generated_exercises": [
+                        {
+                            "id": "review_normal_subgroup_01",
+                            "type": "targeted_review_exercise",
+                            "difficulty": 3,
+                            "path": "05_exercises/generated/review_normal_subgroup_01.md",
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
     def test_review_exercises_cli_rejects_invalid_due_by_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
