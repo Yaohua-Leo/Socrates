@@ -186,10 +186,12 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
     if report_id == "weekly":
         return (
             project_root / "03_sessions",
+            project_root / "04_atomic_notes" / "drafts",
             *_reviewed_note_input_paths(project_root),
             project_root / "05_exercises" / "generated",
             project_root / "05_exercises" / "attempted",
             project_root / "05_exercises" / "graded",
+            project_root / "07_exports" / "obsidian",
             project_root / "00_meta" / "learning_state.json",
         )
     if report_id == "monthly":
@@ -207,6 +209,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "01_references" / "source_registry.yaml",
             project_root / "01_references" / "curated",
             project_root / "03_sessions",
+            project_root / "04_atomic_notes" / "drafts",
             *_reviewed_note_input_paths(project_root),
             project_root / "05_exercises" / "generated",
             project_root / "05_exercises" / "attempted",

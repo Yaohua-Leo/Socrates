@@ -249,6 +249,59 @@ class ReportTests(unittest.TestCase):
             )
             self.assertNotIn("weekly_report.md", stale_reports.stdout)
 
+    def test_report_list_marks_project_summary_stale_after_draft_note_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            report_path = project / "07_exports" / "reports" / "project_summary.md"
+            draft = project / "04_atomic_notes" / "drafts" / "new_draft.md"
+            draft.write_text("# New Draft\n", encoding="utf-8", newline="\n")
+            base_time_ns = 4_000_000_000_000_000_000
+            os.utime(report_path, ns=(base_time_ns, base_time_ns))
+            os.utime(draft, ns=(base_time_ns + 1_000_000_000, base_time_ns + 1_000_000_000))
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- project-summary | stale | Project Summary | "
+                "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+
     def test_report_list_marks_weekly_report_stale_after_learning_state_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -299,6 +352,126 @@ class ReportTests(unittest.TestCase):
                 stale_reports.stdout,
             )
             self.assertNotIn("monthly_report.md", stale_reports.stdout)
+
+    def test_report_list_marks_weekly_report_stale_after_draft_note_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            report_path = project / "07_exports" / "reports" / "weekly_report.md"
+            draft = project / "04_atomic_notes" / "drafts" / "new_draft.md"
+            draft.write_text("# New Draft\n", encoding="utf-8", newline="\n")
+            base_time_ns = 4_000_000_000_000_000_000
+            os.utime(report_path, ns=(base_time_ns, base_time_ns))
+            os.utime(draft, ns=(base_time_ns + 1_000_000_000, base_time_ns + 1_000_000_000))
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- weekly | stale | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md",
+                stale_reports.stdout,
+            )
+
+    def test_report_list_marks_weekly_report_stale_after_obsidian_export_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            export_reviewed_notes_to_obsidian(project)
+            report_path = project / "07_exports" / "reports" / "weekly_report.md"
+            manifest_path = project / "07_exports" / "obsidian" / "export_manifest.json"
+            base_time_ns = 4_000_000_000_000_000_000
+            os.utime(report_path, ns=(base_time_ns, base_time_ns))
+            os.utime(
+                manifest_path,
+                ns=(base_time_ns + 1_000_000_000, base_time_ns + 1_000_000_000),
+            )
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- weekly | stale | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md",
+                stale_reports.stdout,
+            )
 
     def test_report_list_marks_monthly_report_stale_after_note_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -367,7 +540,11 @@ class ReportTests(unittest.TestCase):
                 "07_exports/reports/monthly_report.md",
                 stale_reports.stdout,
             )
-            self.assertNotIn("weekly_report.md", stale_reports.stdout)
+            self.assertIn(
+                "- weekly | stale | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md",
+                stale_reports.stdout,
+            )
 
     def test_weekly_report_cli_summarizes_learning_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
