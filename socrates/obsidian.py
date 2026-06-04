@@ -78,6 +78,7 @@ def _manifest_exported_notes(project_root: Path) -> list[dict[str, object]] | No
             or export_path.suffix != ".md"
             or export_path.stem != note_id
             or not export_path.is_file()
+            or not _is_socrates_obsidian_export(export_path)
         ):
             continue
         valid_notes.append(item)
@@ -91,5 +92,30 @@ def obsidian_exported_note_ids_from_files(project_root: Path) -> set[str]:
     return {
         path.stem
         for path in obsidian_dir.glob("*.md")
-        if path.name != "_socrates_index.md"
+        if path.name != "_socrates_index.md" and _is_socrates_obsidian_export(path)
     }
+
+
+def _is_socrates_obsidian_export(path: Path) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return False
+    return _frontmatter_value(text, "created_by") == "socrates"
+
+
+def _frontmatter_value(text: str, key: str) -> str | None:
+    prefix = f"{key}:"
+    for line in _frontmatter_lines(text):
+        if line.startswith(prefix):
+            return line.removeprefix(prefix).strip().strip('"').strip("'")
+    return None
+
+
+def _frontmatter_lines(text: str) -> list[str]:
+    if not text.startswith("---\n"):
+        return []
+    parts = text.split("---\n", 2)
+    if len(parts) < 3:
+        return []
+    return parts[1].splitlines()

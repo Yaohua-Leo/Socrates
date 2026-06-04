@@ -1079,6 +1079,89 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn("Obsidian exports: 1", result.stdout)
             self.assertIn("Obsidian backlinks: 0", result.stdout)
 
+    def test_corrupt_obsidian_manifest_fallback_ignores_user_markdown_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            obsidian_dir = project / "07_exports" / "obsidian"
+            obsidian_dir.mkdir(parents=True, exist_ok=True)
+            (obsidian_dir / "normal_subgroup.md").write_text(
+                "# Normal Subgroup\n\nThis is a user-authored vault note.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (obsidian_dir / "export_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            queue = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "obsidian-exports",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            exported_notes = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "exported",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Obsidian exports: 0", status.stdout)
+            self.assertIn("Obsidian exports to run: 1", status.stdout)
+            self.assertIn("Current phase: obsidian_export_pending", status.stdout)
+
+            self.assertEqual(queue.returncode, 0, queue.stderr)
+            self.assertIn(
+                "- normal_subgroup | 04_atomic_notes/definitions/normal_subgroup.md",
+                queue.stdout,
+            )
+
+            self.assertEqual(exported_notes.returncode, 0, exported_notes.stderr)
+            self.assertIn("- none", exported_notes.stdout)
+
     def test_missing_obsidian_export_file_marks_reviewed_note_pending_again(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
