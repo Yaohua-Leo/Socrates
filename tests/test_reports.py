@@ -85,6 +85,23 @@ class ReportTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            weekly_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--type",
+                    "weekly",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(weekly.returncode, 0, weekly.stderr)
             self.assertEqual(summary.returncode, 0, summary.stderr)
@@ -112,6 +129,11 @@ class ReportTests(unittest.TestCase):
             self.assertIn(monthly_line, missing_reports.stdout)
             self.assertNotIn("weekly_report.md", missing_reports.stdout)
             self.assertNotIn("project_summary.md", missing_reports.stdout)
+
+            self.assertEqual(weekly_reports.returncode, 0, weekly_reports.stderr)
+            self.assertIn(weekly_line, weekly_reports.stdout)
+            self.assertNotIn("monthly_report.md", weekly_reports.stdout)
+            self.assertNotIn("project_summary.md", weekly_reports.stdout)
 
     def test_report_list_marks_project_summary_stale_after_benchmark_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

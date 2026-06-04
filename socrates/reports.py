@@ -31,6 +31,7 @@ REPORT_SPECS = (
     ("monthly", "Monthly Learning Report", "monthly_report.md"),
     ("project-summary", "Project Summary", "project_summary.md"),
 )
+REPORT_TYPES = frozenset(report_id for report_id, _title, _file_name in REPORT_SPECS)
 _STATE_WARNING_KEY = "_state_warnings"
 
 
@@ -113,13 +114,19 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     return report_path
 
 
-def list_learning_reports(project_path: Path | str, *, status: str = "all") -> list[ReportSummary]:
+def list_learning_reports(
+    project_path: Path | str, *, status: str = "all", report_type: str = "all"
+) -> list[ReportSummary]:
     """List expected learning reports and whether they have been generated."""
 
     allowed_statuses = {"all", "generated", "missing", "stale"}
     if status not in allowed_statuses:
         allowed = ", ".join(sorted(allowed_statuses))
         raise ValueError(f"Unknown report status {status!r}; expected one of: {allowed}")
+    allowed_types = {"all", *REPORT_TYPES}
+    if report_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(f"Unknown report type {report_type!r}; expected one of: {allowed}")
 
     context = load_project(project_path)
     reports_dir = context.root / "07_exports" / "reports"
@@ -137,6 +144,8 @@ def list_learning_reports(project_path: Path | str, *, status: str = "all") -> l
         )
     if status != "all":
         summaries = [summary for summary in summaries if summary.status == status]
+    if report_type != "all":
+        summaries = [summary for summary in summaries if summary.report_id == report_type]
     return summaries
 
 

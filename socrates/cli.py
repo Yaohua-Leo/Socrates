@@ -76,6 +76,7 @@ from .references import (
     review_correction_patch,
 )
 from .reports import (
+    REPORT_TYPES,
     ReportSummary,
     generate_monthly_report,
     generate_project_summary,
@@ -739,6 +740,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "generated", "missing", "stale"),
         default="all",
         help="Filter reports by generation/freshness status; defaults to all.",
+    )
+    report_list_parser.add_argument(
+        "--type",
+        choices=("all", *sorted(REPORT_TYPES)),
+        default="all",
+        help="Filter reports by report type; defaults to all.",
     )
     report_list_parser.set_defaults(func=_handle_report_list)
     weekly_report_parser = report_subparsers.add_parser(
@@ -1746,7 +1753,7 @@ def _handle_benchmark_status(args: argparse.Namespace) -> int:
 
 
 def _handle_report_list(args: argparse.Namespace) -> int:
-    reports = list_learning_reports(args.project, status=args.status)
+    reports = list_learning_reports(args.project, status=args.status, report_type=args.type)
     print(_learning_reports_text(reports), end="")
     return 0
 
