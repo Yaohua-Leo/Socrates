@@ -160,6 +160,36 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertNotIn("definition: Normal Subgroup", search)
             self.assertNotIn("Normality Notes", search)
 
+    def test_kb_search_filters_by_explicit_relationship_type(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "relations.curated.md"
+            curated.write_text(
+                "### Example: Alternating Group In S3\n"
+                "A3 is normal in S3.\n"
+                "Example of: normal subgroup\n\n"
+                "### Counterexample: Transposition Subgroup\n"
+                "A transposition subgroup is not normal in S3.\n"
+                "Counterexample to: normal subgroup\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            search = self._run_cli(
+                "kb",
+                "search",
+                "--project",
+                str(project),
+                "--query",
+                "normal subgroup",
+                "--relationship-type",
+                "example_of",
+            ).stdout
+
+            self.assertIn("example: Alternating Group In S3", search)
+            self.assertNotIn("counterexample: Transposition Subgroup", search)
+
     def test_kb_list_displays_indexed_objects_and_filters(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

@@ -131,6 +131,7 @@ def search_reference_kb(
     limit: int = 10,
     object_type: str = "all",
     source_id: str | None = None,
+    relationship_type: str = "all",
 ) -> list[dict[str, object]]:
     """Return source-grounded reference objects matching a query."""
 
@@ -140,12 +141,19 @@ def search_reference_kb(
         raise ValueError(
             f"Unknown reference object type {object_type!r}; expected one of: {allowed}"
         )
+    allowed_relationship_types = {"all", *CONCEPT_RELATIONSHIP_TYPES}
+    if relationship_type not in allowed_relationship_types:
+        allowed = ", ".join(sorted(allowed_relationship_types))
+        raise ValueError(
+            f"Unknown reference relationship type {relationship_type!r}; expected one of: {allowed}"
+        )
     return _search_reference_objects(
         project_path,
         query,
         limit=limit,
         object_type=None if object_type == "all" else object_type,
         source_id=source_id,
+        relationship_type=None if relationship_type == "all" else relationship_type,
     )
 
 
@@ -297,6 +305,7 @@ def _search_reference_objects(
     limit: int,
     object_type: str | None = None,
     source_id: str | None = None,
+    relationship_type: str | None = None,
 ) -> list[dict[str, object]]:
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
@@ -309,6 +318,11 @@ def _search_reference_objects(
         if object_type is not None and str(item.get("type", "")).casefold() != object_type:
             continue
         if source_id is not None and _object_source_id(item) != source_id:
+            continue
+        if relationship_type is not None and not _has_relationship_type(
+            item,
+            relationship_type,
+        ):
             continue
         haystack = _search_haystack(item)
         if query_text in haystack:
@@ -363,6 +377,17 @@ def _object_source_id(item: dict[str, object]) -> str:
     if not isinstance(source, dict):
         return ""
     return str(source.get("source_id", ""))
+
+
+def _has_relationship_type(item: dict[str, object], relationship_type: str) -> bool:
+    relationships = item.get("relationships", [])
+    if not isinstance(relationships, list):
+        return False
+    return any(
+        isinstance(relationship, dict)
+        and str(relationship.get("relationship", "")) == relationship_type
+        for relationship in relationships
+    )
 
 
 def _search_haystack(item: dict[str, object]) -> str:

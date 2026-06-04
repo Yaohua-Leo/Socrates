@@ -384,6 +384,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--source-id",
         help="Filter matches by source registry id.",
     )
+    kb_search_parser.add_argument(
+        "--relationship-type",
+        choices=("all", *sorted(CONCEPT_RELATIONSHIP_TYPES)),
+        default="all",
+        help="Filter matches by explicit concept relationship type; defaults to all.",
+    )
     kb_search_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
     kb_search_parser.set_defaults(func=_handle_kb_search)
     kb_counterexamples_parser = kb_subparsers.add_parser(
@@ -1359,6 +1365,7 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
         limit=args.limit,
         object_type=args.type,
         source_id=args.source_id,
+        relationship_type=args.relationship_type,
     )
     if not matches:
         print("No reference matches")
