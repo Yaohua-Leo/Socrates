@@ -387,6 +387,8 @@ class NoteReviewExportTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
             self.assertIn("## Socrates Backlinks", normal_text)
             self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
+            self.assertIn("  - Source: df", export_index_text)
+            self.assertNotIn("Source: null", export_index_text)
             self.assertIn(
                 "  - Backlinks: [[quotient_group|Quotient Group]]",
                 export_index_text,

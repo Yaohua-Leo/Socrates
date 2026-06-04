@@ -414,7 +414,10 @@ def _frontmatter_value(text: str, key: str) -> str | None:
     prefix = f"{key}:"
     for line in frontmatter:
         if line.startswith(prefix):
-            return line.removeprefix(prefix).strip().strip('"')
+            value = line.removeprefix(prefix).strip().strip('"')
+            if value.casefold() == "null":
+                return None
+            return value
     return None
 
 
