@@ -2057,6 +2057,31 @@ read-only behavior across child projects
 - current saved brief 显示 `ready`、`current` 和 `none`；missing/stale/invalid brief 显示 `refresh_brief` 并推荐 `brief generate`。
 - 这不是 generator、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 child-project mutation；它只是 project collection 的只读导航视图。
 
+v0.30：multi-project resume JSON
+
+建议目标：
+
+让 v0.29 的 collection-level resume index 能被未来 TUI/Web UI/Codex plugin 等 wrapper 直接消费，而不用解析 Markdown。
+
+必须完成：
+
+`projects resume --root <root> --json` CLI option
+
+structured collection payload builder
+
+stable schema and quality boundary
+
+Markdown and JSON generated from the same collection payload
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects resume --root <root> --json` 已输出 deterministic JSON。
+- Payload 记录 `schema_version: 1` 与 `quality_boundary: deterministic_project_resume_index`。
+- JSON 包含 root、project count，以及每个项目的 id、标题、path、resume state、study brief 状态/路径、当前 next action 和推荐命令。
+- Markdown collection resume 和 JSON 使用同一个 payload。
+- fresh child project 不会因为 `projects resume --json` 写入 `study_brief.md`、`study_brief_manifest.json`、`socrates_projects.json` 或 project log。
+- 这不是 scanner、generator、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 child-project mutation；它只是 wrapper-facing read-only collection state。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

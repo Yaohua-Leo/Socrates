@@ -215,6 +215,102 @@ class ProjectIndexTests(unittest.TestCase):
                 (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
             )
 
+    def test_projects_resume_json_reports_collection_state_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "resume",
+                    "--root",
+                    str(root),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_project_resume_index")
+            self.assertEqual(payload["root"], str(root.resolve()))
+            self.assertEqual(payload["project_count"], 2)
+            self.assertEqual(
+                [project["id"] for project in payload["projects"]],
+                ["group_theory", "ring_theory"],
+            )
+            self.assertEqual(
+                payload["projects"][0],
+                {
+                    "id": "group_theory",
+                    "title": "Group Theory",
+                    "path": "group_theory",
+                    "resume_state": "ready",
+                    "study_brief": "current",
+                    "study_brief_path": "07_exports/briefs/study_brief.md",
+                    "current_next_action": next_action,
+                    "recommended_command": "none",
+                },
+            )
+            self.assertEqual(
+                payload["projects"][1],
+                {
+                    "id": "ring_theory",
+                    "title": "Ring Theory",
+                    "path": "ring_theory",
+                    "resume_state": "refresh_brief",
+                    "study_brief": "not_run",
+                    "study_brief_path": "07_exports/briefs/study_brief.md",
+                    "current_next_action": "none",
+                    "recommended_command": (
+                        f'python -m socrates brief generate --project "{fresh_project}"'
+                    ),
+                },
+            )
+            self.assertFalse((root / "socrates_projects.json").exists())
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+
     def test_projects_refs_finds_reviewed_notes_across_projects(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "SocratesProjects"
