@@ -92,6 +92,72 @@ class IngestionQualityTests(unittest.TestCase):
                 },
             )
 
+    def test_kb_list_cli_shows_checked_source_quality_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Source Metadata\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "## Normal Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            build = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "build",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            check = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            objects = subprocess.run(
+                [sys.executable, "-m", "socrates", "kb", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(build.returncode, 0, build.stderr)
+            self.assertEqual(check.returncode, 0, check.stderr)
+            self.assertEqual(objects.returncode, 0, objects.stderr)
+            self.assertIn(
+                "- definition: Normal Subgroup - Normality Notes (lecture_notes) [normality_notes] | "
+                "01_references/curated/normal_subgroups.curated.md:7",
+                objects.stdout,
+            )
+            self.assertIn("  - source quality: pass", objects.stdout)
+
     def test_kb_check_accepts_numbered_math_object_headings(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

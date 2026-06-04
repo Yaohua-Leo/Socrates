@@ -1331,6 +1331,9 @@ def _reference_kb_objects_text(objects: list[dict[str, object]]) -> str:
         lines.append(
             f"- {_object_label(item)}{_source_label(source)} | {_source_location(source)}"
         )
+        source_quality_status = str(item.get("source_quality_status", "")).strip()
+        if source_quality_status:
+            lines.append(f"  - source quality: {source_quality_status}")
     return "\n".join(lines) + "\n"
 
 

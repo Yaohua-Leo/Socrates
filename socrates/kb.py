@@ -189,6 +189,7 @@ def list_reference_kb_objects(
     objects = index.get("objects", []) if isinstance(index, dict) else []
     if not isinstance(objects, list):
         return []
+    quality_by_source_path = _ingestion_quality_by_source_path(context.root)
 
     items: list[dict[str, object]] = []
     for item in objects:
@@ -201,6 +202,10 @@ def list_reference_kb_objects(
             continue
         if source_id is not None and _object_source_id(item) != source_id:
             continue
+        source_path = _object_source_path(item)
+        if source_path in quality_by_source_path:
+            item = dict(item)
+            item["source_quality_status"] = quality_by_source_path[source_path]
         items.append(item)
     return items
 
@@ -377,6 +382,36 @@ def _object_source_id(item: dict[str, object]) -> str:
     if not isinstance(source, dict):
         return ""
     return str(source.get("source_id", ""))
+
+
+def _object_source_path(item: dict[str, object]) -> str:
+    source = item.get("source", {})
+    if not isinstance(source, dict):
+        return ""
+    return str(source.get("path", ""))
+
+
+def _ingestion_quality_by_source_path(project_root: Path) -> dict[str, str]:
+    manifest_path = project_root / "08_evals" / "ingestion_quality_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    references = manifest.get("curated_references", []) if isinstance(manifest, dict) else []
+    if not isinstance(references, list):
+        return {}
+
+    quality_by_path: dict[str, str] = {}
+    for item in references:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "")).strip()
+        quality_status = str(item.get("quality_status", "")).strip()
+        if path and quality_status:
+            quality_by_path[path] = quality_status
+    return quality_by_path
 
 
 def _has_relationship_type(item: dict[str, object], relationship_type: str) -> bool:
