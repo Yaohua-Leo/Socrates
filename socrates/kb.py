@@ -108,8 +108,14 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
                 object_count=0,
                 status="invalid",
             )
-        objects = index.get("objects", []) if isinstance(index, dict) else []
-        object_count = len(objects) if isinstance(objects, list) else 0
+        if not _valid_reference_index_schema(index):
+            return ReferenceKbStatus(
+                index_path=index_path,
+                object_count=0,
+                status="invalid",
+            )
+        objects = index["objects"]
+        object_count = len(objects)
         index_mtime_ns = index_path.stat().st_mtime_ns
         index_status = "current" if curated_paths else "not_applicable"
 
