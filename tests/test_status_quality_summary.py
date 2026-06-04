@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -93,6 +94,44 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Note quality check: pass (1/1 passed, 0 failed)", status.stdout)
             self.assertIn("Exercise quality check: pass (5/5 passed, 0 failed)", status.stdout)
             self.assertIn("Tutoring quality check: pass (1/1 passed, 0 failed)", status.stdout)
+
+    def test_status_cli_counts_quality_checks_to_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "08_evals" / "note_quality_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checked": 1,
+                        "passed": 0,
+                        "failed": 1,
+                        "notes": [
+                            {
+                                "id": "normal_subgroup",
+                                "path": "04_atomic_notes/drafts/normal_subgroup.md",
+                                "quality_status": "fail",
+                                "issues": ["missing section Review Questions"],
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Note quality check: fail (0/1 passed, 1 failed)", status.stdout)
+            self.assertIn("Quality checks to fix: 1", status.stdout)
 
 
 if __name__ == "__main__":

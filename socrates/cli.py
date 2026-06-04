@@ -1124,6 +1124,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     queue = collect_learning_queue(context.root)
     draft_count = len(queue.notes_to_review)
     misconception_note_draft_count = len(queue.misconception_notes_to_draft)
+    quality_checks_to_fix_count = len(queue.quality_checks_to_fix)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     converted_count = _count_converted_references(context.references_dir)
     conversion_pending_count = _count_sources_with_status(
@@ -1217,6 +1218,7 @@ def _handle_status(args: argparse.Namespace) -> int:
         if repair:
             print(f"Next repair: {repair}")
     print(f"Learning reports: {report_count}")
+    print(f"Quality checks to fix: {quality_checks_to_fix_count}")
     print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
     print(f"Note quality check: {_quality_manifest_status_text(note_quality)}")
     print(f"Exercise quality check: {_quality_manifest_status_text(exercise_quality)}")
