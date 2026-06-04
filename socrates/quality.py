@@ -9,6 +9,11 @@ from pathlib import Path
 import re
 
 from .context import load_project, write_json, write_text
+from .contracts import (
+    EXERCISE_ALLOWED_REVIEW_STATUSES,
+    EXERCISE_ALLOWED_STATUSES,
+    EXERCISE_ALLOWED_TYPES,
+)
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
@@ -520,6 +525,12 @@ def exercise_quality_issues(path: Path) -> list[str]:
     for field in REQUIRED_FRONTMATTER:
         if field not in text:
             issues.append(f"missing frontmatter field {field.rstrip(':')}")
+    if _invalid_exercise_status(text):
+        issues.append("invalid exercise status")
+    if _invalid_exercise_review_status(text):
+        issues.append("invalid exercise review_status")
+    if _invalid_exercise_type(text):
+        issues.append("invalid exercise type")
     if _is_generated_exercise(text) and _missing_source_id(text):
         issues.append("missing source id")
     if _is_targeted_review_exercise(text):
@@ -1169,6 +1180,22 @@ def _missing_frontmatter_value(text: str, key: str) -> bool:
     return value is None or value in {"", "null"}
 
 
+def _invalid_exercise_status(text: str) -> bool:
+    return _invalid_frontmatter_choice(text, "status", EXERCISE_ALLOWED_STATUSES)
+
+
+def _invalid_exercise_review_status(text: str) -> bool:
+    return _invalid_frontmatter_choice(
+        text,
+        "review_status",
+        EXERCISE_ALLOWED_REVIEW_STATUSES,
+    )
+
+
+def _invalid_exercise_type(text: str) -> bool:
+    return _invalid_frontmatter_choice(text, "type", EXERCISE_ALLOWED_TYPES)
+
+
 def _hint_ladder_lines(text: str) -> list[str]:
     hint_section = _section_text(text, "## Hints")
     return [
@@ -1459,7 +1486,13 @@ def _invalid_note_type(text: str) -> bool:
 
 
 def _invalid_note_frontmatter_choice(
-    text: str, key: str, allowed_values: set[str]
+    text: str, key: str, allowed_values: set[str] | frozenset[str]
+) -> bool:
+    return _invalid_frontmatter_choice(text, key, allowed_values)
+
+
+def _invalid_frontmatter_choice(
+    text: str, key: str, allowed_values: set[str] | frozenset[str]
 ) -> bool:
     value = _frontmatter_value(text, key)
     return value is not None and value.casefold() not in allowed_values

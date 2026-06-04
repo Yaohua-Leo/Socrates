@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from .context import append_project_log, load_project, read_json, write_text
+from .contracts import EXERCISE_ALLOWED_TYPES
 from .quality import check_generated_exercise_quality, exercise_quality_issues
 from .project import slugify_topic
 from .state import (
@@ -19,20 +20,7 @@ from .state import (
 
 
 REVIEW_MASTERY_THRESHOLD = 0.7
-EXERCISE_TYPES = frozenset(
-    {
-        "generated_exercise",
-        "targeted_review_exercise",
-        "definition_check",
-        "example_construction",
-        "counterexample_construction",
-        "calculation",
-        "proof",
-        "debug_proof",
-        "concept_comparison",
-        "mixed_review",
-    }
-)
+EXERCISE_TYPES = EXERCISE_ALLOWED_TYPES
 
 
 @dataclass(frozen=True)

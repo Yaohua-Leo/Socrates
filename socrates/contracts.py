@@ -6,6 +6,24 @@ from dataclasses import dataclass, field
 import json
 
 
+EXERCISE_ALLOWED_STATUSES = frozenset({"draft", "approved"})
+EXERCISE_ALLOWED_REVIEW_STATUSES = frozenset({"needs_review", "approved"})
+EXERCISE_ALLOWED_TYPES = frozenset(
+    {
+        "generated_exercise",
+        "targeted_review_exercise",
+        "definition_check",
+        "example_construction",
+        "counterexample_construction",
+        "calculation",
+        "proof",
+        "debug_proof",
+        "concept_comparison",
+        "mixed_review",
+    }
+)
+
+
 def yaml_scalar(value: object) -> str:
     """Return a conservative YAML scalar for generated project files."""
 
