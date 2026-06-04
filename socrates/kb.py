@@ -422,18 +422,32 @@ def _valid_chapter_index_artifact(artifact: dict[str, object]) -> bool:
     for chapter in chapters:
         if not isinstance(chapter, dict):
             return False
+        if not _has_nonempty_string_fields(chapter, ("title",)):
+            return False
         sections = chapter.get("sections")
         if not isinstance(sections, list) or not all(
             isinstance(section, dict) for section in sections
         ):
             return False
         for section in sections:
+            if not _has_nonempty_string_fields(section, ("title", "source_path")):
+                return False
             objects = section.get("objects")
             if not isinstance(objects, list) or not all(
                 isinstance(item, dict) for item in objects
             ):
                 return False
+            for item in objects:
+                if not _has_nonempty_string_fields(
+                    item,
+                    ("id", "type", "title", "source_path"),
+                ):
+                    return False
     return True
+
+
+def _has_nonempty_string_fields(item: dict[str, object], fields: tuple[str, ...]) -> bool:
+    return all(isinstance(item.get(field), str) and item[field].strip() for field in fields)
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
