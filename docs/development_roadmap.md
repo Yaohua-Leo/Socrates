@@ -1519,6 +1519,38 @@ handoff manifest
 - Project summary report 会包含 Next Session Handoff Snapshot，并在 handoff manifest 变化后标记 stale。
 - 这不是 autonomous tutoring、LLM judge、自动评分或 learning-state truth mutation；它只是下一节课前的确定性计划交接。
 
+v0.8：LLM judge 边界
+
+目标：
+
+在不把 LLM 输出提升为可信评分、readiness gate 或 learning-state truth 的前提下，增加可人工审阅的 session judge draft。
+
+必须完成：
+
+review-only session judge draft
+
+strict JSON response contract
+
+LLM suggestion manifest record
+
+no mutation of transcript / session score / learning_state
+
+CLI surface for explicit opt-in use
+
+当前状态（2026-06-04）：
+
+- `session judge-suggest` 已支持调用已配置 LLM，为一个 tutoring session 写入 `03_sessions/<session_id>/llm_session_judge.md`。
+- draft frontmatter 固定记录 `status: draft` 与 `quality_boundary: review_only_llm_judge_draft`。
+- `08_evals/llm_suggestions_manifest.json` 会记录 `session_quality_judge` suggestion、source paths 与 prompt hash。
+- v0.8 测试覆盖 transcript、learning_state 与 deterministic session score manifest 不被 LLM judge draft 修改。
+- 这不是 trusted LLM judge、自动评分、readiness gate、数学证明、教学质量证明或 learning-state truth mutation。
+
+v0.9：长期使用回归与产品闭环打磨
+
+建议目标：
+
+用一个真实小型数学主题跑通多 session 回归，优先修补长期使用时的 CLI 体验、artifact consistency 与报告可读性。除非显式扩展边界，否则继续保持 deterministic gates authoritative，LLM 只作为 review-only draft provider。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

@@ -44,6 +44,7 @@ from .learning_queue import QUEUE_SECTIONS, collect_learning_queue, format_learn
 from .llm import LlmMessage, LlmProviderError, LlmRequest
 from .llm_artifacts import list_llm_suggestions
 from .llm_config import load_llm_config
+from .llm_judge import suggest_session_judge_with_llm
 from .notes import (
     AtomicNoteSummary,
     NOTE_TYPES,
@@ -834,6 +835,13 @@ def build_parser() -> argparse.ArgumentParser:
     session_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
     session_suggest_parser.add_argument("--session-id", required=True, help="Tutoring session id.")
     session_suggest_parser.set_defaults(func=_handle_session_suggest_next)
+    session_judge_suggest_parser = session_subparsers.add_parser(
+        "judge-suggest",
+        help="Ask the configured LLM for a review-only session judge draft.",
+    )
+    session_judge_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_judge_suggest_parser.add_argument("--session-id", required=True, help="Tutoring session id.")
+    session_judge_suggest_parser.set_defaults(func=_handle_session_judge_suggest)
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -2097,6 +2105,22 @@ def _handle_session_suggest_next(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     print(f"Wrote LLM next-question draft: {artifact}")
+    return 0
+
+
+def _handle_session_judge_suggest(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        artifact = suggest_session_judge_with_llm(
+            args.project,
+            args.session_id,
+            client=client,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM session-judge draft: {artifact}")
     return 0
 
 

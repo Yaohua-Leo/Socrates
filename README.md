@@ -6,14 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.7-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.8-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, and an opt-in LLM provider layer for reviewable
-draft suggestions. It is not yet a full AI tutor: autonomous LLM tutoring,
-OCR/PDF extraction backends, LLM judges, and product UI layers remain future
-work.
+draft suggestions, including review-only session judge drafts. It is not yet a
+full AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM
+judges, and product UI layers remain future work.
 
 ## Quick Start
 
@@ -57,6 +57,7 @@ python -m socrates exercise validate --project ".\projects\group_theory" --all
 python -m socrates exercise bank build --project ".\projects\group_theory"
 python -m socrates session score --project ".\projects\group_theory" --session-id session_0001
 python -m socrates session plan-next --project ".\projects\group_theory" --session-id session_0002
+python -m socrates session judge-suggest --project ".\projects\group_theory" --session-id session_0001
 python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
@@ -95,8 +96,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   previous session artifacts, queue counts, and Reference KB context into a
   reviewable plan/manifest for the next session.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
-  tutoring next questions, and exercise feedback proposals, tracked through an
-  LLM suggestion manifest.
+  tutoring next questions, exercise feedback proposals, and review-only session
+  judge observations, tracked through an LLM suggestion manifest.
 
 ## Boundaries
 
@@ -111,6 +112,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   local `.env` configuration and are not part of the default check gate.
 - LLM output never directly overwrites curated references, reviewed notes,
   graded attempts, or learning-state truth.
+- LLM session judge drafts are review-only observations. They are not trusted
+  grades, deterministic session scores, readiness gates, formal teaching
+  evaluations, proofs, or learning-state updates.
 - Exercise validation and counterexample search are advisory review evidence.
   Passing validation does not prove mathematical correctness or approve a draft.
 - Session scores and benchmark gates are deterministic checklist summaries, not

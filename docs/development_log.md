@@ -145,6 +145,22 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 366 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 366 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
 
+## v0.8 LLM judge boundary alpha
+
+- Added `socrates/llm_judge.py` and `python -m socrates session judge-suggest` for review-only LLM session judge drafts.
+- Drafts are written to `03_sessions/<session_id>/llm_session_judge.md` with `quality_boundary: review_only_llm_judge_draft`.
+- `08_evals/llm_suggestions_manifest.json` records the draft as `session_quality_judge` with source paths and prompt hash.
+- Tests cover strict JSON validation and verify the LLM judge draft does not mutate the transcript, learning state, or deterministic session score manifest.
+- Safety boundary: v0.8 LLM judge drafts are observations for human review. They are not trusted grades, deterministic scores, readiness gates, proofs, formal teaching evaluations, or learning-state updates.
+- Verification evidence:
+  - `python -m unittest tests.test_llm_judge` passed.
+  - `python -m unittest tests.test_llm_judge tests.test_llm_tutoring_suggestions tests.test_llm_provider_contract` passed with 6 tests OK.
+  - `python -m unittest discover -s tests` passed with 369 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 369 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 369 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -181,7 +197,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，但这些能力不等同于数学正确性证明、LLM judge、内置 OCR/PDF backend 或自动教学执行。LLM judge、全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 
