@@ -2277,6 +2277,8 @@ def _current_project_phase(
 ) -> str:
     if benchmark_score is not None:
         return "benchmark_ready"
+    if obsidian_exports_to_run > 0:
+        return "obsidian_export_pending"
     if learning_reports > 0:
         return "report_ready"
     if scheduled_reviews > 0:
@@ -2287,8 +2289,6 @@ def _current_project_phase(
         return "exercise_attempted"
     if approved_exercises > 0:
         return "exercise_ready"
-    if obsidian_exports_to_run > 0:
-        return "obsidian_export_pending"
     if obsidian_exports > 0:
         return "obsidian_exported"
     if reviewed_notes > 0:

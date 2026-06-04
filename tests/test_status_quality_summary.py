@@ -205,6 +205,64 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Obsidian exports to run: 1", status.stdout)
             self.assertIn("Current phase: obsidian_export_pending", status.stdout)
 
+    def test_status_phase_prefers_obsidian_export_pending_over_existing_reports(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What condition distinguishes normality from centrality?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            report = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality needed for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "quotient_group")
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(report.returncode, 0, report.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Learning reports: 1", status.stdout)
+            self.assertIn("Obsidian exports to run: 1", status.stdout)
+            self.assertIn("Current phase: obsidian_export_pending", status.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
