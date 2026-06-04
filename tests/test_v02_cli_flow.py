@@ -342,6 +342,50 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("socrates kb build --project", result.stderr)
             self.assertNotIn("No such file or directory", result.stderr)
 
+    def test_kb_chapters_reports_invalid_nested_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            self._run_cli("kb", "build", "--project", str(project))
+            index_path = project / "06_kb" / "chapter_index.json"
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            index["chapters"][0]["sections"][0].pop("source_path")
+            index_path.write_text(
+                json.dumps(index, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "chapters",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB chapter index has invalid schema", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("unknown", result.stdout)
+
     def test_kb_list_reports_invalid_index_with_rebuild_hint(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

@@ -310,7 +310,7 @@ def read_reference_chapter_index(project_path: Path | str) -> dict[str, object]:
         raise ValueError(
             _reference_chapter_index_rebuild_message(context.root, "is invalid")
         ) from exc
-    if not isinstance(index, dict) or not isinstance(index.get("chapters", []), list):
+    if not isinstance(index, dict) or not _valid_chapter_index_artifact(context.root, index):
         raise ValueError(
             _reference_chapter_index_rebuild_message(
                 context.root,
