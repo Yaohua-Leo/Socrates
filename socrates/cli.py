@@ -2333,9 +2333,14 @@ def _count_obsidian_exports(project_root: Path) -> int:
     obsidian_dir = project_root / "07_exports" / "obsidian"
     manifest_path = obsidian_dir / "export_manifest.json"
     if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
-        return len(exported_notes) if isinstance(exported_notes, list) else 0
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            manifest = None
+        if isinstance(manifest, dict):
+            exported_notes = manifest.get("exported_notes", [])
+            if isinstance(exported_notes, list):
+                return len(exported_notes)
     return len(
         [
             path
@@ -2349,7 +2354,10 @@ def _count_obsidian_backlinks(project_root: Path) -> int:
     manifest_path = project_root / "07_exports" / "obsidian" / "export_manifest.json"
     if not manifest_path.exists():
         return 0
-    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return 0
     exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
     if not isinstance(exported_notes, list):
         return 0

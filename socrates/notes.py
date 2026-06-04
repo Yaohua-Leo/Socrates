@@ -312,14 +312,18 @@ def _exported_note_ids(project_root: Path) -> set[str]:
     obsidian_dir = project_root / "07_exports" / "obsidian"
     manifest_path = obsidian_dir / "export_manifest.json"
     if manifest_path.exists():
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
-        if isinstance(exported_notes, list):
-            return {
-                str(item.get("note_id"))
-                for item in exported_notes
-                if isinstance(item, dict) and item.get("note_id")
-            }
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            manifest = None
+        if isinstance(manifest, dict):
+            exported_notes = manifest.get("exported_notes", [])
+            if isinstance(exported_notes, list):
+                return {
+                    str(item.get("note_id"))
+                    for item in exported_notes
+                    if isinstance(item, dict) and item.get("note_id")
+                }
     if not obsidian_dir.exists():
         return set()
     return {

@@ -560,6 +560,38 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Obsidian exports: 2", report_text)
             self.assertIn("- Obsidian backlinks: 1", report_text)
 
+    def test_project_summary_falls_back_when_obsidian_manifest_is_corrupt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            (project / "07_exports" / "obsidian" / "export_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = project / "07_exports" / "reports" / "project_summary.md"
+            report_text = report.read_text(encoding="utf-8")
+            self.assertIn("- Obsidian exports: 1", report_text)
+            self.assertIn("- Obsidian backlinks: 0", report_text)
+
     def test_report_list_marks_project_summary_stale_after_tool_quality_changes(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

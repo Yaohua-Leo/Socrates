@@ -566,6 +566,87 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertNotIn("group_action", exported_notes.stdout)
             self.assertNotIn("quotient_group", exported_notes.stdout)
 
+    def test_note_list_cli_falls_back_when_obsidian_manifest_is_corrupt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            (project / "07_exports" / "obsidian" / "export_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            exported_notes = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "exported",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(exported_notes.returncode, 0, exported_notes.stderr)
+            self.assertIn(
+                "- normal_subgroup | exported | definition | Normal Subgroup | "
+                "04_atomic_notes/definitions/normal_subgroup.md",
+                exported_notes.stdout,
+            )
+
+    def test_status_cli_falls_back_when_obsidian_manifest_is_corrupt(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            (project / "07_exports" / "obsidian" / "export_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Obsidian exports: 1", result.stdout)
+            self.assertIn("Obsidian backlinks: 0", result.stdout)
+
     def test_export_reviewed_notes_rejects_failed_quality_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
