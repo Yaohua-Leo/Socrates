@@ -8,7 +8,7 @@ from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
 from .kb import reference_kb_status
-from .learning_queue import collect_learning_queue
+from .learning_queue import QueueItem, collect_learning_queue, priority_queue_items
 from .obsidian import (
     obsidian_backlink_count,
     obsidian_export_count,
@@ -44,6 +44,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
     report_path = context.root / "07_exports" / "reports" / "weekly_report.md"
     state = _read_learning_state(context.learning_state)
     queue = collect_learning_queue(context.root)
+    priority_actions = priority_queue_items(queue)
     write_text(
         report_path,
         _weekly_report_text(
@@ -55,6 +56,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
+            priority_actions=priority_actions,
             state=state,
         ),
     )
@@ -70,6 +72,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
     state = _read_learning_state(context.learning_state)
     kb_status = reference_kb_status(context.root)
     queue = collect_learning_queue(context.root)
+    priority_actions = priority_queue_items(queue)
     write_text(
         report_path,
         _project_summary_text(
@@ -90,6 +93,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
+            priority_actions=priority_actions,
             tool_verification_records=list_tool_verification_records(context.root),
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
@@ -110,6 +114,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     report_path = context.root / "07_exports" / "reports" / "monthly_report.md"
     state = _read_learning_state(context.learning_state)
     queue = collect_learning_queue(context.root)
+    priority_actions = priority_queue_items(queue)
     write_text(
         report_path,
         _monthly_report_text(
@@ -121,6 +126,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
+            priority_actions=priority_actions,
             state=state,
         ),
     )
@@ -190,6 +196,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "03_sessions",
             project_root / "04_atomic_notes" / "drafts",
             *_reviewed_note_input_paths(project_root),
+            *_priority_action_input_paths(project_root),
             project_root / "05_exercises" / "generated",
             project_root / "05_exercises" / "attempted",
             project_root / "05_exercises" / "graded",
@@ -199,6 +206,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
     if report_id == "monthly":
         return (
             project_root / "04_atomic_notes",
+            *_priority_action_input_paths(project_root),
             project_root / "05_exercises" / "generated",
             project_root / "05_exercises" / "attempted",
             project_root / "05_exercises" / "graded",
@@ -213,6 +221,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "03_sessions",
             project_root / "04_atomic_notes" / "drafts",
             *_reviewed_note_input_paths(project_root),
+            *_priority_action_input_paths(project_root),
             project_root / "05_exercises" / "generated",
             project_root / "05_exercises" / "attempted",
             project_root / "05_exercises" / "graded",
@@ -247,6 +256,18 @@ def _reviewed_note_input_paths(project_root: Path) -> tuple[Path, ...]:
     )
 
 
+def _priority_action_input_paths(project_root: Path) -> tuple[Path, ...]:
+    return (
+        project_root / "08_evals" / "session_closeout_manifest.json",
+        project_root / "08_evals" / "multi_session_regression_manifest.json",
+        project_root / "08_evals" / "ingestion_quality_manifest.json",
+        project_root / "08_evals" / "note_quality_manifest.json",
+        project_root / "08_evals" / "exercise_quality_manifest.json",
+        project_root / "08_evals" / "tutoring_quality_manifest.json",
+        project_root / "08_evals" / "tool_verification_quality_manifest.json",
+    )
+
+
 def _artifact_mtimes(path: Path) -> list[int]:
     if not path.exists():
         return []
@@ -266,6 +287,7 @@ def _weekly_report_text(
     generated_exercises: int,
     attempted_exercises: int,
     graded_exercises: int,
+    priority_actions: list[QueueItem],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -281,6 +303,10 @@ def _weekly_report_text(
         f"- Generated exercises: {generated_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
+        "",
+        "## Priority Actions",
+        "",
+        *_priority_action_lines(priority_actions),
         "",
         *_state_warning_section(state),
         "## Learning State",
@@ -308,6 +334,7 @@ def _monthly_report_text(
     approved_exercises: int,
     attempted_exercises: int,
     graded_exercises: int,
+    priority_actions: list[QueueItem],
     state: dict[str, object],
 ) -> str:
     concept_mastery = state.get("concept_mastery", {})
@@ -329,6 +356,10 @@ def _monthly_report_text(
         f"- Approved exercises: {approved_exercises}",
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
+        "",
+        "## Priority Actions",
+        "",
+        *_priority_action_lines(priority_actions),
         "",
         "## Misconceptions",
         "",
@@ -364,6 +395,7 @@ def _project_summary_text(
     approved_exercises: int,
     attempted_exercises: int,
     graded_exercises: int,
+    priority_actions: list[QueueItem],
     tool_verification_records: list[ToolVerificationSummary],
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
@@ -398,6 +430,10 @@ def _project_summary_text(
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
         f"- Tool verification records: {len(tool_verification_records)}",
+        "",
+        "## Priority Actions",
+        "",
+        *_priority_action_lines(priority_actions),
         "",
         "## Benchmark Snapshot",
         "",
@@ -742,6 +778,23 @@ def _state_warning_section(state: dict[str, object]) -> list[str]:
     if not warning_lines:
         return []
     return ["## State Warnings", "", *warning_lines, ""]
+
+
+def _priority_action_lines(items: list[QueueItem], *, limit: int = 5) -> list[str]:
+    if not items:
+        return ["- none"]
+    lines = [_priority_action_line(item) for item in items[:limit]]
+    remaining = len(items) - limit
+    if remaining > 0:
+        lines.append(f"- ... {remaining} more")
+    return lines
+
+
+def _priority_action_line(item: QueueItem) -> str:
+    line = f"- {item.item_id} | {item.path}"
+    if item.detail:
+        line = f"{line} | {item.detail}"
+    return line
 
 
 def _score_lines(value: object) -> list[str]:

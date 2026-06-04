@@ -1676,6 +1676,29 @@ v0.14：阶段性学习报告与复盘体验打磨
 
 在 priority queue 之后，继续打磨 weekly/monthly/project summary 的真实长期使用路径，让用户更容易从多 session artifact 中看到阶段性进展、薄弱点、复习建议和下一步学习重点。
 
+必须完成：
+
+priority action snapshots in weekly report
+
+priority action snapshots in monthly report
+
+priority action snapshots in project summary
+
+report staleness tracks priority workflow/regression inputs
+
+当前状态（2026-06-04）：
+
+- weekly、monthly 与 project summary report 已包含 `## Priority Actions` snapshot。
+- report priority rows 复用 `queue --section priority` 的 deterministic ordering 与 `<section>:<item>` item id。
+- weekly/monthly/project-summary stale detection 已纳入 closeout、multi-session regression、artifact quality 与 tool-verification quality manifests，避免 report 中的 next-action snapshot 变旧却仍显示 generated。
+- 这不是新的 readiness gate、report score、artifact writer 或 learning-state truth；它只是把已有 queue evidence 放进长期复盘报告。
+
+v0.15：报告行动建议与阶段复盘结构打磨
+
+建议目标：
+
+继续把 priority actions、weak concepts、misconceptions、reviews 和 exercise progress 组合成更清晰的阶段复盘结构，让报告从 artifact inventory 进一步接近可执行学习建议。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

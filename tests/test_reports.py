@@ -710,6 +710,144 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Obsidian exports: 1", report_text)
             self.assertIn("- Obsidian exports to run: 1", report_text)
 
+    def test_weekly_report_includes_priority_actions_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a normal subgroup.\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for coset multiplication?\n"
+                ),
+                source_id="df-1",
+            )
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            workflow = (
+                "- workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>"
+            )
+            note = "- notes:quotient_group | 04_atomic_notes/drafts/quotient_group.md"
+            self.assertIn("## Priority Actions", report_text)
+            self.assertIn(workflow, report_text)
+            self.assertIn(note, report_text)
+            self.assertLess(report_text.index(workflow), report_text.index(note))
+
+    def test_project_summary_includes_priority_actions_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Priority Actions", report_text)
+            self.assertIn(
+                "- workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+                report_text,
+            )
+
+    def test_report_list_marks_weekly_report_stale_after_closeout_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self._write_ready_closeout_manifest(project)
+            report_path = project / "07_exports" / "reports" / "weekly_report.md"
+            closeout_manifest = project / "08_evals" / "session_closeout_manifest.json"
+            base_time_ns = 4_000_000_000_000_000_000
+            os.utime(report_path, ns=(base_time_ns, base_time_ns))
+            os.utime(
+                closeout_manifest,
+                ns=(base_time_ns + 1_000_000_000, base_time_ns + 1_000_000_000),
+            )
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- weekly | stale | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md",
+                stale_reports.stdout,
+            )
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -1742,6 +1880,44 @@ class ReportTests(unittest.TestCase):
             )
             self.assertIn("- normal_equals_central: normal_subgroup, active x1", report_text)
             self.assertNotIn("many", report_text)
+
+    def _write_ready_closeout_manifest(self, project: Path) -> None:
+        artifact_paths = (
+            "08_evals/session_score_report.md",
+            "08_evals/session_score_manifest.json",
+            "02_learning_plan/session_0002_plan.md",
+            "02_learning_plan/next_session_plan_manifest.json",
+            "07_exports/reports/project_summary.md",
+        )
+        for relative_path in artifact_paths:
+            artifact_path = project / relative_path
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_text("# Fixture Artifact\n", encoding="utf-8", newline="\n")
+        closeout_manifest = project / "08_evals" / "session_closeout_manifest.json"
+        closeout_manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_session_closeout",
+                    "status": "ready",
+                    "session_id": "session_0001",
+                    "next_session_id": "session_0002",
+                    "session_score_status": "pass",
+                    "session_score": 100,
+                    "session_score_report_path": "08_evals/session_score_report.md",
+                    "session_score_manifest_path": "08_evals/session_score_manifest.json",
+                    "next_session_plan_path": "02_learning_plan/session_0002_plan.md",
+                    "next_session_plan_manifest_path": (
+                        "02_learning_plan/next_session_plan_manifest.json"
+                    ),
+                    "project_summary_path": "07_exports/reports/project_summary.md",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
 
     def _create_report_fixture(self, root: Path) -> Path:
         project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))

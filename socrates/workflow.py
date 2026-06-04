@@ -68,6 +68,7 @@ def close_tutoring_session(
             "project_summary_path": project_summary_path.relative_to(context.root).as_posix(),
         },
     )
+    project_summary_path = generate_project_summary(context.root)
     append_project_log(context, f"Closed out session {session_id} for {next_session_id}.")
     return SessionCloseoutResult(
         session_id=session_id,

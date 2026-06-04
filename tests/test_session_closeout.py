@@ -56,6 +56,8 @@ class SessionCloseoutTests(unittest.TestCase):
             summary_text = result.project_summary_path.read_text(encoding="utf-8")
             self.assertIn("## Session Score Snapshot", summary_text)
             self.assertIn("## Next Session Handoff Snapshot", summary_text)
+            self.assertIn("## Priority Actions", summary_text)
+            self.assertIn("workflow:multi_session_regression", summary_text)
             stale_reports = list_learning_reports(project, status="stale")
             self.assertEqual(
                 [report.report_id for report in stale_reports if report.report_id == "project-summary"],

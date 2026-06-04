@@ -93,7 +93,7 @@ def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
 
 def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem]]]:
     return [
-        ("priority", "Priority Actions", _priority_actions(queue)),
+        ("priority", "Priority Actions", priority_queue_items(queue)),
         ("notes", "Notes To Review", queue.notes_to_review),
         ("obsidian-exports", "Obsidian Exports To Run", queue.obsidian_exports_to_run),
         ("misconceptions", "Misconception Notes To Draft", queue.misconception_notes_to_draft),
@@ -105,6 +105,12 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
     ]
+
+
+def priority_queue_items(queue: LearningQueue) -> list[QueueItem]:
+    """Return existing queue items in deterministic operator priority order."""
+
+    return _priority_actions(queue)
 
 
 def _priority_actions(queue: LearningQueue) -> list[QueueItem]:

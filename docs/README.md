@@ -7,8 +7,9 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.13-alpha priority action queue navigation
-  over v0.12 workflow action queue visibility
+- Current implementation baseline: v0.14-alpha priority action snapshots in
+  reports, over v0.13 priority action queue navigation and v0.12 workflow action
+  queue visibility
   over deterministic multi-session regression, status/lifecycle visibility,
   deterministic session closeout workflow, review-only LLM session judge drafts,
   deterministic next-session handoff planning, external Markdown conversion
@@ -38,3 +39,5 @@ from the source planning conversation.
   v0.12 plan for workflow action queue visibility.
 - `superpowers/plans/2026-06-04-v13-priority-action-queue.md`: executable
   v0.13 plan for priority action queue navigation.
+- `superpowers/plans/2026-06-04-v14-report-priority-actions.md`: executable
+  v0.14 plan for priority action snapshots in reports.
