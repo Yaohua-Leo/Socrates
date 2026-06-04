@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, timedelta
+from json import JSONDecodeError
 import math
 from pathlib import Path
 
@@ -87,6 +88,19 @@ EVAL_REPORTS = {
     "exercise": ("exercise_eval.md", "Exercise Eval"),
     "note_quality": ("note_quality_eval.md", "Note Quality Eval"),
 }
+
+
+def ensure_learning_state_readable(learning_state_path: Path, *, action: str) -> None:
+    """Raise a stable repair error when a command requires readable learning state."""
+
+    if not learning_state_path.exists():
+        return
+    try:
+        read_json(learning_state_path)
+    except JSONDecodeError as exc:
+        raise ValueError(
+            f"invalid learning_state.json; repair the JSON before {action}"
+        ) from exc
 
 
 def update_learning_state(context: ProjectContext, patch: LearningStatePatch) -> None:

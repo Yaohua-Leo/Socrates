@@ -85,6 +85,7 @@ from .state import (
     MisconceptionSummary,
     MistakeRecord,
     build_review_schedule,
+    ensure_learning_state_readable,
     list_learning_scores,
     list_misconceptions,
     repair_review_schedule,
@@ -980,6 +981,10 @@ def _handle_teach(args: argparse.Namespace) -> int:
     context = load_project(args.project)
     script = _read_script_fields(Path(args.script))
     session_id = args.session_id
+    ensure_learning_state_readable(
+        context.learning_state,
+        action="running tutoring sessions",
+    )
     run_scripted_tutoring_session(context.root, args.script, session_id=session_id)
 
     concept = _first(script, "topic") or "Session Concept"

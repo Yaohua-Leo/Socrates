@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from json import JSONDecodeError
 from pathlib import Path
 
 from .context import append_project_log, load_project, read_json, write_text
@@ -13,6 +12,7 @@ from .state import (
     LearningStatePatch,
     MistakeRecord,
     build_review_schedule,
+    ensure_learning_state_readable,
     resolve_active_misconceptions_for_concept,
     update_learning_state,
 )
@@ -162,7 +162,7 @@ def grade_exercise_attempt(
         raise FileNotFoundError(f"Feedback file does not exist: {feedback_file}")
     feedback_text = feedback_file.read_text(encoding="utf-8").rstrip()
 
-    _ensure_learning_state_readable(
+    ensure_learning_state_readable(
         context.learning_state,
         action="grading exercise attempts",
     )
@@ -219,17 +219,6 @@ def _has_review_schedule(learning_state_path: Path) -> bool:
         return False
     schedule = state.get("review_schedule", [])
     return isinstance(schedule, list) and bool(schedule)
-
-
-def _ensure_learning_state_readable(learning_state_path: Path, *, action: str) -> None:
-    if not learning_state_path.exists():
-        return
-    try:
-        read_json(learning_state_path)
-    except JSONDecodeError as exc:
-        raise ValueError(
-            f"invalid learning_state.json; repair the JSON before {action}"
-        ) from exc
 
 
 def _attempts_by_exercise(project_root: Path) -> dict[str, list[str]]:

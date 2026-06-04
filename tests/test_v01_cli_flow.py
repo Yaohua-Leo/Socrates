@@ -138,6 +138,66 @@ class V01CliFlowTests(unittest.TestCase):
             self.assertIn("- Misconception: normal_equals_central", mistake_bank)
             self.assertIn("Confuses normality with commutativity or centrality.", mistake_bank)
 
+    def test_teach_rejects_corrupt_learning_state_before_writing_artifacts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = root / "group_theory"
+            script = root / "session_script.md"
+            script.write_text(
+                "\n".join(
+                    [
+                        "topic: Normal Subgroup",
+                        "goal: Understand normality as conjugation invariance.",
+                        "question: What must be checked to prove N is normal in G?",
+                        "hint: Compare gNg^-1 with N.",
+                        "attempt: I should show gng^-1 stays inside N.",
+                        "next: Try proving kernels are normal subgroups.",
+                        "",
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            self._run_cli(
+                "init",
+                "--topic",
+                "Group Theory",
+                "--path",
+                str(project),
+            )
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "teach",
+                    "--project",
+                    str(project),
+                    "--session-id",
+                    "session_0001",
+                    "--script",
+                    str(script),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid learning_state.json", result.stderr)
+            self.assertIn("repair the JSON before running tutoring sessions", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+            self.assertFalse((project / "03_sessions" / "session_0001").exists())
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").glob("*.md")), [])
+            self.assertEqual(list((project / "05_exercises" / "generated").glob("*.md")), [])
+
     def _run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
             [sys.executable, "-m", "socrates", *args],
