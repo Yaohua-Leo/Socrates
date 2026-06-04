@@ -1323,13 +1323,14 @@ class ReportTests(unittest.TestCase):
             project = self._create_report_fixture(root)
             manifest = {
                 "schema_version": 1,
-                "score": 75,
-                "passed_gates": 3,
-                "total_gates": 4,
+                "score": 80,
+                "passed_gates": 4,
+                "total_gates": 5,
                 "gates": [
                     {"name": "Ingestion", "passed": True},
                     {"name": "Note quality", "passed": True},
                     {"name": "Exercise quality", "passed": True},
+                    {"name": "Exercise validation", "passed": True},
                     {"name": "Tutoring quality", "passed": False},
                 ],
             }
@@ -1360,8 +1361,8 @@ class ReportTests(unittest.TestCase):
                 project / "07_exports" / "reports" / "project_summary.md"
             ).read_text(encoding="utf-8")
             self.assertIn("## Benchmark Snapshot", report_text)
-            self.assertIn("- Score: 75/100", report_text)
-            self.assertIn("- Gates passed: 3/4", report_text)
+            self.assertIn("- Score: 80/100", report_text)
+            self.assertIn("- Gates passed: 4/5", report_text)
             self.assertIn("- Failed gates: Tutoring quality", report_text)
             self.assertIn("- Manifest: 08_evals/benchmark_manifest.json", report_text)
 

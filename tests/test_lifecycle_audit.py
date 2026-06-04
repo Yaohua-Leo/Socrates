@@ -14,6 +14,7 @@ from socrates.artifacts import (
     generate_misconception_note_drafts,
 )
 from socrates.context import load_project
+from socrates.exercise_bank import build_exercise_bank
 from socrates.exercises import (
     approve_exercise_draft,
     grade_exercise_attempt,
@@ -64,7 +65,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 2/17 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 2/19 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
@@ -308,10 +309,12 @@ class LifecycleAuditTests(unittest.TestCase):
                 "ingestion_eval.md",
                 "note_quality_eval.md",
                 "exercise_quality_eval.md",
+                "exercise_validation_eval.md",
                 "tutoring_eval.md",
                 "ingestion_quality_manifest.json",
                 "note_quality_manifest.json",
                 "exercise_quality_manifest.json",
+                "exercise_validation_manifest.json",
                 "tutoring_quality_manifest.json",
             )
             for name in artifact_names:
@@ -419,7 +422,7 @@ class LifecycleAuditTests(unittest.TestCase):
             for name in artifact_names:
                 (evals / name).write_text("{}\n", encoding="utf-8", newline="\n")
             (evals / "benchmark_report.md").write_text(
-                "# Benchmark Report\n\n## Summary\n\n- Benchmark score: 75/100\n",
+                "# Benchmark Report\n\n## Summary\n\n- Benchmark score: 80/100\n",
                 encoding="utf-8",
                 newline="\n",
             )
@@ -427,9 +430,9 @@ class LifecycleAuditTests(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "score": 75,
-                        "passed_gates": 3,
-                        "total_gates": 4,
+                        "score": 80,
+                        "passed_gates": 4,
+                        "total_gates": 5,
                         "gates": [
                             {
                                 "name": "Ingestion",
@@ -454,6 +457,14 @@ class LifecycleAuditTests(unittest.TestCase):
                                 "failed": 0,
                                 "report_path": "08_evals/exercise_quality_eval.md",
                                 "manifest_path": "08_evals/exercise_quality_manifest.json",
+                            },
+                            {
+                                "name": "Exercise validation",
+                                "passed": True,
+                                "checked": 5,
+                                "failed": 0,
+                                "report_path": "08_evals/exercise_validation_eval.md",
+                                "manifest_path": "08_evals/exercise_validation_manifest.json",
                             },
                             {
                                 "name": "Tutoring quality",
@@ -861,6 +872,7 @@ class LifecycleAuditTests(unittest.TestCase):
             generate_monthly_report(project)
             generate_project_summary(project)
             run_project_benchmark(project, session_id="session_0001")
+            build_exercise_bank(project)
 
             result = subprocess.run(
                 [
@@ -879,7 +891,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 19/19 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 21/21 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -890,6 +902,8 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Obsidian export completeness: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
             self.assertIn("- Artifact quality: pass", report_text)
+            self.assertIn("- Exercise validation: pass", report_text)
+            self.assertIn("- Exercise bank: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: pass", report_text)
             self.assertIn("- Tool verification records: pass", report_text)

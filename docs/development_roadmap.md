@@ -1433,6 +1433,14 @@ exercise quality checker
 
 counterexample search 初版
 
+当前状态（2026-06-04）：
+
+- 已完成 v0.4-alpha exercise schema parser 与 validator；生成题目带 `schema_version: "v0.4"`，并保留原有 Markdown sections。
+- 已完成 `exercise validate --all/--exercise`，会写入 `08_evals/exercise_validation/` 单题报告和 `08_evals/exercise_validation_manifest.json`。
+- 已完成 `exercise bank build/status`，只把人工 approved 且 validation pass 的题目写入 `05_exercises/exercise_bank_manifest.json`。
+- Exercise quality manifest、status、benchmark 与 lifecycle audit 已接入 v0.4 validation/bank 可见性；benchmark 现在是 5 个 gate。
+- Counterexample search 与 validation 仍是 review evidence，不是形式化证明、自动审批或自动评分。
+
 v0.5：教学质量评测
 
 目标：

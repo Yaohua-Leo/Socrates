@@ -2,13 +2,13 @@
 
 更新时间：2026-06-04
 
-当前分支：`feature/v0.2-reference-kb-obsidian`
+当前分支：`codex/v02-closure`
 
 ## 当前阶段
 
-Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1 的最小学习闭环已经基本落地，并且当前开发重心已经进入 v0.2：Reference KB 与 Obsidian 笔记沉淀。
+Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.4-alpha 的题库验证与 exercise bank 层。
 
-当前分支相对 `main` 已有大量功能提交，最近一组工作主要在收紧 Reference KB 的可靠性边界：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 `status` 的 readiness 门禁。
+当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.4 exercise validation：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁。
 
 ## v0.2 收口基线
 
@@ -61,7 +61,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 ### 质量门禁
 
 - 当前全量门禁：`powershell -ExecutionPolicy Bypass -File scripts\check.ps1`
-- 最近一次结果：327 tests OK。
+- 最近一次结果：356 tests OK，1 skipped。
 - 最近收口提交：
   - `f49a0c2 Fail fast on invalid chapter index reads`
   - `1d61f90 Fail fast on invalid concept graph reads`
@@ -76,11 +76,29 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 - Preserved the safety boundary: LLM output is reviewed draft material and does not directly mutate curated references, reviewed notes, graded attempts, or learning state.
 - Default gates remain offline; live DeepSeek smoke is opt-in.
 
+## v0.4 Exercise bank and validation alpha
+
+- Added `socrates/exercise_schema.py` to parse generated exercise Markdown into structured schema objects and validate status, review status, exercise type, concept, difficulty, hints, solution steps, rubric totals, prerequisites, and common mistakes.
+- Added `socrates/exercise_validation.py` and `python -m socrates exercise validate` to write per-exercise JSON/Markdown reports under `08_evals/exercise_validation/` plus `08_evals/exercise_validation_manifest.json`.
+- Added `socrates/exercise_bank.py` and `python -m socrates exercise bank build/status`; the bank manifest includes only human-approved exercises with passing validation evidence.
+- Exercise quality manifests now include v0.4 validation evidence while preserving the older checklist pass/fail behavior for compatibility.
+- Benchmark now has five gates: ingestion, note quality, exercise quality, exercise validation, and tutoring quality.
+- Lifecycle audit now checks exercise validation and exercise bank readiness separately.
+- Safety boundary: validation, rubric checks, and Reference KB counterexample search are advisory evidence only; they do not prove correctness, approve drafts, or mutate learner mastery.
+- Verification evidence:
+  - `python -m unittest tests.test_exercise_schema tests.test_exercise_validation tests.test_exercise_bank tests.test_v04_exercise_flow` passed.
+  - `python -m unittest tests.test_exercise_quality tests.test_status_quality_summary tests.test_benchmark tests.test_lifecycle_audit` passed.
+  - `python -m unittest discover -s tests` passed with 356 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 356 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 356 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
 
-- 当前工作仍在 `feature/v0.2-reference-kb-obsidian`，尚未合并回集成分支或 `main`。
+- 当前工作在 `codex/v02-closure`，尚未合并回集成分支或 `main`。
 - 旧的 v0.1 多 worktree 仍存在，包括 core contracts、reference import、learning plan、tutoring session、notes/exercises、state/eval 与 integration worktree。
 - 集成审计结论：
   - `feature/v0.2-reference-kb-obsidian` 与 `origin/feature/v0.2-reference-kb-obsidian` 同步，`0 ahead / 0 behind`。
@@ -112,7 +130,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。苏格拉底式教学、笔记生成、组题和质量评估中的“智能层”尚未接入真实 LLM/provider；PDF/OCR 后端也仍是占位边界。这些属于 v0.3+ 的架构工作，不应混入 v0.2 收口。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，但不等同于数学正确性证明。PDF/OCR 后端、LLM judge、全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

@@ -18,6 +18,7 @@ from .artifacts import (
 )
 from .context import load_project
 from .contracts import REVIEW_PRIORITY_FILTERS
+from .exercise_bank import build_exercise_bank, read_exercise_bank
 from .exercises import (
     EXERCISE_TYPES,
     ExerciseSummary,
@@ -27,6 +28,7 @@ from .exercises import (
     record_exercise_attempt,
     suggest_exercise_feedback_with_llm,
 )
+from .exercise_validation import validate_exercise, validate_project_exercises
 from .kb import (
     CONCEPT_RELATIONSHIP_TYPES,
     OBJECT_TYPES,
@@ -695,6 +697,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     exercise_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     exercise_check_parser.set_defaults(func=_handle_exercise_check)
+    exercise_validate_parser = exercise_subparsers.add_parser(
+        "validate",
+        help="Run v0.4 schema and evidence validation for generated exercise drafts.",
+    )
+    exercise_validate_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    validation_target = exercise_validate_parser.add_mutually_exclusive_group(required=True)
+    validation_target.add_argument("--all", action="store_true", help="Validate all generated exercises.")
+    validation_target.add_argument("--exercise", help="Generated exercise id, without .md.")
+    exercise_validate_parser.set_defaults(func=_handle_exercise_validate)
+    exercise_bank_parser = exercise_subparsers.add_parser(
+        "bank",
+        help="Build or inspect the approved exercise bank.",
+    )
+    exercise_bank_subparsers = exercise_bank_parser.add_subparsers(
+        dest="exercise_bank_command",
+        required=True,
+    )
+    exercise_bank_build_parser = exercise_bank_subparsers.add_parser(
+        "build",
+        help="Build the bank manifest from approved, passing validation exercises.",
+    )
+    exercise_bank_build_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_bank_build_parser.set_defaults(func=_handle_exercise_bank_build)
+    exercise_bank_status_parser = exercise_bank_subparsers.add_parser(
+        "status",
+        help="Show the current exercise bank manifest.",
+    )
+    exercise_bank_status_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_bank_status_parser.set_defaults(func=_handle_exercise_bank_status)
     exercise_approve_parser = exercise_subparsers.add_parser(
         "approve",
         help="Approve one generated exercise draft after quality checks.",
@@ -1254,6 +1285,7 @@ def _handle_status(args: argparse.Namespace) -> int:
         context.root,
         "exercise_quality_manifest.json",
     )
+    exercise_validation = _read_exercise_validation_status(context.root)
     tutoring_quality = _read_quality_manifest_status(
         context.root,
         "tutoring_quality_manifest.json",
@@ -1264,6 +1296,7 @@ def _handle_status(args: argparse.Namespace) -> int:
         context.learning_state
     )
     approved_exercise_count = _count_approved_exercises(context.root)
+    exercise_bank_count = _count_exercise_bank_entries(context.root)
     attempted_exercise_count = len(list((context.root / "05_exercises" / "attempted").glob("*.md")))
     graded_exercise_count = len(list((context.root / "05_exercises" / "graded").glob("*.md")))
     phase = _current_project_phase(
@@ -1326,6 +1359,8 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
     print(f"Note quality check: {_quality_manifest_status_text(note_quality)}")
     print(f"Exercise quality check: {_quality_manifest_status_text(exercise_quality)}")
+    print(f"Exercise validation: {_quality_manifest_status_text(exercise_validation)}")
+    print(f"Exercise bank entries: {exercise_bank_count}")
     print(f"Tutoring quality check: {_quality_manifest_status_text(tutoring_quality)}")
     print(f"Tool verification records: {tool_verification_count}")
     print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
@@ -1832,6 +1867,61 @@ def _handle_exercise_check(args: argparse.Namespace) -> int:
     )
     print(f"Exercise quality report: {result.report_path}")
     print(f"Exercise quality manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_exercise_validate(args: argparse.Namespace) -> int:
+    if args.all:
+        result = validate_project_exercises(args.project)
+        print(
+            f"Validated {result.checked} exercise drafts: "
+            f"{result.passed} passed, {result.failed} failed"
+        )
+        print(f"Exercise validation checked: {result.checked}")
+        print(f"Exercise validation passed: {result.passed}")
+        print(f"Exercise validation failed: {result.failed}")
+        print(f"Exercise validation report: {result.report_path}")
+        print(f"Exercise validation manifest: {result.manifest_path}")
+        return 1 if result.failed else 0
+
+    result = validate_exercise(args.project, args.exercise)
+    print(f"Exercise validation {result.exercise_id}: {result.status}")
+    if result.issues:
+        print("Issues:")
+        for issue in result.issues:
+            print(f"- {issue}")
+    print(f"Exercise validation report: {result.report_path}")
+    print(f"Exercise validation artifact: {result.artifact_path}")
+    return 1 if result.status == "fail" else 0
+
+
+def _handle_exercise_bank_build(args: argparse.Namespace) -> int:
+    try:
+        result = build_exercise_bank(args.project)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Exercise bank entries: {result.total_exercises}")
+    print(f"Exercise bank manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_exercise_bank_status(args: argparse.Namespace) -> int:
+    try:
+        summaries = read_exercise_bank(args.project)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print("# Exercise Bank")
+    print("")
+    if not summaries:
+        print("- none")
+        return 0
+    for item in summaries:
+        print(
+            f"- {item.exercise_id} | {item.concept} | "
+            f"difficulty {item.difficulty} | {item.path}"
+        )
     return 0
 
 
@@ -2518,6 +2608,10 @@ def _quality_manifest_status_text(value: dict[str, object] | None) -> str:
     )
 
 
+def _read_exercise_validation_status(project_root: Path) -> dict[str, object] | None:
+    return _read_quality_manifest_status(project_root, "exercise_validation_manifest.json")
+
+
 def _read_tool_verification_quality_status(project_root: Path) -> dict[str, object] | None:
     manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
     if not manifest_path.exists():
@@ -2777,6 +2871,18 @@ def _count_approved_exercises(project_root: Path) -> int:
         if 'status: "approved"' in text and "reviewed_by_user: true" in text:
             approved += 1
     return approved
+
+
+def _count_exercise_bank_entries(project_root: Path) -> int:
+    manifest_path = project_root / "05_exercises" / "exercise_bank_manifest.json"
+    if not manifest_path.exists():
+        return 0
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return 0
+    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    return len(records) if isinstance(records, list) else 0
 
 
 def _count_scheduled_reviews(learning_state: Path) -> int:

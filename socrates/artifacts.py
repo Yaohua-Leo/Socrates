@@ -15,6 +15,7 @@ from socrates.contracts import (
     REVIEW_ALLOWED_PRIORITIES,
     yaml_scalar,
 )
+from socrates.exercise_schema import EXERCISE_SCHEMA_VERSION
 from socrates.kb import reference_kb_status
 from socrates.project import slugify_topic
 from socrates.state import (
@@ -267,6 +268,7 @@ def _exercise_text(
             {
                 "status": "draft",
                 "review_status": "needs_review",
+                "schema_version": EXERCISE_SCHEMA_VERSION,
                 "type": "generated_exercise",
                 "concept": concept,
                 "source_id": source_id,
@@ -326,6 +328,7 @@ def _targeted_review_exercise_text(
             {
                 "status": "draft",
                 "review_status": "needs_review",
+                "schema_version": EXERCISE_SCHEMA_VERSION,
                 "type": "targeted_review_exercise",
                 "concept": concept,
                 "difficulty": difficulty,
