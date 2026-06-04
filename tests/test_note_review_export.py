@@ -167,6 +167,73 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertEqual(exported_note["type"], "misconception")
             self.assertEqual(exported_note["concept"], "normal_equals_central")
 
+    def test_note_draft_misconceptions_cli_does_not_overwrite_existing_drafts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        )
+                    ],
+                ),
+            )
+            first_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "draft-misconceptions",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            draft = project / "04_atomic_notes" / "drafts" / "normal_equals_central.md"
+            draft.write_text(
+                draft.read_text(encoding="utf-8").rstrip()
+                + "\n\nReviewer note: keep this manual edit.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            second_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "draft-misconceptions",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(first_result.returncode, 0, first_result.stderr)
+            self.assertIn("Drafted 1 misconception note", first_result.stdout)
+            self.assertEqual(second_result.returncode, 0, second_result.stderr)
+            self.assertIn("Drafted 0 misconception notes", second_result.stdout)
+            self.assertIn(
+                "Reviewer note: keep this manual edit.",
+                draft.read_text(encoding="utf-8"),
+            )
+
     def test_review_atomic_note_rejects_failed_quality_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

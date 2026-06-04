@@ -83,7 +83,10 @@ def generate_misconception_note_drafts(
 
     context = load_project(project_path)
     drafts: list[AtomicNoteDraft] = []
+    covered_note_ids = _covered_atomic_note_ids(context.root)
     for misconception in list_misconceptions(context, status=status):
+        if slugify_topic(misconception.misconception_id) in covered_note_ids:
+            continue
         drafts.append(
             generate_atomic_note_draft(
                 context.root,
@@ -426,6 +429,22 @@ def _misconception_note_body(misconception: MisconceptionSummary) -> str:
 def _or_placeholder(value: str, placeholder: str) -> str:
     text = value.strip()
     return text if text else placeholder
+
+
+def _covered_atomic_note_ids(project_root: Path) -> set[str]:
+    notes_root = project_root / "04_atomic_notes"
+    if not notes_root.exists():
+        return set()
+    covered: set[str] = set()
+    drafts_dir = notes_root / "drafts"
+    if drafts_dir.exists():
+        covered.update(path.stem for path in drafts_dir.glob("*.md"))
+    for folder in notes_root.iterdir():
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in folder.glob("*.md"):
+            covered.add(note_path.stem)
+    return covered
 
 
 def _safe_positive_int(value: object) -> int:
