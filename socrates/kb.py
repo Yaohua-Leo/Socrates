@@ -564,6 +564,9 @@ def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
         "source": item["source"],
         "dependencies": item.get("dependencies", []),
     }
+    relationships = item.get("relationships", [])
+    if isinstance(relationships, list) and relationships:
+        metadata["relationships"] = relationships
     metadata.update(_chunk_provenance_metadata(item))
     if item.get("number"):
         metadata["number"] = item["number"]

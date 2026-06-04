@@ -249,6 +249,26 @@ class ReferenceKbTests(unittest.TestCase):
             self.assertIn("object_id", chunk["metadata"])
             self.assertEqual(chunk["metadata"]["object_id"], "normal_subgroup")
 
+    def test_build_reference_kb_preserves_explicit_relationships_in_chunk_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "examples.curated.md"
+            curated.write_text(
+                "### Example: Alternating Group In S3\n"
+                "A3 is closed under conjugation inside S3.\n"
+                "Example of: normal subgroup\n",
+                encoding="utf-8",
+            )
+
+            result = build_reference_kb(project)
+
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            metadata = index["chunks"][0]["metadata"]
+            self.assertEqual(
+                metadata["relationships"],
+                [{"relationship": "example_of", "target": "normal subgroup"}],
+            )
+
     def test_search_reference_kb_matches_source_provenance_metadata(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
