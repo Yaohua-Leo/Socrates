@@ -1743,6 +1743,11 @@ def _sessions_text(sessions: list[TutoringSessionSummary]) -> str:
             lines.append(f"  - missing: {', '.join(session.missing_artifacts)}")
         else:
             lines.append("  - missing: none")
+        if session.quality_status:
+            quality_line = f"  - quality: {session.quality_status}"
+            if session.quality_score is not None:
+                quality_line += f", score {session.quality_score}/100"
+            lines.append(quality_line)
     return "\n".join(lines) + "\n"
 
 

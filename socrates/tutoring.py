@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 
 from socrates.context import load_project, write_text
@@ -24,6 +25,8 @@ class TutoringSessionSummary:
     status: str
     path: str
     missing_artifacts: tuple[str, ...]
+    quality_status: str | None = None
+    quality_score: int | None = None
 
 
 @dataclass(frozen=True)
@@ -88,6 +91,7 @@ def list_tutoring_sessions(
 
     context = load_project(project_path)
     summaries: list[TutoringSessionSummary] = []
+    quality_by_session = _tutoring_quality_by_session(context.root)
     if not context.sessions_dir.exists():
         return summaries
     for session_dir in sorted(context.sessions_dir.iterdir(), key=lambda path: path.name):
@@ -95,17 +99,46 @@ def list_tutoring_sessions(
             continue
         missing = tuple(name for name in SESSION_ARTIFACTS if not (session_dir / name).exists())
         session_status = "incomplete" if missing else "complete"
+        quality_status, quality_score = quality_by_session.get(session_dir.name, (None, None))
         summaries.append(
             TutoringSessionSummary(
                 session_id=session_dir.name,
                 status=session_status,
                 path=session_dir.relative_to(context.root).as_posix(),
                 missing_artifacts=missing,
+                quality_status=quality_status,
+                quality_score=quality_score,
             )
         )
     if status != "all":
         summaries = [summary for summary in summaries if summary.status == status]
     return summaries
+
+
+def _tutoring_quality_by_session(project_root: Path) -> dict[str, tuple[str | None, int | None]]:
+    manifest_path = project_root / "08_evals" / "tutoring_quality_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    sessions = manifest.get("sessions", []) if isinstance(manifest, dict) else []
+    if not isinstance(sessions, list):
+        return {}
+
+    quality_by_session: dict[str, tuple[str | None, int | None]] = {}
+    for item in sessions:
+        if not isinstance(item, dict):
+            continue
+        session_id = str(item.get("session_id", "")).strip()
+        quality_status = str(item.get("status", "")).strip()
+        if not session_id or not quality_status:
+            continue
+        score_value = item.get("total_score")
+        quality_score = score_value if type(score_value) is int and 0 <= score_value <= 100 else None
+        quality_by_session[session_id] = (quality_status, quality_score)
+    return quality_by_session
 
 
 def _read_script(script_path: Path) -> _Script:

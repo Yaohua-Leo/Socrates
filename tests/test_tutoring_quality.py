@@ -160,6 +160,53 @@ class TutoringQualityTests(unittest.TestCase):
             self.assertEqual(session["total_score"], 100)
             self.assertEqual(session["artifacts"]["transcript.md"]["exists"], True)
 
+    def test_session_list_cli_shows_checked_quality_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            script = Path(temp_dir) / "session.script"
+            script.write_text(
+                "topic: Normal Subgroup\n"
+                "goal: Distinguish normality from commutativity.\n"
+                "question: What must be checked for normality?\n"
+                "hint: Use conjugation invariance.\n"
+                "hint: Compare gNg^-1=N with elementwise commutativity.\n"
+                "attempt: I should check gNg^-1 = N.\n"
+                "next: Try proving kernels are normal.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            run_scripted_tutoring_session(project, script, session_id="session_0001")
+
+            check = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "session",
+                    "check",
+                    "--project",
+                    str(project),
+                    "--session-id",
+                    "session_0001",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            sessions = subprocess.run(
+                [sys.executable, "-m", "socrates", "session", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(check.returncode, 0, check.stderr)
+            self.assertEqual(sessions.returncode, 0, sessions.stderr)
+            self.assertIn("- session_0001 | complete | 03_sessions/session_0001", sessions.stdout)
+            self.assertIn("  - quality: pass, score 100/100", sessions.stdout)
+
     def test_session_check_manifest_preserves_multiple_checked_sessions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
