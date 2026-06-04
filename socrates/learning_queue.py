@@ -226,18 +226,20 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
         manifest = read_json(manifest_path)
     except JSONDecodeError:
         return [
-            QueueItem(
-                item_id="tool_verification_quality_manifest",
-                path=manifest_path.relative_to(project_root).as_posix(),
-                detail=(
-                    "quality: fail; "
-                    "issues: invalid tool-verification quality manifest JSON; "
-                    "rerun with: socrates tool check --project <project>"
-                ),
+            _tool_quality_manifest_item(
+                project_root,
+                manifest_path,
+                issue="invalid tool-verification quality manifest JSON",
             )
         ]
     if not isinstance(manifest, dict):
-        return []
+        return [
+            _tool_quality_manifest_item(
+                project_root,
+                manifest_path,
+                issue="invalid tool-verification quality manifest schema",
+            )
+        ]
     records = manifest.get("records", [])
     if not isinstance(records, list):
         return []
@@ -281,6 +283,23 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
             )
         )
     return items
+
+
+def _tool_quality_manifest_item(
+    project_root: Path,
+    manifest_path: Path,
+    *,
+    issue: str,
+) -> QueueItem:
+    return QueueItem(
+        item_id="tool_verification_quality_manifest",
+        path=manifest_path.relative_to(project_root).as_posix(),
+        detail=(
+            "quality: fail; "
+            f"issues: {issue}; "
+            "rerun with: socrates tool check --project <project>"
+        ),
+    )
 
 
 def _tool_verification_issue_items(value: object) -> list[str]:
