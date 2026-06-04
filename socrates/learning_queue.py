@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from json import JSONDecodeError
 from pathlib import Path
 
 from .context import load_project, read_json
@@ -221,7 +222,20 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
     manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
     if not manifest_path.exists():
         return []
-    manifest = read_json(manifest_path)
+    try:
+        manifest = read_json(manifest_path)
+    except JSONDecodeError:
+        return [
+            QueueItem(
+                item_id="tool_verification_quality_manifest",
+                path=manifest_path.relative_to(project_root).as_posix(),
+                detail=(
+                    "quality: fail; "
+                    "issues: invalid tool-verification quality manifest JSON; "
+                    "rerun with: socrates tool check --project <project>"
+                ),
+            )
+        ]
     if not isinstance(manifest, dict):
         return []
     records = manifest.get("records", [])
