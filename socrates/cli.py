@@ -1202,6 +1202,7 @@ def _graph_counts(graph_path: Path) -> tuple[int, int]:
 
 
 def _handle_kb_list(args: argparse.Namespace) -> int:
+    _warn_if_reference_kb_stale(args.project)
     objects = list_reference_kb_objects(
         args.project,
         object_type=args.type,
@@ -1225,6 +1226,7 @@ def _reference_kb_objects_text(objects: list[dict[str, object]]) -> str:
 
 
 def _handle_kb_search(args: argparse.Namespace) -> int:
+    _warn_if_reference_kb_stale(args.project)
     matches = search_reference_kb(args.project, args.query, limit=args.limit)
     if not matches:
         print("No reference matches")
@@ -1239,6 +1241,7 @@ def _handle_kb_search(args: argparse.Namespace) -> int:
 
 
 def _handle_kb_counterexamples(args: argparse.Namespace) -> int:
+    _warn_if_reference_kb_stale(args.project)
     matches = find_counterexamples(args.project, args.concept, limit=args.limit)
     if not matches:
         print("No counterexamples found")
@@ -1262,6 +1265,17 @@ def _handle_kb_check(args: argparse.Namespace) -> int:
     print(f"Ingestion quality report: {result.report_path}")
     print(f"Ingestion quality manifest: {result.manifest_path}")
     return 0
+
+
+def _warn_if_reference_kb_stale(project_path: Path | str) -> None:
+    kb_status = reference_kb_status(project_path)
+    if kb_status.status != "stale":
+        return
+    print(
+        "warning: Reference KB status is stale; "
+        f"run socrates kb build --project {project_path} to rebuild.",
+        file=sys.stderr,
+    )
 
 
 def _handle_note_list(args: argparse.Namespace) -> int:

@@ -788,6 +788,23 @@ class ReferenceImportTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            search_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "search",
+                    "--project",
+                    str(project),
+                    "--query",
+                    "Let G",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(apply_result.returncode, 0, apply_result.stderr)
             self.assertIn(
@@ -818,6 +835,9 @@ class ReferenceImportTests(unittest.TestCase):
             )
             self.assertEqual(status_result.returncode, 0, status_result.stderr)
             self.assertIn("Reference KB status: stale", status_result.stdout)
+            self.assertEqual(search_result.returncode, 0, search_result.stderr)
+            self.assertIn("warning: Reference KB status is stale", search_result.stderr)
+            self.assertIn("socrates kb build --project", search_result.stderr)
 
     def test_patches_apply_rejects_unaccepted_patch_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
