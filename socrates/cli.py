@@ -55,7 +55,11 @@ from .obsidian import (
     obsidian_backlink_count as count_obsidian_backlinks,
     obsidian_export_count as count_obsidian_exports,
 )
-from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
+from .planning import (
+    adjust_short_term_plan_from_review_schedule,
+    create_learning_plan,
+    create_next_session_plan,
+)
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
 from .project_index import (
@@ -811,6 +815,18 @@ def build_parser() -> argparse.ArgumentParser:
     session_score_parser.add_argument("--project", required=True, help="Socrates project directory.")
     session_score_parser.add_argument("--session-id", required=True, help="Session identifier.")
     session_score_parser.set_defaults(func=_handle_session_score)
+    session_plan_next_parser = session_subparsers.add_parser(
+        "plan-next",
+        help="Create a deterministic handoff plan for the next tutoring session.",
+    )
+    session_plan_next_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_plan_next_parser.add_argument("--session-id", required=True, help="Next session identifier.")
+    session_plan_next_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used as the due-review cutoff; defaults to today.",
+    )
+    session_plan_next_parser.set_defaults(func=_handle_session_plan_next)
     session_suggest_parser = session_subparsers.add_parser(
         "suggest-next",
         help="Ask the configured LLM for a draft next Socratic question.",
@@ -1320,6 +1336,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     tool_verification_quality = _read_tool_verification_quality_status(context.root)
     benchmark_status = _read_benchmark_status(context.root)
     session_score_status = _read_session_score_status(context.root)
+    next_session_plan_status = _read_next_session_plan_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
     )
@@ -1395,6 +1412,12 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Session score: {_session_score_status_text(session_score_status)}")
     print(f"Session score gates: {_session_score_gates_text(session_score_status)}")
     print(f"Session score failed gates: {_session_score_failed_gates_text(session_score_status)}")
+    print(f"Next session plan: {_next_session_plan_text(next_session_plan_status)}")
+    print(
+        "Next session due reviews: "
+        f"{_next_session_due_reviews_text(next_session_plan_status)}"
+    )
+    print(f"Next session handoff: {_next_session_handoff_text(next_session_plan_status)}")
     if benchmark_status is None:
         print("Benchmark score: none")
         print("Benchmark gates: none")
@@ -2037,6 +2060,27 @@ def _handle_session_score(args: argparse.Namespace) -> int:
     print(f"Session score gates: {result.passed_gates}/{result.total_gates}")
     print(f"Session score report: {result.report_path}")
     print(f"Session score manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_plan_next(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else None
+        result = create_next_session_plan(
+            args.project,
+            session_id=args.session_id,
+            as_of=as_of,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Created next-session plan {result.session_id}: {result.plan_path}")
+    print(f"Due reviews: {result.due_reviews}")
+    if result.previous_session_id:
+        print(f"Previous session: {result.previous_session_id}")
+    else:
+        print("Previous session: none")
+    print(f"Next-session manifest: {result.manifest_path}")
     return 0
 
 
@@ -2744,6 +2788,32 @@ def _read_session_score_status(project_root: Path) -> dict[str, object] | None:
     }
 
 
+def _read_next_session_plan_status(project_root: Path) -> dict[str, object] | None:
+    manifest_path = project_root / "02_learning_plan" / "next_session_plan_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    if manifest.get("quality_boundary") != "deterministic_handoff_plan":
+        return {"status": "invalid"}
+    session_id = manifest.get("session_id")
+    status = manifest.get("status")
+    due_reviews = manifest.get("due_reviews")
+    if not isinstance(session_id, str) or not isinstance(status, str):
+        return {"status": "invalid"}
+    if not isinstance(due_reviews, int) or due_reviews < 0:
+        return {"status": "invalid"}
+    return {
+        "status": status,
+        "session_id": session_id,
+        "due_reviews": due_reviews,
+    }
+
+
 def _session_score_status_text(value: dict[str, object] | None) -> str:
     if value is None:
         return "not run"
@@ -2777,6 +2847,28 @@ def _session_score_failed_gates_text(value: dict[str, object] | None) -> str:
     ):
         return "unknown"
     return "none"
+
+
+def _next_session_plan_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not created"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return str(value["session_id"])
+
+
+def _next_session_due_reviews_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return str(value["due_reviews"])
+
+
+def _next_session_handoff_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    return str(value.get("status", "invalid"))
 
 
 def _failed_benchmark_gates(value: object) -> list[str]:

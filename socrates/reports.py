@@ -95,6 +95,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
             benchmark_snapshot=_read_benchmark_snapshot(context.root),
             session_score_snapshot=_read_session_score_snapshot(context.root),
+            next_session_handoff_snapshot=_read_next_session_handoff_snapshot(context.root),
             state=state,
         ),
     )
@@ -216,6 +217,7 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "05_exercises" / "attempted",
             project_root / "05_exercises" / "graded",
             project_root / "06_kb" / "chunks" / "reference_index.json",
+            project_root / "02_learning_plan" / "next_session_plan_manifest.json",
             project_root / "07_exports" / "obsidian",
             project_root / "08_evals" / "benchmark_manifest.json",
             project_root / "08_evals" / "session_score_manifest.json",
@@ -367,6 +369,7 @@ def _project_summary_text(
     tool_verification_quality: dict[str, object],
     benchmark_snapshot: dict[str, object],
     session_score_snapshot: dict[str, object],
+    next_session_handoff_snapshot: dict[str, object],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -403,6 +406,10 @@ def _project_summary_text(
         "## Session Score Snapshot",
         "",
         *_session_score_snapshot_lines(session_score_snapshot),
+        "",
+        "## Next Session Handoff Snapshot",
+        "",
+        *_next_session_handoff_snapshot_lines(next_session_handoff_snapshot),
         "",
         "## Artifact Quality Snapshot",
         "",
@@ -601,6 +608,40 @@ def _read_session_score_snapshot(project_root: Path) -> dict[str, object]:
     }
 
 
+def _read_next_session_handoff_snapshot(project_root: Path) -> dict[str, object]:
+    manifest_path = project_root / "02_learning_plan" / "next_session_plan_manifest.json"
+    if not manifest_path.exists():
+        return {"status": "not_run"}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    if manifest.get("quality_boundary") != "deterministic_handoff_plan":
+        return {"status": "invalid"}
+    session_id = manifest.get("session_id")
+    status = manifest.get("status")
+    due_reviews = manifest.get("due_reviews")
+    previous_session_id = manifest.get("previous_session_id")
+    invalid_review_items = manifest.get("invalid_review_items")
+    if not isinstance(session_id, str) or not isinstance(status, str):
+        return {"status": "invalid"}
+    if not isinstance(due_reviews, int) or due_reviews < 0:
+        return {"status": "invalid"}
+    if previous_session_id is not None and not isinstance(previous_session_id, str):
+        return {"status": "invalid"}
+    if not isinstance(invalid_review_items, int) or invalid_review_items < 0:
+        return {"status": "invalid"}
+    return {
+        "status": status,
+        "session_id": session_id,
+        "due_reviews": due_reviews,
+        "previous_session_id": previous_session_id,
+        "invalid_review_items": invalid_review_items,
+    }
+
+
 def _read_artifact_quality_snapshots(project_root: Path) -> list[dict[str, object]]:
     specs = (
         ("Ingestion", "ingestion_quality_manifest.json"),
@@ -796,6 +837,23 @@ def _session_score_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
         f"- Gates passed: {snapshot['passed_gates']}/{snapshot['total_gates']}",
         f"- Failed gates: {failed_text}",
         "- Manifest: 08_evals/session_score_manifest.json",
+    ]
+
+
+def _next_session_handoff_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
+    status = snapshot.get("status")
+    if status == "not_run":
+        return ["- not run"]
+    if status == "invalid":
+        return ["- invalid next-session handoff manifest"]
+    previous_session_id = snapshot.get("previous_session_id") or "none"
+    return [
+        f"- Session: {snapshot['session_id']}",
+        f"- Status: {snapshot['status']}",
+        f"- Due reviews: {snapshot['due_reviews']}",
+        f"- Previous session: {previous_session_id}",
+        f"- Invalid review items: {snapshot['invalid_review_items']}",
+        "- Manifest: 02_learning_plan/next_session_plan_manifest.json",
     ]
 
 

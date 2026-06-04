@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
 from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
+from socrates.planning import create_next_session_plan
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
     LearningStatePatch,
@@ -167,6 +169,66 @@ class ReportTests(unittest.TestCase):
                     },
                     indent=2,
                 ),
+                encoding="utf-8",
+                newline="\n",
+            )
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- project-summary | stale | Project Summary | "
+                "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("weekly_report.md", stale_reports.stdout)
+
+    def test_report_list_marks_project_summary_stale_after_handoff_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            create_next_session_plan(
+                project,
+                session_id="session_0002",
+                as_of=date(2026, 6, 4),
+            )
+
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            manifest_path = project / "02_learning_plan" / "next_session_plan_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["due_reviews"] = 2
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2) + "\n",
                 encoding="utf-8",
                 newline="\n",
             )
@@ -1032,6 +1094,48 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Gates passed: 5/5", report_text)
             self.assertIn("- Failed gates: none", report_text)
             self.assertIn("- Manifest: 08_evals/session_score_manifest.json", report_text)
+
+    def test_project_summary_includes_next_session_handoff_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            context = load_project(project)
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            create_next_session_plan(
+                project,
+                session_id="session_0002",
+                as_of=date(2026, 6, 4),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Next Session Handoff Snapshot", report_text)
+            self.assertIn("- Session: session_0002", report_text)
+            self.assertIn("- Status: ready", report_text)
+            self.assertIn("- Due reviews: 1", report_text)
+            self.assertIn("- Previous session: session_0001", report_text)
+            self.assertIn(
+                "- Manifest: 02_learning_plan/next_session_plan_manifest.json",
+                report_text,
+            )
 
     def test_project_summary_marks_stale_reference_kb_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

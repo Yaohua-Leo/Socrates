@@ -7,8 +7,9 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.6-alpha external Markdown conversion
-  handoff for PDF/OCR workflows plus deterministic teaching-quality scoring.
+- Current implementation baseline: v0.7-alpha deterministic next-session
+  handoff planning, external Markdown conversion handoff for PDF/OCR workflows,
+  and deterministic teaching-quality scoring.
 
 ## Plans
 
@@ -20,3 +21,5 @@ from the source planning conversation.
   v0.5 plan for session score reports and teaching-quality evaluation.
 - `superpowers/plans/2026-06-04-v06-external-conversion-handoff.md`: executable
   v0.6 plan for attaching externally converted Markdown to imported sources.
+- `superpowers/plans/2026-06-04-v07-next-session-handoff-plan.md`: executable
+  v0.7 plan for deterministic next-session handoff planning.

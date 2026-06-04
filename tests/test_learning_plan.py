@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import date
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -10,7 +12,7 @@ import unittest
 from socrates.context import load_project
 from socrates.contracts import SourceRecord
 from socrates.kb import build_reference_kb
-from socrates.planning import create_learning_plan
+from socrates.planning import create_learning_plan, create_next_session_plan
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
     LearningStatePatch,
@@ -18,6 +20,7 @@ from socrates.state import (
     build_review_schedule,
     update_learning_state,
 )
+from socrates.tutoring import run_scripted_tutoring_session
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -393,6 +396,165 @@ class LearningPlanTests(unittest.TestCase):
                 short_term_path.read_text(encoding="utf-8"),
                 original_short_term_plan,
             )
+
+    def test_create_next_session_plan_writes_stateful_handoff(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=root / "normal_subgroup",
+                    goal="Understand normality before quotient groups.",
+                )
+            )
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N of G is normal when it is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            script = root / "session.script"
+            script.write_text(
+                "topic: Normal Subgroup\n"
+                "question: What does conjugation invariance require?\n"
+                "hint: Compare normality with centrality.\n"
+                "attempt: Normal means central.\n"
+                "misconception: normal_equals_central\n"
+                "next: Rebuild normality from gNg^-1=N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            run_scripted_tutoring_session(project, script, session_id="session_0001")
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={"normal_subgroup": 0.42},
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session_0001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = create_next_session_plan(
+                project,
+                session_id="session_0002",
+                as_of=date(2026, 6, 4),
+            )
+
+            self.assertEqual(result.session_id, "session_0002")
+            self.assertEqual(result.due_reviews, 1)
+            self.assertEqual(result.previous_session_id, "session_0001")
+            self.assertEqual(
+                result.plan_path,
+                project / "02_learning_plan" / "session_0002_plan.md",
+            )
+            self.assertEqual(
+                result.manifest_path,
+                project / "02_learning_plan" / "next_session_plan_manifest.json",
+            )
+            plan_text = result.plan_path.read_text(encoding="utf-8")
+            self.assertIn("## Previous Session Handoff", plan_text)
+            self.assertIn("## Due Reviews", plan_text)
+            self.assertIn("normal_subgroup", plan_text)
+            self.assertIn("repair: Compare gNg^-1=N with gn=ng.", plan_text)
+            self.assertIn("Definition 3.1: Normal Subgroup", plan_text)
+            self.assertIn("## Boundary", plan_text)
+            manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["session_id"], "session_0002")
+            self.assertEqual(manifest["status"], "ready")
+            self.assertEqual(manifest["quality_boundary"], "deterministic_handoff_plan")
+            self.assertEqual(manifest["due_reviews"], 1)
+            self.assertEqual(manifest["previous_session_id"], "session_0001")
+            self.assertEqual(manifest["action_queue"]["scheduled_reviews"], 1)
+
+    def test_create_next_session_plan_rejects_corrupt_learning_state_without_writing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            plan_path = project / "02_learning_plan" / "session_0002_plan.md"
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "invalid learning_state.json; repair the JSON before creating next-session plans",
+            ):
+                create_next_session_plan(project, session_id="session_0002")
+
+            self.assertFalse(plan_path.exists())
+
+    def test_session_plan_next_cli_writes_handoff_plan_and_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=Path(temp_dir) / "normal_subgroup",
+                )
+            )
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.42}),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "session",
+                    "plan-next",
+                    "--project",
+                    str(project),
+                    "--session-id",
+                    "session_0002",
+                    "--as-of",
+                    "2026-06-04",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Created next-session plan session_0002", result.stdout)
+            self.assertIn("Next-session manifest:", result.stdout)
+            self.assertTrue((project / "02_learning_plan" / "session_0002_plan.md").exists())
+            self.assertTrue(
+                (project / "02_learning_plan" / "next_session_plan_manifest.json").exists()
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Next session plan: session_0002", status.stdout)
+            self.assertIn("Next session due reviews: 1", status.stdout)
+            self.assertIn("Next session handoff: ready", status.stdout)
 
 
 if __name__ == "__main__":

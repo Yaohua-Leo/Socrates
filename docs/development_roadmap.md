@@ -1491,6 +1491,34 @@ record conversion provenance
 - 转换产物记录 raw source path、external conversion source 和 `external_markdown_handoff` policy。
 - 这不是内置 OCR/PDF backend；外部转换结果仍需 curated draft review 与 Reference KB provenance gate。
 
+v0.7：下一节课交接计划
+
+目标：
+
+把长期学习状态、复习计划、上一次 session 产物、action queue 与 Reference KB context 汇总成下一节课的确定性 handoff plan。
+
+必须完成：
+
+next-session handoff plan
+
+previous session summary / next_actions ingestion
+
+due review selection
+
+action queue snapshot
+
+Reference KB context snapshot
+
+handoff manifest
+
+当前状态（2026-06-04）：
+
+- `session plan-next` 已能生成 `02_learning_plan/<session_id>_plan.md`。
+- `02_learning_plan/next_session_plan_manifest.json` 记录 session id、due review 数量、previous session、Reference KB 状态、action queue 计数与 deterministic handoff boundary。
+- `status` 会显示 next session plan、due reviews 与 handoff 状态。
+- Project summary report 会包含 Next Session Handoff Snapshot，并在 handoff manifest 变化后标记 stale。
+- 这不是 autonomous tutoring、LLM judge、自动评分或 learning-state truth mutation；它只是下一节课前的确定性计划交接。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
