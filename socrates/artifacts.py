@@ -11,6 +11,7 @@ import re
 from socrates.context import load_project, write_text
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft, yaml_scalar
 from socrates.project import slugify_topic
+from socrates.state import MisconceptionSummary, list_misconceptions
 
 
 def generate_atomic_note_draft(
@@ -71,6 +72,30 @@ def generate_atomic_note_draft(
         concept=concept,
         path=_as_posix(relative_path),
     )
+
+
+def generate_misconception_note_drafts(
+    project_path: Path | str,
+    *,
+    status: str = "active",
+) -> list[AtomicNoteDraft]:
+    """Write misconception-note drafts from the persisted learning state."""
+
+    context = load_project(project_path)
+    drafts: list[AtomicNoteDraft] = []
+    for misconception in list_misconceptions(context, status=status):
+        drafts.append(
+            generate_atomic_note_draft(
+                context.root,
+                concept=misconception.misconception_id,
+                note_type="misconception",
+                body=_misconception_note_body(misconception),
+                source_id="learning_state",
+                source_title="Socrates learning state",
+                source_location=f"misconception:{misconception.misconception_id}",
+            )
+        )
+    return drafts
 
 
 def generate_exercise_drafts(
@@ -338,6 +363,69 @@ def _targeted_review_training_point(concept: str, has_repair_context: bool) -> s
     return (
         f"Repair the scheduled weakness in {concept} by contrasting the definition with a borderline case."
     )
+
+
+def _misconception_note_body(misconception: MisconceptionSummary) -> str:
+    concept_title = _concept_title(misconception.concept)
+    lines = [
+        f"This note records a misconception about [[{concept_title}]].",
+        "",
+        "## Misconception Pattern",
+        "",
+        f"- Misconception id: `{misconception.misconception_id}`",
+        f"- Status: {misconception.status}",
+        f"- Occurrences: {misconception.count}",
+    ]
+    if misconception.last_session_id:
+        lines.append(f"- Last session: {misconception.last_session_id}")
+    lines.extend(
+        [
+            "",
+            "## Diagnosis",
+            "",
+            _or_placeholder(
+                misconception.analysis,
+                "Add the user-specific analysis before approving this note.",
+            ),
+            "",
+            "## Repair Plan",
+            "",
+            "- "
+            + _or_placeholder(
+                misconception.repair_suggestion,
+                f"Re-state the exact definition of [[{concept_title}]] and compare it with the mistaken pattern.",
+            ),
+        ]
+    )
+    if misconception.follow_up_exercises:
+        lines.extend(["", "## Follow-Up Exercises", ""])
+        lines.extend(f"- {item}" for item in misconception.follow_up_exercises)
+    lines.extend(
+        [
+            "",
+            "## Key Examples",
+            "",
+            f"- A correct use of [[{concept_title}]] where every defining condition is checked.",
+            "",
+            "## Non-Examples",
+            "",
+            f"- A case where `{misconception.misconception_id}` sounds plausible but fails the definition.",
+            "",
+            "## Common Mistakes",
+            "",
+            f"- Replacing [[{concept_title}]] with the shortcut `{misconception.misconception_id}`.",
+            "",
+            "## Review Questions",
+            "",
+            f"- How does the definition of [[{concept_title}]] block this misconception?",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def _or_placeholder(value: str, placeholder: str) -> str:
+    text = value.strip()
+    return text if text else placeholder
 
 
 def _safe_positive_int(value: object) -> int:

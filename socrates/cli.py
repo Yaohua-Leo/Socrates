@@ -12,6 +12,7 @@ from typing import Sequence
 from .artifacts import (
     generate_atomic_note_draft,
     generate_exercise_drafts,
+    generate_misconception_note_drafts,
     generate_targeted_review_exercise_drafts,
 )
 from .context import load_project
@@ -314,6 +315,22 @@ def build_parser() -> argparse.ArgumentParser:
     note_review_parser.add_argument("--project", required=True, help="Socrates project directory.")
     note_review_parser.add_argument("--note", required=True, help="Draft note id, without .md.")
     note_review_parser.set_defaults(func=_handle_note_review)
+    note_misconception_parser = note_subparsers.add_parser(
+        "draft-misconceptions",
+        help="Draft misconception atomic notes from learning state.",
+    )
+    note_misconception_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    note_misconception_parser.add_argument(
+        "--status",
+        choices=("active", "resolved", "all"),
+        default="active",
+        help="Misconception status to draft; defaults to active.",
+    )
+    note_misconception_parser.set_defaults(func=_handle_note_draft_misconceptions)
     note_export_parser = note_subparsers.add_parser(
         "export-obsidian",
         help="Export reviewed notes to the Obsidian directory.",
@@ -1121,6 +1138,13 @@ def _atomic_notes_text(notes: list[AtomicNoteSummary]) -> str:
 def _handle_note_review(args: argparse.Namespace) -> int:
     reviewed = review_atomic_note(args.project, args.note)
     print(f"Reviewed note {args.note}: {reviewed}")
+    return 0
+
+
+def _handle_note_draft_misconceptions(args: argparse.Namespace) -> int:
+    drafts = generate_misconception_note_drafts(args.project, status=args.status)
+    noun = "note" if len(drafts) == 1 else "notes"
+    print(f"Drafted {len(drafts)} misconception {noun}")
     return 0
 
 

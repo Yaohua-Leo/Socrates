@@ -8,9 +8,11 @@ import tempfile
 import unittest
 
 from socrates.artifacts import generate_atomic_note_draft
+from socrates.context import load_project
 from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
+from socrates.state import LearningStatePatch, MistakeRecord, update_learning_state
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -70,6 +72,100 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Pending draft notes: 0", result.stdout)
             self.assertIn("Reviewed notes: 1", result.stdout)
+
+    def test_note_draft_misconceptions_cli_creates_reviewable_obsidian_note(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                            follow_up_exercises=["Find a non-central normal subgroup."],
+                        )
+                    ],
+                ),
+            )
+
+            draft_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "draft-misconceptions",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(draft_result.returncode, 0, draft_result.stderr)
+            self.assertIn("Drafted 1 misconception note", draft_result.stdout)
+            draft = project / "04_atomic_notes" / "drafts" / "normal_equals_central.md"
+            self.assertTrue(draft.exists())
+            draft_text = draft.read_text(encoding="utf-8")
+            self.assertIn('type: "misconception"', draft_text)
+            self.assertIn('source_id: "learning_state"', draft_text)
+            self.assertIn("[[Normal Subgroup]]", draft_text)
+            self.assertIn("Compare gNg^-1 = N with gn = ng.", draft_text)
+
+            review_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "review",
+                    "--project",
+                    str(project),
+                    "--note",
+                    "normal_equals_central",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            export_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "export-obsidian",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            reviewed = project / "04_atomic_notes" / "misconceptions" / "normal_equals_central.md"
+            self.assertEqual(review_result.returncode, 0, review_result.stderr)
+            self.assertTrue(reviewed.exists())
+            self.assertEqual(export_result.returncode, 0, export_result.stderr)
+            manifest = json.loads(
+                (project / "07_exports" / "obsidian" / "export_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            exported_note = manifest["exported_notes"][0]
+            self.assertEqual(exported_note["note_id"], "normal_equals_central")
+            self.assertEqual(exported_note["type"], "misconception")
+            self.assertEqual(exported_note["concept"], "normal_equals_central")
 
     def test_review_atomic_note_rejects_failed_quality_gate(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
