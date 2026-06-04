@@ -215,6 +215,23 @@ class ReferenceImportTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            pdf_sources = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "sources",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--type",
+                    "pdf",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(all_sources.returncode, 0, all_sources.stderr)
             curated_line = (
@@ -251,6 +268,10 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertEqual(lecture_sources.returncode, 0, lecture_sources.stderr)
             self.assertIn(curated_line, lecture_sources.stdout)
             self.assertNotIn("abstract_algebra", lecture_sources.stdout)
+
+            self.assertEqual(pdf_sources.returncode, 0, pdf_sources.stderr)
+            self.assertIn(pending_line, pdf_sources.stdout)
+            self.assertNotIn("normal_subgroups_notes", pdf_sources.stdout)
 
     def test_curate_markdown_reference_creates_curated_draft_and_updates_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

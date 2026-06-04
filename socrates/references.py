@@ -91,7 +91,11 @@ def import_reference(
 
 
 def list_source_registry(
-    project_path: Path | str, *, status: str = "all", role: str = "all"
+    project_path: Path | str,
+    *,
+    status: str = "all",
+    role: str = "all",
+    source_type: str = "all",
 ) -> list[SourceSummary]:
     """List imported sources from ``source_registry.yaml``."""
 
@@ -102,6 +106,8 @@ def list_source_registry(
         summaries = [summary for summary in summaries if summary.status == status]
     if role != "all":
         summaries = [summary for summary in summaries if summary.role == role]
+    if source_type != "all":
+        summaries = [summary for summary in summaries if summary.type == source_type]
     return summaries
 
 

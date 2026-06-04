@@ -192,6 +192,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="Filter by exact source role; defaults to all.",
     )
+    sources_list_parser.add_argument(
+        "--type",
+        default="all",
+        help="Filter by exact source type; defaults to all.",
+    )
     sources_list_parser.set_defaults(func=_handle_sources_list)
 
     curate_parser = subparsers.add_parser(
@@ -928,7 +933,12 @@ def _handle_import(args: argparse.Namespace) -> int:
 
 
 def _handle_sources_list(args: argparse.Namespace) -> int:
-    sources = list_source_registry(args.project, status=args.status, role=args.role)
+    sources = list_source_registry(
+        args.project,
+        status=args.status,
+        role=args.role,
+        source_type=args.type,
+    )
     print(_source_registry_text(sources), end="")
     return 0
 
