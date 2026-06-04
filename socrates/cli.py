@@ -105,7 +105,7 @@ from .reports import (
     list_learning_reports,
     summarize_report_history,
 )
-from .resume import format_project_resume
+from .resume import build_project_resume_payload, format_project_resume
 from .session_score import score_teaching_session
 from .state import (
     EvalReportUpdate,
@@ -384,6 +384,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show a compact read-only resume card for a returning learner.",
     )
     resume_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    resume_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the resume card as deterministic JSON.",
+    )
     resume_parser.set_defaults(func=_handle_resume)
 
     brief_parser = subparsers.add_parser(
@@ -1575,6 +1580,15 @@ def _handle_dashboard(args: argparse.Namespace) -> int:
 
 
 def _handle_resume(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_project_resume_payload(args.project),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(format_project_resume(args.project), end="")
     return 0
 

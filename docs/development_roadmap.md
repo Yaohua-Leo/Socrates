@@ -2009,6 +2009,30 @@ recommended `brief generate` command when the saved brief is not current
 - missing/stale/invalid brief 显示 `Resume state: refresh_brief` 并推荐 `brief generate`，但不会自动运行。
 - 这不是 generator、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 learning-state mutation；它只是 returning learner 的只读导航视图。
 
+v0.28：resume JSON
+
+建议目标：
+
+让 v0.27 的 returning-learner resume card 能被未来 TUI/Web UI/Codex plugin 等 wrapper 直接消费，而不用解析 Markdown。
+
+必须完成：
+
+`resume --json` CLI option
+
+structured payload builder
+
+stable schema and quality boundary
+
+Markdown and JSON generated from the same payload
+
+当前状态（2026-06-04）：
+
+- `python -m socrates resume --project <project> --json` 已输出 deterministic JSON。
+- Payload 记录 `schema_version: 1` 与 `quality_boundary: deterministic_project_resume`。
+- JSON 和 Markdown 使用同一个 payload，包括项目标题、root、resume state、study brief 状态、brief path、当前 next action 和推荐命令。
+- fresh project 不会因为 `resume --json` 写入 `study_brief.md`、`study_brief_manifest.json` 或 project log。
+- 这不是 writer、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 learning-state mutation；它只是 wrapper-facing read-only state。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

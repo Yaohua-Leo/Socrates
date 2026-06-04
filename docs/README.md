@@ -7,9 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.27-alpha read-only resume command, over
-  v0.26 read-only study brief status command, v0.25 manifest-backed study
-  brief freshness, v0.24 study brief next-action freshness visibility, v0.23
+- Current implementation baseline: v0.28-alpha machine-readable read-only
+  resume JSON, over v0.27 read-only resume command, v0.26 read-only study brief
+  status command, v0.25 manifest-backed study brief freshness, v0.24 study
+  brief next-action freshness visibility, v0.23
   generated study-start briefs, v0.22 read-only study dashboards, v0.21 long-term multi-session
   regression refresh, v0.20 report-history audit
   visibility, v0.19 risk trend report summaries, v0.18 risk summary report
@@ -75,3 +76,5 @@ from the source planning conversation.
   generation.
 - `superpowers/plans/2026-06-04-v27-resume-command.md`: executable v0.27
   plan for a read-only returning-learner resume card.
+- `superpowers/plans/2026-06-04-v28-resume-json.md`: executable v0.28 plan
+  for machine-readable read-only resume state.

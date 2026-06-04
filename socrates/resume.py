@@ -9,23 +9,43 @@ from .dashboard import project_title
 from .study_brief_status import StudyBriefStatus, summarize_study_brief
 
 
-def format_project_resume(project_path: Path | str) -> str:
-    """Render the compact read-only resume card for one project."""
+RESUME_QUALITY_BOUNDARY = "deterministic_project_resume"
+
+
+def build_project_resume_payload(project_path: Path | str) -> dict[str, object]:
+    """Build the machine-readable read-only resume payload."""
 
     context = load_project(project_path)
     study_brief = summarize_study_brief(context.root)
+    return {
+        "schema_version": 1,
+        "quality_boundary": RESUME_QUALITY_BOUNDARY,
+        "project": project_title(context.project_file, fallback=context.root.name),
+        "root": str(context.root),
+        "resume_state": _resume_state(study_brief),
+        "study_brief": study_brief.status,
+        "study_brief_path": study_brief.path,
+        "current_next_action": study_brief.current_next_action,
+        "recommended_command": _recommended_command(context.root, study_brief),
+    }
+
+
+def format_project_resume(project_path: Path | str) -> str:
+    """Render the compact read-only resume card for one project."""
+
+    payload = build_project_resume_payload(project_path)
     lines = [
         "# Resume Project",
         "",
         "## Snapshot",
         "",
-        f"- Project: {project_title(context.project_file, fallback=context.root.name)}",
-        f"- Root: {context.root}",
-        f"- Resume state: {_resume_state(study_brief)}",
-        f"- Study brief: {study_brief.status}",
-        f"- Study brief path: {study_brief.path}",
-        f"- Current next action: {study_brief.current_next_action}",
-        f"- Recommended command: {_recommended_command(context.root, study_brief)}",
+        f"- Project: {payload['project']}",
+        f"- Root: {payload['root']}",
+        f"- Resume state: {payload['resume_state']}",
+        f"- Study brief: {payload['study_brief']}",
+        f"- Study brief path: {payload['study_brief_path']}",
+        f"- Current next action: {payload['current_next_action']}",
+        f"- Recommended command: {payload['recommended_command']}",
         "",
         "## Boundary",
         "",
