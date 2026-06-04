@@ -170,6 +170,46 @@ class LearningPlanTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
             self.assertIn("- Reference KB status: stale", session_plan)
 
+    def test_plan_cli_warns_and_continues_with_invalid_reference_kb_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=Path(temp_dir) / "normal_subgroup",
+                    goal="Understand the definition before quotient groups.",
+                )
+            )
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N of G is normal when it is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            kb_result = build_reference_kb(project)
+            kb_result.index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "plan", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("warning: Reference KB status is invalid", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+            session_plan = (
+                project / "02_learning_plan" / "session_0001_plan.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("- Reference KB status: invalid", session_plan)
+            self.assertIn("- Reference KB context: none indexed yet.", session_plan)
+
     def test_review_adjust_plan_command_updates_short_term_plan_from_schedule(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

@@ -102,7 +102,12 @@ def _read_reference_context(project_root: Path, topic: str, *, limit: int = 5) -
     if not index_path.exists():
         return []
 
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(index, dict):
+        return []
     objects = [item for item in index.get("objects", []) if isinstance(item, dict)]
     query = topic.casefold()
     matches: list[dict[str, object]] = []

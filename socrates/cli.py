@@ -1275,10 +1275,10 @@ def _handle_kb_check(args: argparse.Namespace) -> int:
 
 def _warn_if_reference_kb_stale(project_path: Path | str) -> None:
     kb_status = reference_kb_status(project_path)
-    if kb_status.status != "stale":
+    if kb_status.status not in {"stale", "invalid", "missing"}:
         return
     print(
-        "warning: Reference KB status is stale; "
+        f"warning: Reference KB status is {kb_status.status}; "
         f"run socrates kb build --project {project_path} to rebuild.",
         file=sys.stderr,
     )
