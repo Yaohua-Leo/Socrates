@@ -74,6 +74,37 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Benchmark manifest: fail", report_text)
             self.assertIn("- Tool verification records: fail", report_text)
 
+    def test_lifecycle_audit_cli_reports_corrupt_learning_state_cleanly(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid learning_state.json", result.stderr)
+            self.assertIn("repair the JSON before auditing project lifecycle", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
     def test_lifecycle_audit_does_not_count_obsidian_utility_index_as_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

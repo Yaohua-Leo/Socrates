@@ -12,6 +12,7 @@ from .context import load_project, write_json, write_text
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
+from .state import ensure_learning_state_readable
 
 
 @dataclass(frozen=True)
@@ -459,6 +460,10 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
     """Check whether the project has persisted artifacts for the full learning loop."""
 
     context = load_project(project_path)
+    ensure_learning_state_readable(
+        context.learning_state,
+        action="auditing project lifecycle",
+    )
     state = _read_learning_state(context.learning_state)
     kb_status = reference_kb_status(context.root)
     checks = {
