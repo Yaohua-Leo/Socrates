@@ -1883,6 +1883,32 @@ report-history / closeout / regression snapshot rows
 - 空项目显示 `Completion: clear` 与 `- none`；有 draft note 的项目显示同 priority queue 一致的 first next action。
 - 这不是新的 truth source、readiness gate、score、prediction、planner、tutor、repair runner 或 learning-state mutation。
 
+v0.23：学习启动 brief
+
+建议目标：
+
+在 dashboard 之后生成一个可保存的 study-start brief，把“现在从哪里开始”固化为 `07_exports/briefs/study_brief.md`，减少真实长期学习时从状态面板跳到下一步行动之间的摩擦。
+
+必须完成：
+
+top-level `brief` CLI command
+
+study brief formatter and writer
+
+first priority action and action type rows
+
+demoted dashboard evidence section
+
+clear boundary that only the brief artifact and project log are written
+
+当前状态（2026-06-04）：
+
+- `python -m socrates brief --project <project>` 已写入 `07_exports/briefs/study_brief.md`。
+- Brief 包含 `# Study Brief`、`## Start Here`、`## Dashboard Evidence` 与 `## Boundary`。
+- Brief 的 first next action 复用 priority queue 的第一个 action；空项目显示 `Next action: none` 与 `Action type: none`，不会制造伪命令。
+- Dashboard evidence 以降级 Markdown heading 嵌入，使 artifact 同时保存 snapshot、action summary、top priority actions 与 report health。
+- 这不是 repair runner、report generator、LLM call、approval、score、tutor、prediction、readiness gate 或 learning-state truth mutation；除 brief artifact 与 project log entry 外不改项目真值。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

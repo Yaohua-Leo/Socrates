@@ -6,18 +6,19 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.22-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.23-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, read-only study dashboards, workflow action
-queue visibility, priority action queue navigation, priority action snapshots in
-reports, recommended focus report summaries, action summary queue/report
-summaries, repair path queue/report summaries, risk summary report snapshots,
-risk trend report summaries, report-history audit visibility, and an opt-in LLM
-provider layer for reviewable draft suggestions, including
+long-term report-surface refresh, read-only study dashboards, generated
+study-start briefs, workflow action queue visibility, priority action queue
+navigation, priority action snapshots in reports, recommended focus report
+summaries, action summary queue/report summaries, repair path queue/report
+summaries, risk summary report snapshots, risk trend report summaries,
+report-history audit visibility, and an opt-in LLM provider layer for
+reviewable draft suggestions, including
 review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
 tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
 remain future work.
@@ -75,6 +76,7 @@ python -m socrates report monthly --project ".\projects\group_theory"
 python -m socrates report project-summary --project ".\projects\group_theory"
 python -m socrates session judge-suggest --project ".\projects\group_theory" --session-id session_0001
 python -m socrates dashboard --project ".\projects\group_theory"
+python -m socrates brief --project ".\projects\group_theory"
 python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
@@ -154,6 +156,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.22 read-only study dashboards summarize existing status, queue, report,
   report-history, closeout, and regression evidence into one operator-facing
   Markdown view.
+- v0.23 generated study-start briefs write `07_exports/briefs/study_brief.md`
+  from existing dashboard and queue evidence so the next action can be saved
+  before starting a learning session.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -217,6 +222,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   evidence. They do not create new truth, run repairs, generate reports, call an
   LLM, approve artifacts, score learning, tutor, predict, or mutate project
   state.
+- Study-start briefs are deterministic export artifacts. Aside from writing the
+  brief and a project-log entry, they do not run repairs, refresh reports, call
+  an LLM, approve artifacts, score learning, tutor, predict, or mutate
+  learning-state truth.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

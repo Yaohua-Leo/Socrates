@@ -37,7 +37,7 @@ def format_study_dashboard(project_path: Path | str) -> str:
         "",
         "## Snapshot",
         "",
-        f"- Project: {_project_title(context.project_file, fallback=context.root.name)}",
+        f"- Project: {project_title(context.project_file, fallback=context.root.name)}",
         f"- Root: {context.root}",
         f"- Workflow actions: {len(queue.workflow_actions)}",
         f"- Session closeout: {_status_label(closeout)}",
@@ -108,7 +108,7 @@ def _status_label(value: dict[str, object] | None) -> str:
     return status if isinstance(status, str) else "invalid"
 
 
-def _project_title(project_file: Path, *, fallback: str) -> str:
+def project_title(project_file: Path, *, fallback: str) -> str:
     try:
         lines = project_file.read_text(encoding="utf-8").splitlines()
     except OSError:

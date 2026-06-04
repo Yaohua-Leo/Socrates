@@ -121,6 +121,7 @@ from .state import (
     update_eval_report,
     update_learning_state,
 )
+from .study_brief import generate_study_brief
 from .tool_verification import (
     check_tool_verification_records,
     check_lean_file,
@@ -375,6 +376,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dashboard_parser.add_argument("--project", required=True, help="Socrates project directory.")
     dashboard_parser.set_defaults(func=_handle_dashboard)
+
+    brief_parser = subparsers.add_parser(
+        "brief",
+        help="Write a deterministic study-start brief.",
+    )
+    brief_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    brief_parser.set_defaults(func=_handle_brief)
 
     queue_parser = subparsers.add_parser(
         "queue",
@@ -1525,6 +1533,12 @@ def _handle_queue(args: argparse.Namespace) -> int:
 
 def _handle_dashboard(args: argparse.Namespace) -> int:
     print(format_study_dashboard(args.project), end="")
+    return 0
+
+
+def _handle_brief(args: argparse.Namespace) -> int:
+    brief_path = generate_study_brief(args.project)
+    print(f"Wrote study brief: {brief_path}")
     return 0
 
 
