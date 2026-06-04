@@ -889,6 +889,7 @@ def _exercise_frontmatter(text: str) -> dict[str, object]:
     keys = (
         "status",
         "review_status",
+        "reviewed_by_user",
         "type",
         "concept",
         "source_id",
@@ -902,7 +903,12 @@ def _exercise_frontmatter(text: str) -> dict[str, object]:
         value = _frontmatter_value(text, key)
         if value is None:
             continue
-        values[key] = _int_if_possible(value) if key == "difficulty" else value
+        if key == "difficulty":
+            values[key] = _int_if_possible(value)
+        elif key == "reviewed_by_user":
+            values[key] = _bool_if_possible(value)
+        else:
+            values[key] = value
     return values
 
 

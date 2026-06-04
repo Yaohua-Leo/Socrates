@@ -1682,6 +1682,68 @@ class ExerciseQualityTests(unittest.TestCase):
                 "not_run",
             )
 
+    def test_exercise_quality_manifest_records_reviewed_by_user_for_approved_exercises(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=1,
+            )
+            approve_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "approve",
+                    "--project",
+                    str(project),
+                    "--exercise",
+                    "normal_subgroup_01",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(approve_result.returncode, 0, approve_result.stderr)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertIn(
+                "reviewed_by_user",
+                manifest["exercises"][0]["frontmatter"],
+            )
+            self.assertEqual(
+                manifest["exercises"][0]["frontmatter"]["reviewed_by_user"],
+                True,
+            )
+
     def test_exercise_check_cli_reports_reference_counterexample_candidates(self) -> None:
         from socrates.kb import build_reference_kb
 
