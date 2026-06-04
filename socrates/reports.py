@@ -65,6 +65,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
     report_path = context.root / "07_exports" / "reports" / "project_summary.md"
     state = _read_learning_state(context.learning_state)
     kb_status = reference_kb_status(context.root)
+    queue = collect_learning_queue(context.root)
     write_text(
         report_path,
         _project_summary_text(
@@ -76,9 +77,10 @@ def generate_project_summary(project_path: Path | str) -> Path:
             kb_status=kb_status.status,
             kb_snapshot=_read_kb_snapshot(context.root),
             sessions_completed=_count_dirs(context.sessions_dir),
+            pending_draft_notes=len(queue.notes_to_review),
             reviewed_notes=_count_reviewed_notes(context.root),
             obsidian_exports=obsidian_export_count(context.root),
-            obsidian_exports_to_run=_count_obsidian_exports_to_run(context.root),
+            obsidian_exports_to_run=len(queue.obsidian_exports_to_run),
             obsidian_backlinks=obsidian_backlink_count(context.root),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
@@ -336,6 +338,7 @@ def _project_summary_text(
     kb_status: str,
     kb_snapshot: list[dict[str, str]],
     sessions_completed: int,
+    pending_draft_notes: int,
     reviewed_notes: int,
     obsidian_exports: int,
     obsidian_exports_to_run: int,
@@ -366,6 +369,7 @@ def _project_summary_text(
         f"- KB objects: {kb_objects}",
         f"- Reference KB status: {kb_status}",
         f"- Sessions completed: {sessions_completed}",
+        f"- Pending draft notes: {pending_draft_notes}",
         f"- Reviewed notes: {reviewed_notes}",
         f"- Obsidian exports: {obsidian_exports}",
         f"- Obsidian exports to run: {obsidian_exports_to_run}",
