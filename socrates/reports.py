@@ -8,6 +8,7 @@ from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
 from .kb import reference_kb_status
+from .learning_queue import collect_learning_queue
 from .obsidian import (
     obsidian_backlink_count,
     obsidian_export_count,
@@ -100,13 +101,14 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     context = load_project(project_path)
     report_path = context.root / "07_exports" / "reports" / "monthly_report.md"
     state = _read_learning_state(context.learning_state)
+    queue = collect_learning_queue(context.root)
     write_text(
         report_path,
         _monthly_report_text(
             reviewed_notes=_count_reviewed_notes(context.root),
-            draft_notes=_count_markdown(context.atomic_note_drafts_dir),
+            draft_notes=len(queue.notes_to_review),
             obsidian_exports=obsidian_export_count(context.root),
-            obsidian_exports_to_run=_count_obsidian_exports_to_run(context.root),
+            obsidian_exports_to_run=len(queue.obsidian_exports_to_run),
             generated_exercises=_count_markdown(context.generated_exercises_dir),
             approved_exercises=_count_approved_exercises(context.root),
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
