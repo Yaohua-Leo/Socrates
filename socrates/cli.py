@@ -1453,7 +1453,14 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     context = load_project(args.project)
-    repaired_count, schedule_path = repair_review_schedule(context, as_of=as_of)
+    try:
+        repaired_count, schedule_path = repair_review_schedule(context, as_of=as_of)
+    except json.JSONDecodeError:
+        print(
+            "error: invalid learning_state.json; repair the JSON before repairing review schedule",
+            file=sys.stderr,
+        )
+        return 1
     noun = "item" if repaired_count == 1 else "items"
     print(f"Repaired {repaired_count} review schedule {noun}: {schedule_path}")
     return 0
