@@ -374,6 +374,12 @@ def build_parser() -> argparse.ArgumentParser:
     kb_search_parser = kb_subparsers.add_parser("search", help="Search the reference KB.")
     kb_search_parser.add_argument("--project", required=True, help="Socrates project directory.")
     kb_search_parser.add_argument("--query", required=True, help="Search query.")
+    kb_search_parser.add_argument(
+        "--type",
+        choices=("all", *sorted(OBJECT_TYPES)),
+        default="all",
+        help="Filter matches by reference object type; defaults to all.",
+    )
     kb_search_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
     kb_search_parser.set_defaults(func=_handle_kb_search)
     kb_counterexamples_parser = kb_subparsers.add_parser(
@@ -1343,7 +1349,12 @@ def _reference_kb_relationships_text(relationships: list[dict[str, str]]) -> str
 
 def _handle_kb_search(args: argparse.Namespace) -> int:
     _warn_if_reference_kb_stale(args.project)
-    matches = search_reference_kb(args.project, args.query, limit=args.limit)
+    matches = search_reference_kb(
+        args.project,
+        args.query,
+        limit=args.limit,
+        object_type=args.type,
+    )
     if not matches:
         print("No reference matches")
         return 0

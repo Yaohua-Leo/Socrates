@@ -91,6 +91,34 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("definition 3.1: Normal Subgroup", search)
             self.assertIn("normality.curated.md:p82:1", search)
 
+    def test_kb_search_filters_by_reference_object_type(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n\n"
+                "### Theorem: Kernel Normality\n"
+                "The kernel of a homomorphism is normal by conjugation.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            search = self._run_cli(
+                "kb",
+                "search",
+                "--project",
+                str(project),
+                "--query",
+                "normal",
+                "--type",
+                "theorem",
+            ).stdout
+
+            self.assertIn("theorem: Kernel Normality", search)
+            self.assertNotIn("definition: Normal Subgroup", search)
+
     def test_kb_list_displays_indexed_objects_and_filters(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

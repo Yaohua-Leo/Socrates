@@ -124,10 +124,27 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
     )
 
 
-def search_reference_kb(project_path: Path | str, query: str, *, limit: int = 10) -> list[dict[str, object]]:
+def search_reference_kb(
+    project_path: Path | str,
+    query: str,
+    *,
+    limit: int = 10,
+    object_type: str = "all",
+) -> list[dict[str, object]]:
     """Return source-grounded reference objects matching a query."""
 
-    return _search_reference_objects(project_path, query, limit=limit)
+    allowed_types = {"all", *OBJECT_TYPES}
+    if object_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(
+            f"Unknown reference object type {object_type!r}; expected one of: {allowed}"
+        )
+    return _search_reference_objects(
+        project_path,
+        query,
+        limit=limit,
+        object_type=None if object_type == "all" else object_type,
+    )
 
 
 def find_counterexamples(project_path: Path | str, concept: str, *, limit: int = 10) -> list[dict[str, object]]:
