@@ -6,13 +6,13 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.33-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.34-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, command-summarized filterable readiness-counted
+long-term report-surface refresh, commands-output command-summarized filterable readiness-counted
 machine-readable and Markdown read-only multi-project resume indexes,
 machine-readable read-only project resume state, read-only project resume
 cards, read-only study dashboards, generated
@@ -85,6 +85,7 @@ python -m socrates resume --project ".\projects\group_theory" --json
 python -m socrates projects resume --root ".\projects"
 python -m socrates projects resume --root ".\projects" --json
 python -m socrates projects resume --root ".\projects" --state refresh_brief
+python -m socrates projects resume --root ".\projects" --state refresh_brief --commands
 python -m socrates brief generate --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory"
 python -m socrates status --project ".\projects\group_theory"
@@ -200,6 +201,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.33 collection resume outputs include a derived recommended-command summary
   so filtered project-root views show which child-project commands should be run
   next without executing them.
+- v0.34 `projects resume --commands` prints only the derived child-project
+  command lines for the active state filter, with `--json` and `--commands`
+  kept mutually exclusive.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -297,6 +301,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - Collection resume recommended-command summaries are derived from returned
   rows. They are not command execution, batch automation, scanners, scores,
   readiness gates, report generation, LLM calls, or child-project mutations.
+- `projects resume --commands` is an output/copy mode over those derived command
+  rows. It is not command execution, batch automation, a generator, scanner,
+  score, readiness gate, report generator, LLM call, or child-project mutation.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

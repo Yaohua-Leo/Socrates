@@ -77,6 +77,7 @@ from .project_index import (
 from .project_resume import (
     RESUME_STATE_FILTERS,
     build_project_resume_index_payload,
+    format_project_resume_commands,
     format_project_resume_index,
 )
 from .quality import (
@@ -504,10 +505,16 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="Filter projects by resume state; defaults to all.",
     )
-    projects_resume_parser.add_argument(
+    projects_resume_output_group = projects_resume_parser.add_mutually_exclusive_group()
+    projects_resume_output_group.add_argument(
         "--json",
         action="store_true",
         help="Print the project resume index as deterministic JSON.",
+    )
+    projects_resume_output_group.add_argument(
+        "--commands",
+        action="store_true",
+        help="Print only recommended child-project commands.",
     )
     projects_resume_parser.set_defaults(func=_handle_projects_resume)
 
@@ -1706,6 +1713,8 @@ def _handle_projects_resume(args: argparse.Namespace) -> int:
                 sort_keys=True,
             )
         )
+    elif args.commands:
+        print(format_project_resume_commands(args.root, state_filter=args.state), end="")
     else:
         print(format_project_resume_index(args.root, state_filter=args.state), end="")
     return 0

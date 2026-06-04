@@ -2156,6 +2156,30 @@ commands derived after filtering
 - Commands 基于 filtered rows 派生：`--state ready` 时为空，`--state refresh_brief` 只列出需要 refresh brief 的项目命令。
 - 这不是 command execution、batch automation、score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读命令摘要。
 
+v0.34：multi-project resume commands output
+
+建议目标：
+
+让 filtered collection resume view 的推荐命令可以直接以纯命令行输出，便于复制到 shell 或被 wrapper 消费，而不用解析 Markdown。
+
+必须完成：
+
+`projects resume --commands`
+
+commands-only output mode
+
+mutually exclusive with `--json`
+
+empty output when no commands exist
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects resume --root <root> --state refresh_brief --commands` 已只输出 returned projects 的 non-`none` recommended command lines。
+- Commands-only output 不包含 Markdown headings、project rows、counts 或 boundary text。
+- `python -m socrates projects resume --root <root> --state ready --commands` 在无命令时以空 stdout 和 exit 0 返回。
+- `--commands` 与 `--json` 已互斥，避免 output contracts 混用。
+- 这不是 command execution、batch automation、generator、score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读命令输出模式。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

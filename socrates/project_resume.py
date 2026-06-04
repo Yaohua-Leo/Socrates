@@ -115,6 +115,20 @@ def format_project_resume_index(
     return "\n".join(lines)
 
 
+def format_project_resume_commands(
+    root_path: Path | str,
+    *,
+    state_filter: str = "all",
+) -> str:
+    """Render only recommended child-project commands for the collection."""
+
+    payload = build_project_resume_index_payload(root_path, state_filter=state_filter)
+    commands = [str(command["command"]) for command in payload["recommended_commands"]]
+    if not commands:
+        return ""
+    return "\n".join(commands) + "\n"
+
+
 def _filtered_projects(
     projects: list[dict[str, object]],
     state_filter: str,
