@@ -18,6 +18,7 @@ QUEUE_SECTIONS = frozenset(
         "exercise-drafts",
         "exercises",
         "attempts",
+        "quality-checks",
         "tool-verifications",
     }
 )
@@ -42,6 +43,7 @@ class LearningQueue:
     exercise_drafts_to_approve: list[QueueItem]
     exercises_to_attempt: list[QueueItem]
     attempts_to_grade: list[QueueItem]
+    quality_checks_to_fix: list[QueueItem]
     tool_verifications_to_fix: list[QueueItem]
 
 
@@ -56,6 +58,7 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
         exercises_to_attempt=_exercises_to_attempt(context.root),
         attempts_to_grade=_attempts_to_grade(context.root),
+        quality_checks_to_fix=_artifact_quality_checks_to_fix(context.root),
         tool_verifications_to_fix=_tool_verifications_to_fix(context.root),
     )
 
@@ -83,6 +86,7 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("exercise-drafts", "Exercise Drafts To Approve", queue.exercise_drafts_to_approve),
         ("exercises", "Exercises To Attempt", queue.exercises_to_attempt),
         ("attempts", "Attempts To Grade", queue.attempts_to_grade),
+        ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
     ]
 
@@ -242,6 +246,163 @@ def _attempts_to_grade(project_root: Path) -> list[QueueItem]:
             continue
         items.append(_queue_item(attempt_path, project_root))
     return items
+
+
+def _artifact_quality_checks_to_fix(project_root: Path) -> list[QueueItem]:
+    specs = (
+        {
+            "item_id": "ingestion_quality",
+            "manifest": "ingestion_quality_manifest.json",
+            "report": "ingestion_eval.md",
+            "records": "curated_references",
+            "command": "socrates kb check --project <project>",
+        },
+        {
+            "item_id": "note_quality",
+            "manifest": "note_quality_manifest.json",
+            "report": "note_quality_eval.md",
+            "records": "notes",
+            "command": "socrates note check --project <project>",
+        },
+        {
+            "item_id": "exercise_quality",
+            "manifest": "exercise_quality_manifest.json",
+            "report": "exercise_quality_eval.md",
+            "records": "exercises",
+            "command": "socrates exercise check --project <project>",
+        },
+        {
+            "item_id": "tutoring_quality",
+            "manifest": "tutoring_quality_manifest.json",
+            "report": "tutoring_eval.md",
+            "records": "sessions",
+            "command": "socrates session check --project <project> --session-id <id>",
+        },
+    )
+    items: list[QueueItem] = []
+    for spec in specs:
+        item = _artifact_quality_check_item(project_root, spec)
+        if item is not None:
+            items.append(item)
+    return items
+
+
+def _artifact_quality_check_item(
+    project_root: Path,
+    spec: dict[str, str],
+) -> QueueItem | None:
+    manifest_path = project_root / "08_evals" / spec["manifest"]
+    if not manifest_path.exists():
+        return None
+    report_path = project_root / "08_evals" / spec["report"]
+    queue_path = report_path if report_path.exists() else manifest_path
+    command = spec["command"]
+    item_id = spec["item_id"]
+    try:
+        manifest = read_json(manifest_path)
+    except JSONDecodeError:
+        return _artifact_quality_manifest_item(
+            project_root,
+            manifest_path,
+            item_id=item_id,
+            issue=f"invalid {item_id} manifest JSON",
+            command=command,
+        )
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return _artifact_quality_manifest_item(
+            project_root,
+            manifest_path,
+            item_id=item_id,
+            issue=f"invalid {item_id} manifest schema",
+            command=command,
+        )
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return _artifact_quality_manifest_item(
+            project_root,
+            manifest_path,
+            item_id=item_id,
+            issue=f"invalid {item_id} manifest counts",
+            command=command,
+        )
+    if checked < 0 or passed < 0 or failed < 0 or passed + failed != checked:
+        return _artifact_quality_manifest_item(
+            project_root,
+            manifest_path,
+            item_id=item_id,
+            issue=f"invalid {item_id} manifest counts",
+            command=command,
+        )
+    if failed == 0:
+        return None
+    issues = _artifact_quality_issue_items(
+        manifest.get(spec["records"], []),
+    )
+    return QueueItem(
+        item_id=item_id,
+        path=queue_path.relative_to(project_root).as_posix(),
+        detail=(
+            "quality: fail; "
+            f"failed: {failed}/{checked}; "
+            f"issues: {_artifact_quality_issue_text(issues)}; "
+            f"rerun with: {command}"
+        ),
+    )
+
+
+def _artifact_quality_manifest_item(
+    project_root: Path,
+    manifest_path: Path,
+    *,
+    item_id: str,
+    issue: str,
+    command: str,
+) -> QueueItem:
+    return QueueItem(
+        item_id=item_id,
+        path=manifest_path.relative_to(project_root).as_posix(),
+        detail=(
+            "quality: fail; "
+            f"issues: {issue}; "
+            f"rerun with: {command}"
+        ),
+    )
+
+
+def _artifact_quality_issue_items(records: object) -> list[str]:
+    if not isinstance(records, list):
+        return []
+    issues: list[str] = []
+    for index, record in enumerate(records, start=1):
+        if not isinstance(record, dict):
+            continue
+        status = str(record.get("quality_status") or record.get("status") or "").strip()
+        if status != "fail":
+            continue
+        record_id = (
+            str(record.get("id") or record.get("session_id") or record.get("file") or "").strip()
+            or f"record_{index}"
+        )
+        record_issues = _artifact_quality_record_issues(record.get("issues", []))
+        if record_issues:
+            issues.append(f"{record_id}: {'; '.join(record_issues)}")
+        else:
+            issues.append(f"{record_id}: no issue details recorded")
+    return issues
+
+
+def _artifact_quality_record_issues(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(issue).strip() for issue in value if str(issue).strip()]
+
+
+def _artifact_quality_issue_text(issues: list[str]) -> str:
+    if not issues:
+        return "none recorded"
+    return "; ".join(issues)
 
 
 def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:

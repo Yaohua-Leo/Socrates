@@ -403,6 +403,67 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_lists_failed_artifact_quality_checks_to_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            evals = project / "08_evals"
+            (evals / "note_quality_eval.md").write_text(
+                "# Note Quality Eval\n\n- normal_subgroup: fail\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "note_quality_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checked": 1,
+                        "passed": 0,
+                        "failed": 1,
+                        "notes": [
+                            {
+                                "id": "normal_subgroup",
+                                "path": "04_atomic_notes/drafts/normal_subgroup.md",
+                                "quality_status": "fail",
+                                "issues": ["missing section Review Questions"],
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "quality-checks",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Quality Checks To Fix", result.stdout)
+            self.assertIn(
+                (
+                    "- note_quality | 08_evals/note_quality_eval.md | "
+                    "quality: fail; failed: 1/1; "
+                    "issues: normal_subgroup: missing section Review Questions; "
+                    "rerun with: socrates note check --project <project>"
+                ),
+                result.stdout,
+            )
+
     def test_queue_cli_lists_corrupt_tool_quality_manifest_to_fix(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
