@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -422,12 +423,6 @@ class V02CliFlowTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
             index_path = project / "06_kb" / "chunks" / "reference_index.json"
-            index_path.write_text(
-                '{"schema_version": 1, "objects": "not a list", "chunks": []}\n',
-                encoding="utf-8",
-                newline="\n",
-            )
-
             commands = [
                 [sys.executable, "-m", "socrates", "kb", "list", "--project", str(project)],
                 [
@@ -453,22 +448,33 @@ class V02CliFlowTests(unittest.TestCase):
                     "normal subgroup",
                 ],
             ]
+            malformed_indexes = [
+                {"schema_version": 1, "objects": "not a list", "chunks": []},
+                {"schema_version": 1, "objects": ["not an object"], "chunks": []},
+                {"schema_version": 1, "objects": [], "chunks": ["not an object"]},
+            ]
 
-            for command in commands:
-                with self.subTest(command=" ".join(command[3:])):
-                    result = subprocess.run(
-                        command,
-                        cwd=REPO_ROOT,
-                        text=True,
-                        capture_output=True,
-                        check=False,
-                    )
+            for index in malformed_indexes:
+                index_path.write_text(
+                    json.dumps(index) + "\n",
+                    encoding="utf-8",
+                    newline="\n",
+                )
+                for command in commands:
+                    with self.subTest(index=index, command=" ".join(command[3:])):
+                        result = subprocess.run(
+                            command,
+                            cwd=REPO_ROOT,
+                            text=True,
+                            capture_output=True,
+                            check=False,
+                        )
 
-                    self.assertEqual(result.returncode, 1)
-                    self.assertIn("Reference KB index has invalid schema", result.stderr)
-                    self.assertIn("socrates kb build --project", result.stderr)
-                    self.assertNotIn("No reference matches", result.stdout)
-                    self.assertNotIn("No counterexamples found", result.stdout)
+                        self.assertEqual(result.returncode, 1)
+                        self.assertIn("Reference KB index has invalid schema", result.stderr)
+                        self.assertIn("socrates kb build --project", result.stderr)
+                        self.assertNotIn("No reference matches", result.stdout)
+                        self.assertNotIn("No counterexamples found", result.stdout)
 
     def test_kb_counterexamples_lists_matching_reference_counterexamples(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

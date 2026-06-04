@@ -351,14 +351,21 @@ def read_reference_index(
         raise ValueError(_reference_index_rebuild_message(project_root, "is missing")) from exc
     except json.JSONDecodeError as exc:
         raise ValueError(_reference_index_rebuild_message(project_root, "is invalid")) from exc
-    if (
-        not isinstance(index, dict)
-        or index.get("schema_version") != 1
-        or not isinstance(index.get("objects"), list)
-        or not isinstance(index.get("chunks"), list)
-    ):
+    if not _valid_reference_index_schema(index):
         raise ValueError(_reference_index_rebuild_message(project_root, "has invalid schema"))
     return index
+
+
+def _valid_reference_index_schema(index: object) -> bool:
+    if not isinstance(index, dict) or index.get("schema_version") != 1:
+        return False
+    objects = index.get("objects")
+    chunks = index.get("chunks")
+    if not isinstance(objects, list) or not isinstance(chunks, list):
+        return False
+    return all(isinstance(item, dict) for item in objects) and all(
+        isinstance(item, dict) for item in chunks
+    )
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
