@@ -35,6 +35,18 @@ class ReportSummary:
     path: str
 
 
+@dataclass(frozen=True)
+class RiskMetrics:
+    """Current report risk pressure derived from queue and learning state."""
+
+    risk_level: str
+    blocker_pressure: int
+    review_pressure: int
+    human_review_backlog: int
+    weak_concepts: int
+    active_misconceptions: int
+
+
 REPORT_SPECS = (
     ("weekly", "Weekly Learning Report", "weekly_report.md"),
     ("monthly", "Monthly Learning Report", "monthly_report.md"),
@@ -42,6 +54,8 @@ REPORT_SPECS = (
 )
 REPORT_TYPES = frozenset(report_id for report_id, _title, _file_name in REPORT_SPECS)
 _STATE_WARNING_KEY = "_state_warnings"
+_RISK_HISTORY_FILE = "risk_history.json"
+_RISK_HISTORY_SCHEMA_VERSION = "v0.19"
 
 
 def generate_weekly_report(project_path: Path | str) -> Path:
@@ -54,7 +68,12 @@ def generate_weekly_report(project_path: Path | str) -> Path:
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
     repair_paths = repair_path_items(queue)
-    risk_summary = _risk_summary_lines(queue=queue, state=state)
+    risk_metrics = _risk_metrics(queue=queue, state=state)
+    risk_summary = _risk_summary_lines(risk_metrics)
+    trend_summary = _trend_summary_lines(
+        previous=_latest_risk_snapshot(context.root, report_type="weekly"),
+        current=risk_metrics,
+    )
     write_text(
         report_path,
         _weekly_report_text(
@@ -70,9 +89,11 @@ def generate_weekly_report(project_path: Path | str) -> Path:
             action_summary=action_summary,
             repair_paths=repair_paths,
             risk_summary=risk_summary,
+            trend_summary=trend_summary,
             state=state,
         ),
     )
+    _append_risk_history_snapshot(context.root, report_type="weekly", metrics=risk_metrics)
     append_project_log(context, "Generated weekly learning report.")
     return report_path
 
@@ -88,7 +109,12 @@ def generate_project_summary(project_path: Path | str) -> Path:
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
     repair_paths = repair_path_items(queue)
-    risk_summary = _risk_summary_lines(queue=queue, state=state)
+    risk_metrics = _risk_metrics(queue=queue, state=state)
+    risk_summary = _risk_summary_lines(risk_metrics)
+    trend_summary = _trend_summary_lines(
+        previous=_latest_risk_snapshot(context.root, report_type="project-summary"),
+        current=risk_metrics,
+    )
     write_text(
         report_path,
         _project_summary_text(
@@ -113,6 +139,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             action_summary=action_summary,
             repair_paths=repair_paths,
             risk_summary=risk_summary,
+            trend_summary=trend_summary,
             tool_verification_records=list_tool_verification_records(context.root),
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
@@ -121,6 +148,11 @@ def generate_project_summary(project_path: Path | str) -> Path:
             next_session_handoff_snapshot=_read_next_session_handoff_snapshot(context.root),
             state=state,
         ),
+    )
+    _append_risk_history_snapshot(
+        context.root,
+        report_type="project-summary",
+        metrics=risk_metrics,
     )
     append_project_log(context, "Generated project summary report.")
     return report_path
@@ -136,7 +168,12 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
     repair_paths = repair_path_items(queue)
-    risk_summary = _risk_summary_lines(queue=queue, state=state)
+    risk_metrics = _risk_metrics(queue=queue, state=state)
+    risk_summary = _risk_summary_lines(risk_metrics)
+    trend_summary = _trend_summary_lines(
+        previous=_latest_risk_snapshot(context.root, report_type="monthly"),
+        current=risk_metrics,
+    )
     write_text(
         report_path,
         _monthly_report_text(
@@ -152,9 +189,11 @@ def generate_monthly_report(project_path: Path | str) -> Path:
             action_summary=action_summary,
             repair_paths=repair_paths,
             risk_summary=risk_summary,
+            trend_summary=trend_summary,
             state=state,
         ),
     )
+    _append_risk_history_snapshot(context.root, report_type="monthly", metrics=risk_metrics)
     append_project_log(context, "Generated monthly learning report.")
     return report_path
 
@@ -316,6 +355,7 @@ def _weekly_report_text(
     action_summary: list[str],
     repair_paths: list[QueueItem],
     risk_summary: list[str],
+    trend_summary: list[str],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -352,6 +392,10 @@ def _weekly_report_text(
         "",
         *risk_summary,
         "",
+        "## Trend Summary",
+        "",
+        *trend_summary,
+        "",
         *_state_warning_section(state),
         "## Learning State",
         "",
@@ -382,6 +426,7 @@ def _monthly_report_text(
     action_summary: list[str],
     repair_paths: list[QueueItem],
     risk_summary: list[str],
+    trend_summary: list[str],
     state: dict[str, object],
 ) -> str:
     concept_mastery = state.get("concept_mastery", {})
@@ -424,6 +469,10 @@ def _monthly_report_text(
         "",
         *risk_summary,
         "",
+        "## Trend Summary",
+        "",
+        *trend_summary,
+        "",
         "## Misconceptions",
         "",
         *_misconception_lines(state.get("misconceptions", {})),
@@ -462,6 +511,7 @@ def _project_summary_text(
     action_summary: list[str],
     repair_paths: list[QueueItem],
     risk_summary: list[str],
+    trend_summary: list[str],
     tool_verification_records: list[ToolVerificationSummary],
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
@@ -516,6 +566,10 @@ def _project_summary_text(
         "## Risk Summary",
         "",
         *risk_summary,
+        "",
+        "## Trend Summary",
+        "",
+        *trend_summary,
         "",
         "## Benchmark Snapshot",
         "",
@@ -895,7 +949,7 @@ def _recommended_focus_lines(
     ]
 
 
-def _risk_summary_lines(*, queue: LearningQueue, state: dict[str, object]) -> list[str]:
+def _risk_metrics(*, queue: LearningQueue, state: dict[str, object]) -> RiskMetrics:
     blocker_pressure = (
         len(queue.workflow_actions)
         + len(queue.quality_checks_to_fix)
@@ -918,14 +972,141 @@ def _risk_summary_lines(*, queue: LearningQueue, state: dict[str, object]) -> li
         weak_concepts=weak_concepts,
         active_misconceptions=active_misconceptions,
     )
+    return RiskMetrics(
+        risk_level=risk_level,
+        blocker_pressure=blocker_pressure,
+        review_pressure=review_pressure,
+        human_review_backlog=human_review_backlog,
+        weak_concepts=weak_concepts,
+        active_misconceptions=active_misconceptions,
+    )
+
+
+def _risk_summary_lines(metrics: RiskMetrics) -> list[str]:
     return [
-        f"- Risk level: {risk_level}",
-        f"- Blocker pressure: {blocker_pressure}",
-        f"- Review pressure: {review_pressure}",
-        f"- Human review backlog: {human_review_backlog}",
-        f"- Weak concepts: {weak_concepts}",
-        f"- Active misconceptions: {active_misconceptions}",
+        f"- Risk level: {metrics.risk_level}",
+        f"- Blocker pressure: {metrics.blocker_pressure}",
+        f"- Review pressure: {metrics.review_pressure}",
+        f"- Human review backlog: {metrics.human_review_backlog}",
+        f"- Weak concepts: {metrics.weak_concepts}",
+        f"- Active misconceptions: {metrics.active_misconceptions}",
     ]
+
+
+def _trend_summary_lines(
+    *,
+    previous: dict[str, object] | None,
+    current: RiskMetrics,
+) -> list[str]:
+    if previous is None:
+        return [
+            "- Previous snapshot: none",
+            "- Risk level change: baseline",
+            "- Blocker pressure change: baseline",
+            "- Review pressure change: baseline",
+            "- Human review backlog change: baseline",
+            "- Weak concepts change: baseline",
+            "- Active misconceptions change: baseline",
+        ]
+    return [
+        f"- Previous snapshot: {_snapshot_id_label(previous.get('snapshot_id'))}",
+        f"- Risk level change: {previous.get('risk_level', 'unknown')} -> {current.risk_level}",
+        (
+            "- Blocker pressure change: "
+            f"{_risk_delta(current.blocker_pressure, previous.get('blocker_pressure'))}"
+        ),
+        (
+            "- Review pressure change: "
+            f"{_risk_delta(current.review_pressure, previous.get('review_pressure'))}"
+        ),
+        (
+            "- Human review backlog change: "
+            f"{_risk_delta(current.human_review_backlog, previous.get('human_review_backlog'))}"
+        ),
+        f"- Weak concepts change: {_risk_delta(current.weak_concepts, previous.get('weak_concepts'))}",
+        (
+            "- Active misconceptions change: "
+            f"{_risk_delta(current.active_misconceptions, previous.get('active_misconceptions'))}"
+        ),
+    ]
+
+
+def _risk_delta(current: int, previous: object) -> str:
+    delta = current - _snapshot_int(previous)
+    return "0" if delta == 0 else f"{delta:+d}"
+
+
+def _snapshot_id_label(value: object) -> str:
+    snapshot_id = _snapshot_int(value)
+    return str(snapshot_id) if snapshot_id else "unknown"
+
+
+def _risk_history_path(project_root: Path) -> Path:
+    return project_root / "07_exports" / "reports" / _RISK_HISTORY_FILE
+
+
+def _read_risk_history(project_root: Path) -> list[dict[str, object]]:
+    history_path = _risk_history_path(project_root)
+    if not history_path.exists():
+        return []
+    try:
+        loaded = json.loads(history_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(loaded, dict):
+        return []
+    if loaded.get("schema_version") != _RISK_HISTORY_SCHEMA_VERSION:
+        return []
+    snapshots = loaded.get("snapshots", [])
+    if not isinstance(snapshots, list):
+        return []
+    return [snapshot for snapshot in snapshots if isinstance(snapshot, dict)]
+
+
+def _latest_risk_snapshot(
+    project_root: Path,
+    *,
+    report_type: str,
+) -> dict[str, object] | None:
+    for snapshot in reversed(_read_risk_history(project_root)):
+        if snapshot.get("report_type") == report_type:
+            return snapshot
+    return None
+
+
+def _append_risk_history_snapshot(
+    project_root: Path,
+    *,
+    report_type: str,
+    metrics: RiskMetrics,
+) -> None:
+    snapshots = _read_risk_history(project_root)
+    snapshot_id = max((_snapshot_int(item.get("snapshot_id")) for item in snapshots), default=0) + 1
+    snapshots.append(
+        {
+            "snapshot_id": snapshot_id,
+            "report_type": report_type,
+            "risk_level": metrics.risk_level,
+            "blocker_pressure": metrics.blocker_pressure,
+            "review_pressure": metrics.review_pressure,
+            "human_review_backlog": metrics.human_review_backlog,
+            "weak_concepts": metrics.weak_concepts,
+            "active_misconceptions": metrics.active_misconceptions,
+        }
+    )
+    payload = {
+        "schema_version": _RISK_HISTORY_SCHEMA_VERSION,
+        "snapshots": snapshots[-50:],
+    }
+    write_text(_risk_history_path(project_root), json.dumps(payload, indent=2) + "\n")
+
+
+def _snapshot_int(value: object) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return number if number > 0 else 0
 
 
 def _risk_level(

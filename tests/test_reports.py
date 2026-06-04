@@ -1188,6 +1188,109 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Weak concepts: 0", report_text)
             self.assertIn("- Active misconceptions: 0", report_text)
 
+    def test_weekly_report_trend_summary_compares_previous_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+
+            update_learning_state(
+                load_project(project),
+                LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
+            )
+
+            second = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(second.returncode, 0, second.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Trend Summary", report_text)
+            self.assertLess(
+                report_text.index("## Risk Summary"),
+                report_text.index("## Trend Summary"),
+            )
+            self.assertIn("- Previous snapshot: 1", report_text)
+            self.assertIn("- Risk level change: clear -> attention", report_text)
+            self.assertIn("- Weak concepts change: +1", report_text)
+
+            history = json.loads(
+                (project / "07_exports" / "reports" / "risk_history.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(history["schema_version"], "v0.19")
+            self.assertEqual([item["snapshot_id"] for item in history["snapshots"]], [1, 2])
+            self.assertEqual(history["snapshots"][0]["report_type"], "weekly")
+            self.assertEqual(history["snapshots"][1]["weak_concepts"], 1)
+
+    def test_project_summary_trend_summary_uses_empty_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Trend Summary", report_text)
+            self.assertIn("- Previous snapshot: none", report_text)
+            self.assertIn("- Risk level change: baseline", report_text)
+
+            history = json.loads(
+                (project / "07_exports" / "reports" / "risk_history.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(history["snapshots"][0]["report_type"], "project-summary")
+            self.assertEqual(history["snapshots"][0]["risk_level"], "blocked")
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

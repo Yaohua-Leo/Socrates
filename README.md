@@ -6,7 +6,7 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.18-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.19-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
@@ -15,10 +15,10 @@ status/lifecycle visibility, deterministic multi-session regression, workflow
 action queue visibility, priority action queue navigation, priority action
 snapshots in reports, recommended focus report summaries, action summary
 queue/report summaries, repair path queue/report summaries, risk summary report
-snapshots, and an opt-in LLM provider layer for reviewable draft suggestions,
-including review-only session judge drafts. It is not yet a full AI tutor:
-autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM judges, and
-product UI layers remain future work.
+snapshots, risk trend report summaries, and an opt-in LLM provider layer for
+reviewable draft suggestions, including review-only session judge drafts. It is
+not yet a full AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends,
+trusted LLM judges, and product UI layers remain future work.
 
 ## Quick Start
 
@@ -138,6 +138,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.18 risk summary rows in weekly, monthly, and project-summary reports,
   showing deterministic current-state pressure from blockers, reviews,
   human-review backlog, weak concepts, and active misconceptions.
+- v0.19 trend summary rows in weekly, monthly, and project-summary reports,
+  comparing current risk metrics against the previous same-type snapshot stored
+  in `07_exports/reports/risk_history.json`.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -190,6 +193,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   existing queue and learning-state evidence. They are not historical analytics,
   prediction, scoring, grading, tutoring, planning, readiness gates, or
   learning-state mutation.
+- Trend summary rows are deterministic comparisons over bounded report risk
+  snapshots. They are not predictions, learning-quality scores, grades,
+  tutoring decisions, plans, readiness gates, or learning-state mutation.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

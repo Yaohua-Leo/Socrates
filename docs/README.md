@@ -7,10 +7,11 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.18-alpha risk summary report snapshots,
-  over v0.17 repair paths in queue and reports, v0.16 action summaries, v0.15
-  recommended focus summaries, v0.14 priority action snapshots, v0.13 priority
-  action queue navigation, and v0.12 workflow action queue visibility
+- Current implementation baseline: v0.19-alpha risk trend report summaries,
+  over v0.18 risk summary report snapshots, v0.17 repair paths in queue and
+  reports, v0.16 action summaries, v0.15 recommended focus summaries, v0.14
+  priority action snapshots, v0.13 priority action queue navigation, and v0.12
+  workflow action queue visibility
   over deterministic multi-session regression, status/lifecycle visibility,
   deterministic session closeout workflow, review-only LLM session judge drafts,
   deterministic next-session handoff planning, external Markdown conversion
@@ -50,3 +51,5 @@ from the source planning conversation.
   for blocker repair paths in queue and reports.
 - `superpowers/plans/2026-06-04-v18-risk-summary.md`: executable v0.18 plan
   for deterministic risk summary snapshots in reports.
+- `superpowers/plans/2026-06-04-v19-risk-trend-summary.md`: executable v0.19
+  plan for bounded risk trend summaries in reports.

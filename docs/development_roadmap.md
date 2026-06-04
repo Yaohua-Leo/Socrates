@@ -1785,11 +1785,36 @@ deterministic fallback rows when no risk evidence exists
 - 空项目或缺失 evidence 会输出 0-count fallback，不会制造伪风险。
 - 这不是 historical analytics、prediction、score、grade、tutor、planner、readiness gate 或 learning-state mutation；它只是把已有 queue/state evidence 压缩成当前状态的风险摘要。
 
-v0.19：阶段趋势与长期风险信号
+v0.19：报告风险趋势摘要
 
 建议目标：
 
-在 current-state risk summary 之后再打磨 historical trend summary，让报告能看到 quality、review、exercise、misconception 等长期信号是在改善、持平还是积累风险。
+在 current-state risk summary 之后再打磨 historical trend summary，让报告能用有界 report risk snapshots 对比当前风险指标与同类型上一次报告，避免把一次性报告误读成长期趋势。
+
+必须完成：
+
+persist bounded risk history snapshots under reports
+
+trend summary section in weekly report
+
+trend summary section in monthly report
+
+trend summary section in project summary
+
+baseline fallback rows when no previous same-type report snapshot exists
+
+当前状态（2026-06-04）：
+
+- weekly、monthly 与 project summary report 已包含 `## Trend Summary` section，位置在 `## Risk Summary` 后。
+- `07_exports/reports/risk_history.json` 保存最近 50 条 report risk snapshots，并按 report type 比较同类型上一次 snapshot。
+- Trend Summary 显示 previous snapshot id、risk level change，以及 blocker/review/human-review/weak-concept/active-misconception pressure deltas。
+- 这不是 prediction、score、grade、tutor、planner、readiness gate 或 learning-state mutation；它只是比较 bounded report snapshots。
+
+v0.20：真实长期使用回归与报告 UX 打磨
+
+建议目标：
+
+在 risk trend summary 之后继续用真实多 session fixture 打磨长期学习回归和报告 UX，确保 report/action surfaces 对实际学习节奏有用，而不是只通过单点 artifact checks。
 
 v1.0：可长期使用的数学学习系统
 
