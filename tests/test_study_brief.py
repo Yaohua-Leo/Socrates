@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 import subprocess
 import sys
@@ -70,6 +71,67 @@ class StudyBriefTests(unittest.TestCase):
             self.assertIn("- Action type: none", text)
             self.assertIn("### Top Priority Actions", text)
             self.assertIn("- none", text)
+
+    def test_brief_cli_writes_structured_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+
+            result = self._run_socrates("brief", "--project", str(project))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest_path = project / "07_exports" / "briefs" / "study_brief_manifest.json"
+            self.assertTrue(manifest_path.exists())
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.assertEqual(manifest["schema_version"], 1)
+            self.assertEqual(manifest["quality_boundary"], "deterministic_study_brief")
+            self.assertEqual(manifest["status"], "generated")
+            self.assertEqual(manifest["brief_path"], "07_exports/briefs/study_brief.md")
+            self.assertEqual(
+                manifest["recorded_next_action"],
+                "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md",
+            )
+            self.assertEqual(manifest["action_type"], "human_review")
+
+    def test_dashboard_and_status_mark_corrupt_study_brief_manifest_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            brief = self._run_socrates("brief", "--project", str(project))
+            manifest_path = project / "07_exports" / "briefs" / "study_brief_manifest.json"
+            manifest_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            dashboard = self._run_socrates("dashboard", "--project", str(project))
+            status = self._run_socrates("status", "--project", str(project))
+
+            self.assertEqual(brief.returncode, 0, brief.stderr)
+            self.assertEqual(dashboard.returncode, 0, dashboard.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("- Study brief: invalid", dashboard.stdout)
+            self.assertIn("Study brief: invalid", status.stdout)
+
+    def test_dashboard_and_status_fall_back_to_legacy_markdown_brief(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+            brief = self._run_socrates("brief", "--project", str(project))
+            manifest_path = project / "07_exports" / "briefs" / "study_brief_manifest.json"
+            manifest_path.unlink()
+
+            dashboard = self._run_socrates("dashboard", "--project", str(project))
+            status = self._run_socrates("status", "--project", str(project))
+
+            self.assertEqual(brief.returncode, 0, brief.stderr)
+            self.assertEqual(dashboard.returncode, 0, dashboard.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("- Study brief: current", dashboard.stdout)
+            self.assertIn(f"- Study brief recorded next action: {next_action}", dashboard.stdout)
+            self.assertIn("Study brief: current", status.stdout)
+            self.assertIn(f"Study brief recorded next action: {next_action}", status.stdout)
 
     def test_dashboard_and_status_show_missing_study_brief(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -1935,6 +1935,32 @@ missing/current/invalid fallback rows
 - 当 brief 记录的是 `none` 但当前 priority queue 出现新 draft note 时，dashboard/status 显示 `Study brief: stale`。
 - 这不是完整 report freshness、readiness gate、score、tutor、planner 或 mutation；它只比较 brief 记录的 next action 与当前 priority queue first action。
 
+v0.25：study brief manifest
+
+建议目标：
+
+让新生成的 study brief 带结构化 manifest，避免长期依赖 Markdown 行解析来判断 brief freshness，同时保留旧 Markdown brief 的 fallback。
+
+必须完成：
+
+write `study_brief_manifest.json`
+
+manifest-backed status reader
+
+malformed manifest conservative invalid
+
+legacy Markdown fallback when manifest is absent
+
+manifest path and boundary documentation
+
+当前状态（2026-06-04）：
+
+- `python -m socrates brief --project <project>` 已同时写入 `07_exports/briefs/study_brief.md` 和 `07_exports/briefs/study_brief_manifest.json`。
+- Manifest 记录 `schema_version: 1`、`quality_boundary: deterministic_study_brief`、`status: generated`、`brief_path`、`recorded_next_action` 和 `action_type`。
+- `socrates.study_brief_status` 优先读取 manifest；manifest 损坏、缺字段或 schema 不符时显示 `Study brief: invalid`。
+- 只有 manifest 不存在但 Markdown brief 存在时，reader 才 fallback 到 `- Next action:` 行解析。
+- 这不是数学验证、report freshness、approval、score、tutor、planner 或 mutation；manifest 只是 brief artifact 的确定性元数据。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

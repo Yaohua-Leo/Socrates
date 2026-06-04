@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .context import append_project_log, load_project, write_text
+from .context import append_project_log, load_project, write_json, write_text
 from .dashboard import format_study_dashboard, project_title
 from .learning_queue import QueueItem, collect_learning_queue, priority_queue_items
-from .study_brief_status import STUDY_BRIEF_RELATIVE_PATH
+from .study_brief_status import (
+    STUDY_BRIEF_MANIFEST_RELATIVE_PATH,
+    STUDY_BRIEF_QUALITY_BOUNDARY,
+    STUDY_BRIEF_RELATIVE_PATH,
+)
 
 
 def format_study_brief(project_path: Path | str) -> str:
@@ -48,7 +52,19 @@ def generate_study_brief(project_path: Path | str) -> Path:
 
     context = load_project(project_path)
     brief_path = context.root / STUDY_BRIEF_RELATIVE_PATH
+    first_action = _first_priority_action(context.root)
     write_text(brief_path, format_study_brief(context.root))
+    write_json(
+        context.root / STUDY_BRIEF_MANIFEST_RELATIVE_PATH,
+        {
+            "schema_version": 1,
+            "quality_boundary": STUDY_BRIEF_QUALITY_BOUNDARY,
+            "status": "generated",
+            "brief_path": STUDY_BRIEF_RELATIVE_PATH.as_posix(),
+            "recorded_next_action": _action_line(first_action),
+            "action_type": _action_type(first_action),
+        },
+    )
     append_project_log(context, "Generated study brief.")
     return brief_path
 
