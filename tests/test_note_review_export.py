@@ -159,6 +159,8 @@ class NoteReviewExportTests(unittest.TestCase):
                         "note_id": "normal_subgroup",
                         "concept": "Normal Subgroup",
                         "type": "definition",
+                        "topic": "group_theory",
+                        "created_by": "socrates",
                         "path": "normal_subgroup.md",
                         "review_status": "approved",
                         "source_id": "df",

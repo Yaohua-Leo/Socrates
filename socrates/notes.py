@@ -81,6 +81,8 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
                 "note_id": note_path.stem,
                 "concept": _frontmatter_value(text, "concept") or note_path.stem,
                 "type": _frontmatter_value(text, "type") or folder.name.rstrip("s"),
+                "topic": _frontmatter_value(text, "topic") or "",
+                "created_by": _frontmatter_value(text, "created_by") or "",
                 "path": destination.relative_to(destination.parent).as_posix(),
                 "review_status": _frontmatter_value(text, "review_status") or "",
                 "source_id": _frontmatter_value(text, "source_id") or "",
