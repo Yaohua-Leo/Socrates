@@ -641,6 +641,27 @@ LATEX_OBJECT_TYPES = {
     "remark",
     "notation",
 }
+LATEX_OBJECT_TYPE_ALIASES = {
+    "def": "definition",
+    "defn": "definition",
+    "thm": "theorem",
+    "prop": "proposition",
+    "proposition": "proposition",
+    "lem": "lemma",
+    "lemma": "lemma",
+    "cor": "corollary",
+    "corr": "corollary",
+    "ex": "example",
+    "eg": "example",
+    "exmp": "example",
+    "cex": "counterexample",
+    "counterex": "counterexample",
+    "exer": "exercise",
+    "exc": "exercise",
+    "rem": "remark",
+    "rmk": "remark",
+    "ntn": "notation",
+}
 LATEX_SECTION_RE = re.compile(r"\\(?P<level>section|subsection|subsubsection)\{(?P<title>[^}]*)\}")
 LATEX_BEGIN_RE = re.compile(
     r"\\begin\{(?P<kind>[a-zA-Z*]+)\}(?:\[(?P<title>[^\]]+)\])?"
@@ -662,19 +683,26 @@ def _latex_to_markdown(source_text: str) -> str:
 
         begin = LATEX_BEGIN_RE.fullmatch(stripped)
         if begin:
-            kind = begin.group("kind").rstrip("*").casefold()
-            if kind in LATEX_OBJECT_TYPES:
+            kind = _latex_object_type(begin.group("kind"))
+            if kind is not None:
                 title = begin.group("title") or kind.replace("_", " ").title()
                 lines.append(_latex_object_heading(kind, title))
                 continue
 
         end = LATEX_END_RE.fullmatch(stripped)
-        if end and end.group("kind").rstrip("*").casefold() in LATEX_OBJECT_TYPES:
+        if end and _latex_object_type(end.group("kind")) is not None:
             continue
         if stripped.startswith(r"\label{"):
             continue
         lines.append(raw_line)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _latex_object_type(kind: str) -> str | None:
+    normalized = kind.rstrip("*").casefold()
+    if normalized in LATEX_OBJECT_TYPES:
+        return normalized
+    return LATEX_OBJECT_TYPE_ALIASES.get(normalized)
 
 
 def _plain_latex_title(title: str) -> str:

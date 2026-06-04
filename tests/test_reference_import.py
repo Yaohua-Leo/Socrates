@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -373,6 +374,58 @@ class ReferenceImportTests(unittest.TestCase):
             index = result.index_path.read_text(encoding="utf-8")
             self.assertIn("### Definition 3.1: Normal Subgroup", converted_text)
             self.assertIn('"number": "3.1"', index)
+
+    def test_curate_latex_reference_converts_common_theorem_environment_aliases(self) -> None:
+        from socrates.kb import build_reference_kb
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normality_aliases.tex"
+            source.write_text(
+                "\\section{Normality}\n"
+                "\\begin{defn}[3.1 Normal Subgroup]\n"
+                "A subgroup N is normal if gNg^{-1}=N.\n"
+                "\\end{defn}\n"
+                "\\begin{thm}[3.2 Kernel Normality]\n"
+                "The kernel of a homomorphism is normal.\n"
+                "Depends: kernel, homomorphism\n"
+                "\\end{thm}\n"
+                "\\begin{lem}[3.3 Coset Lemma]\n"
+                "Cosets are equal or disjoint.\n"
+                "\\end{lem}\n"
+                "\\begin{prop}[3.4 Quotient Multiplication]\n"
+                "Coset multiplication is well-defined for normal subgroups.\n"
+                "\\end{prop}\n"
+                "\\begin{cor}[3.5 Quotient Group]\n"
+                "The quotient by a normal subgroup is a group.\n"
+                "\\end{cor}\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normality Aliases",
+            )
+
+            curate_reference(project, record.id)
+            result = build_reference_kb(project)
+
+            converted = project / "01_references" / "converted" / "markdown" / "normality_aliases.md"
+            converted_text = converted.read_text(encoding="utf-8")
+            index = json.loads(result.index_path.read_text(encoding="utf-8"))
+            self.assertIn("### Definition 3.1: Normal Subgroup", converted_text)
+            self.assertIn("### Theorem 3.2: Kernel Normality", converted_text)
+            self.assertIn("### Lemma 3.3: Coset Lemma", converted_text)
+            self.assertIn("### Proposition 3.4: Quotient Multiplication", converted_text)
+            self.assertIn("### Corollary 3.5: Quotient Group", converted_text)
+            self.assertEqual(result.object_count, 5)
+            self.assertEqual(
+                [item["type"] for item in index["objects"]],
+                ["definition", "theorem", "lemma", "proposition", "corollary"],
+            )
 
     def test_patch_command_writes_patch_only_correction_without_mutating_references(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
