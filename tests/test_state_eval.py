@@ -497,6 +497,168 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn(resolved_line, resolved_items.stdout)
             self.assertNotIn("cosets_are_subgroups", resolved_items.stdout)
 
+    def test_review_misconceptions_json_lists_statuses_and_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            repeated = MistakeRecord(
+                session_id="session-001",
+                concept="normal_subgroup",
+                misconception_id="normal_equals_central",
+                user_answer="Normal means central.",
+                analysis="Confuses normality with centrality.",
+                repair_suggestion="Compare normality with conjugation.",
+                follow_up_exercises=["normal_subgroup_review_01"],
+            )
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        repeated,
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether the identity is present.",
+                            follow_up_exercises=["quotient_group_review_01"],
+                        ),
+                    ],
+                ),
+            )
+            update_learning_state(context, LearningStatePatch(mistakes=[repeated]))
+            resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "misconceptions",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Misconceptions", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_misconception_review",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["status_filter"], "all")
+            self.assertEqual(payload["misconception_count"], 2)
+            self.assertEqual(payload["active_count"], 1)
+            self.assertEqual(payload["resolved_count"], 1)
+            self.assertEqual(
+                payload["misconceptions"],
+                [
+                    {
+                        "misconception_id": "cosets_are_subgroups",
+                        "status": "active",
+                        "concept": "quotient_group",
+                        "count": 1,
+                        "last_session_id": "session-002",
+                        "analysis": "Confuses cosets with subgroups.",
+                        "repair_suggestion": "Check whether the identity is present.",
+                        "follow_up_exercises": ["quotient_group_review_01"],
+                    },
+                    {
+                        "misconception_id": "normal_equals_central",
+                        "status": "resolved",
+                        "concept": "normal_subgroup",
+                        "count": 2,
+                        "last_session_id": "session-001",
+                        "analysis": "Confuses normality with centrality.",
+                        "repair_suggestion": "Compare normality with conjugation.",
+                        "follow_up_exercises": ["normal_subgroup_review_01"],
+                    },
+                ],
+            )
+
+    def test_review_misconceptions_json_filters_active_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with conjugation.",
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether the identity is present.",
+                        ),
+                    ],
+                ),
+            )
+            resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "misconceptions",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "active",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status_filter"], "active")
+            self.assertEqual(payload["misconception_count"], 1)
+            self.assertEqual(payload["active_count"], 1)
+            self.assertEqual(payload["resolved_count"], 0)
+            self.assertEqual(
+                [
+                    item["misconception_id"]
+                    for item in payload["misconceptions"]
+                ],
+                ["cosets_are_subgroups"],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").iterdir()), [])
+
     def test_review_misconceptions_cli_recovers_malformed_count(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

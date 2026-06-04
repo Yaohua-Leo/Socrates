@@ -16,7 +16,7 @@ from .artifacts import (
     generate_misconception_note_drafts,
     generate_targeted_review_exercise_drafts,
 )
-from .context import load_project
+from .context import ProjectContext, load_project
 from .contracts import REVIEW_PRIORITY_FILTERS
 from .dashboard import format_study_dashboard
 from .exercise_bank import build_exercise_bank, read_exercise_bank
@@ -790,6 +790,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "active", "resolved"),
         default="all",
         help="Filter misconceptions by status; defaults to all.",
+    )
+    review_misconceptions_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of Markdown.",
     )
     review_misconceptions_parser.set_defaults(func=_handle_review_misconceptions)
     review_mastery_parser = review_subparsers.add_parser(
@@ -2125,6 +2130,15 @@ def _handle_review_resolve(args: argparse.Namespace) -> int:
 def _handle_review_misconceptions(args: argparse.Namespace) -> int:
     context = load_project(args.project)
     misconceptions = list_misconceptions(context, status=args.status)
+    if args.json:
+        print(
+            json.dumps(
+                _misconceptions_payload(context, args.status, misconceptions),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(_misconceptions_text(misconceptions), end="")
     return 0
 
@@ -2162,6 +2176,37 @@ def _misconceptions_text(misconceptions: list[MisconceptionSummary]) -> str:
                 f"  - Follow-up exercises: {', '.join(item.follow_up_exercises)}"
             )
     return "\n".join(lines) + "\n"
+
+
+def _misconceptions_payload(
+    context: ProjectContext,
+    status_filter: str,
+    misconceptions: list[MisconceptionSummary],
+) -> dict[str, object]:
+    rows = [_misconception_record(item) for item in misconceptions]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_misconception_review",
+        "project": str(context.root),
+        "status_filter": status_filter,
+        "misconception_count": len(rows),
+        "active_count": sum(1 for item in misconceptions if item.status == "active"),
+        "resolved_count": sum(1 for item in misconceptions if item.status == "resolved"),
+        "misconceptions": rows,
+    }
+
+
+def _misconception_record(item: MisconceptionSummary) -> dict[str, object]:
+    return {
+        "misconception_id": item.misconception_id,
+        "status": item.status,
+        "concept": item.concept,
+        "count": item.count,
+        "last_session_id": item.last_session_id,
+        "analysis": item.analysis,
+        "repair_suggestion": item.repair_suggestion,
+        "follow_up_exercises": list(item.follow_up_exercises),
+    }
 
 
 def _learning_scores_text(scores: list[LearningScoreSummary]) -> str:

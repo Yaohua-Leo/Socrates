@@ -2303,6 +2303,30 @@ unknown project-id rejection before writes
 - Unknown project ids 会在写入前以 exit code 2 失败，避免 typo 导致静默 no-op 或部分写入。
 - 这不是新 readiness rule、scanner、queue、report refresh、repair runner、LLM call、score、tutor、approval、hidden discovery mode 或 learning-state truth mutation；它只是 explicit writer selection 的 target filter。
 
+v0.40：misconception ledger JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 persisted misconception ledger，而不用解析 `review misconceptions` Markdown。
+
+必须完成：
+
+`review misconceptions --json`
+
+structured misconception rows
+
+status-filtered counts
+
+read-only no-write behavior
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review misconceptions --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_misconception_review`、`project`、`status_filter`、`misconception_count`、`active_count`、`resolved_count` 和 `misconceptions` rows。
+- 每个 row 包含 misconception id、status、concept、count、last session、analysis、repair suggestion 与 follow-up exercises。
+- `--status active --json` 只返回 active rows，并且不修改 `learning_state.json`、`mistake_bank.md`、note drafts、reports 或 project log。
+- 这不是 resolver、note generator、tutor、score、report refresh、LLM call 或 learning-state mutation；它只是 persisted misconception reader 的 structured output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
