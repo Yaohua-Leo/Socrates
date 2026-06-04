@@ -222,6 +222,31 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("Active misconceptions: 1", status.stdout)
             self.assertIn("Resolved misconceptions: 1", status.stdout)
 
+    def test_status_cli_recovers_corrupt_learning_state_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Current phase: planning_complete", status.stdout)
+            self.assertIn("Scheduled reviews: 0", status.stdout)
+            self.assertIn("Active misconceptions: 0", status.stdout)
+            self.assertIn("Resolved misconceptions: 0", status.stdout)
+            self.assertNotIn("Traceback", status.stderr)
+            self.assertNotIn("Expecting property name", status.stderr)
+
     def test_review_misconceptions_cli_lists_statuses_and_counts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

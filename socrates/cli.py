@@ -2400,18 +2400,14 @@ def _count_approved_exercises(project_root: Path) -> int:
 
 
 def _count_scheduled_reviews(learning_state: Path) -> int:
-    if not learning_state.exists():
-        return 0
-    state = json.loads(learning_state.read_text(encoding="utf-8"))
-    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    state = _read_learning_state_for_status(learning_state)
+    schedule = state.get("review_schedule", [])
     return len(schedule) if isinstance(schedule, list) else 0
 
 
 def _next_scheduled_review(learning_state: Path) -> dict[str, str] | None:
-    if not learning_state.exists():
-        return None
-    state = json.loads(learning_state.read_text(encoding="utf-8"))
-    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    state = _read_learning_state_for_status(learning_state)
+    schedule = state.get("review_schedule", [])
     if not isinstance(schedule, list):
         return None
 
@@ -2443,10 +2439,8 @@ def _next_scheduled_review(learning_state: Path) -> dict[str, str] | None:
 
 
 def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
-    if not learning_state.exists():
-        return (0, 0)
-    state = json.loads(learning_state.read_text(encoding="utf-8"))
-    misconceptions = state.get("misconceptions", {}) if isinstance(state, dict) else {}
+    state = _read_learning_state_for_status(learning_state)
+    misconceptions = state.get("misconceptions", {})
     if not isinstance(misconceptions, dict):
         return (0, 0)
 
@@ -2461,6 +2455,16 @@ def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
         elif status == "active" or "status" not in value:
             active += 1
     return (active, resolved)
+
+
+def _read_learning_state_for_status(learning_state: Path) -> dict[str, object]:
+    if not learning_state.exists():
+        return {}
+    try:
+        state = json.loads(learning_state.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+    return state if isinstance(state, dict) else {}
 
 
 def _parse_iso_date(value: str) -> date:

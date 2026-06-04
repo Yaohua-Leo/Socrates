@@ -93,11 +93,7 @@ def _reviewed_note_ids(project_root: Path) -> set[str]:
 
 def _misconception_notes_to_draft(project_root: Path) -> list[QueueItem]:
     learning_state = project_root / "00_meta" / "learning_state.json"
-    if not learning_state.exists():
-        return []
-    state = read_json(learning_state)
-    if not isinstance(state, dict):
-        return []
+    state = _read_learning_state(learning_state)
     misconceptions = state.get("misconceptions", {})
     if not isinstance(misconceptions, dict):
         return []
@@ -152,11 +148,7 @@ def _exercise_drafts_to_approve(project_root: Path) -> list[QueueItem]:
 def _scheduled_reviews(project_root: Path) -> list[QueueItem]:
     learning_state = project_root / "00_meta" / "learning_state.json"
     schedule_path = project_root / "02_learning_plan" / "review_schedule.md"
-    if not learning_state.exists():
-        return []
-    state = read_json(learning_state)
-    if not isinstance(state, dict):
-        return []
+    state = _read_learning_state(learning_state)
     schedule = state.get("review_schedule", [])
     if not isinstance(schedule, list):
         return []
@@ -173,6 +165,16 @@ def _scheduled_reviews(project_root: Path) -> list[QueueItem]:
             )
         )
     return items
+
+
+def _read_learning_state(learning_state: Path) -> dict[str, object]:
+    if not learning_state.exists():
+        return {}
+    try:
+        state = read_json(learning_state)
+    except JSONDecodeError:
+        return {}
+    return state if isinstance(state, dict) else {}
 
 
 def _exercises_to_attempt(project_root: Path) -> list[QueueItem]:
