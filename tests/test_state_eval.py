@@ -579,6 +579,37 @@ class StateEvalTests(unittest.TestCase):
             self.assertNotIn("subgroup", ready_with_high_cutoff.stdout)
             self.assertNotIn("normal_subgroup", ready_with_high_cutoff.stdout)
 
+    def test_review_mastery_cli_rejects_nonfinite_threshold(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.42}),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--threshold",
+                    "nan",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: Review mastery threshold must be finite", result.stderr)
+
     def test_build_review_schedule_uses_weak_concepts_and_active_misconceptions(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -865,6 +896,44 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("## quotient_group", schedule_text)
             self.assertNotIn("## subgroup", schedule_text)
             self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
+
+    def test_review_schedule_cli_rejects_nonfinite_threshold_without_writing_schedule(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(concept_mastery={"normal_subgroup": 0.4}),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--threshold",
+                    "nan",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: Review mastery threshold must be finite", result.stderr)
+            self.assertFalse((project / "02_learning_plan" / "review_schedule.md").exists())
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(learning_state.get("review_schedule", []), [])
 
     def test_review_schedule_cli_rejects_invalid_as_of_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

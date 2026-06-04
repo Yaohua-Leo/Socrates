@@ -158,6 +158,7 @@ def build_review_schedule(
 ) -> Path:
     """Build a first review schedule from weak concepts and active misconceptions."""
 
+    _validate_mastery_threshold(mastery_threshold)
     state = _learning_state_dict(context.learning_state)
     items = _review_items(
         state,
@@ -285,6 +286,7 @@ def list_learning_scores(
     if status not in allowed_statuses:
         allowed = ", ".join(sorted(allowed_statuses))
         raise ValueError(f"Unknown score status {status!r}; expected one of: {allowed}")
+    _validate_mastery_threshold(threshold)
 
     state = _learning_state_dict(context.learning_state)
     summaries: list[LearningScoreSummary] = []
@@ -325,6 +327,13 @@ def _learning_state_dict(path: Path) -> dict[str, object]:
     if not isinstance(state.get("review_schedule"), list):
         state["review_schedule"] = []
     return state
+
+
+def _validate_mastery_threshold(threshold: float) -> None:
+    if not math.isfinite(threshold):
+        raise ValueError("Review mastery threshold must be finite.")
+    if threshold < 0 or threshold > 1:
+        raise ValueError("Review mastery threshold must be between 0 and 1.")
 
 
 def _review_items(
