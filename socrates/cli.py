@@ -1185,7 +1185,9 @@ def _handle_status(args: argparse.Namespace) -> int:
         learning_reports=report_count,
         learning_plans=_count_learning_plans(context.learning_plan_dir),
         benchmark_score=(
-            benchmark_status["score"] if benchmark_status is not None else None
+            benchmark_status["score"]
+            if benchmark_status is not None and benchmark_status.get("status") != "invalid"
+            else None
         ),
     )
 
@@ -1231,6 +1233,9 @@ def _handle_status(args: argparse.Namespace) -> int:
     if benchmark_status is None:
         print("Benchmark score: none")
         print("Benchmark gates: none")
+    elif benchmark_status.get("status") == "invalid":
+        print("Benchmark score: invalid")
+        print("Benchmark gates: invalid")
     else:
         print(f"Benchmark score: {benchmark_status['score']}/100")
         print(
@@ -2426,17 +2431,18 @@ def _read_benchmark_status(project_root: Path) -> dict[str, object] | None:
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return None
+        return {"status": "invalid"}
     if not isinstance(manifest, dict):
-        return None
+        return {"status": "invalid"}
     score = manifest.get("score")
     passed_gates = manifest.get("passed_gates")
     total_gates = manifest.get("total_gates")
     if not all(isinstance(value, int) for value in (score, passed_gates, total_gates)):
-        return None
+        return {"status": "invalid"}
     if score < 0 or passed_gates < 0 or total_gates <= 0:
-        return None
+        return {"status": "invalid"}
     return {
+        "status": "current",
         "score": score,
         "passed_gates": passed_gates,
         "total_gates": total_gates,
@@ -2484,7 +2490,11 @@ def _benchmark_status_text(project_root: Path) -> str:
 
     manifest = _read_json_object(manifest_path)
     benchmark_status = _read_benchmark_status(project_root)
-    if manifest is None or benchmark_status is None:
+    if (
+        manifest is None
+        or benchmark_status is None
+        or benchmark_status.get("status") == "invalid"
+    ):
         lines.append("- invalid manifest")
         lines.append(f"- manifest: {manifest_path.relative_to(project_root).as_posix()}")
         return "\n".join(lines) + "\n"

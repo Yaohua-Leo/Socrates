@@ -348,11 +348,13 @@ def list_tool_verification_records(
         return []
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return []
-    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    except json.JSONDecodeError as exc:
+        raise ValueError("invalid tool-verification manifest JSON") from exc
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        raise ValueError("invalid tool-verification manifest schema")
+    records = manifest.get("records", [])
     if not isinstance(records, list):
-        return []
+        raise ValueError("tool-verification manifest records must be a list")
 
     summaries: list[ToolVerificationSummary] = []
     for record in records:

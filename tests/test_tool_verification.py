@@ -573,6 +573,38 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Tool verification records: 1", status.stdout)
 
+    def test_tool_list_cli_reports_corrupt_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            verification_dir = project / "08_evals" / "tool_verification"
+            verification_dir.mkdir(parents=True, exist_ok=True)
+            (verification_dir / "manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "list",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid tool-verification manifest JSON", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
     def test_lean_skeleton_cli_marks_stale_reference_kb_status(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

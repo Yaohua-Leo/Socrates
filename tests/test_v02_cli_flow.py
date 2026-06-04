@@ -725,10 +725,28 @@ class V02CliFlowTests(unittest.TestCase):
             self._run_cli("note", "export-obsidian", "--project", str(project))
 
             status = self._run_cli("status", "--project", str(project)).stdout
+            lifecycle = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
             session_plan = (project / "02_learning_plan" / "session_0001_plan.md").read_text(
                 encoding="utf-8"
             )
             exported = project / "07_exports" / "obsidian" / "normal_subgroup.md"
+            lifecycle_report = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
 
             self.assertIn("Definition: Normal Subgroup", session_plan)
             self.assertIn("Source: 01_references/curated/normal_subgroup_notes.curated.md", session_plan)
@@ -746,6 +764,14 @@ class V02CliFlowTests(unittest.TestCase):
             self.assertIn("KB objects: 1", status)
             self.assertIn("Reviewed notes: 1", status)
             self.assertIn("Obsidian exports: 1", status)
+            self.assertEqual(lifecycle.returncode, 1)
+            self.assertIn("Lifecycle audit passed", lifecycle.stdout)
+            self.assertIn("- Reference KB: pass", lifecycle_report)
+            self.assertIn("- Learning plans: pass", lifecycle_report)
+            self.assertIn("- Tutoring session artifacts: pass", lifecycle_report)
+            self.assertIn("- Obsidian export: pass", lifecycle_report)
+            self.assertIn("- Benchmark report: fail", lifecycle_report)
+            self.assertIn("- Tool verification records: fail", lifecycle_report)
 
     def _run_cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         result = subprocess.run(
