@@ -9,6 +9,8 @@ from pathlib import Path
 
 from .context import append_project_log, load_project, read_json, write_text
 from .contracts import EXERCISE_ALLOWED_TYPES
+from .llm import LlmClient, LlmMessage, LlmRequest, parse_json_object, sha256_text
+from .llm_artifacts import record_llm_suggestion
 from .quality import check_generated_exercise_quality, exercise_quality_issues
 from .project import slugify_topic
 from .state import (
@@ -237,6 +239,68 @@ def grade_exercise_attempt(
     return grade_path
 
 
+def suggest_exercise_feedback_with_llm(
+    project_path: Path | str,
+    attempt_id: str,
+    *,
+    client: LlmClient,
+) -> Path:
+    """Write draft LLM feedback for an attempt without grading or updating state."""
+
+    context = load_project(project_path)
+    attempt_path = context.root / "05_exercises" / "attempted" / f"{attempt_id}.md"
+    if not attempt_path.exists():
+        raise FileNotFoundError(f"Exercise attempt does not exist: {attempt_path}")
+    attempt_text = attempt_path.read_text(encoding="utf-8")
+    response = client.complete(
+        LlmRequest(
+            purpose="exercise_feedback_suggestion",
+            messages=(
+                LlmMessage(
+                    role="system",
+                    content=(
+                        "Return one JSON object with keys score_suggestion, "
+                        "misconception_id, analysis, repair_suggestion, follow_up_prompt. "
+                        "This is a draft for human review, not a grade."
+                    ),
+                ),
+                LlmMessage(role="user", content=f"Exercise attempt:\n{attempt_text}"),
+            ),
+            temperature=0.1,
+        )
+    )
+    suggestion = _parse_feedback_suggestion(response.content)
+    artifact_path = context.root / "05_exercises" / "attempted" / f"{attempt_id}_llm_feedback.md"
+    write_text(
+        artifact_path,
+        (
+            "---\n"
+            "status: draft\n"
+            "created_by: socrates_llm\n"
+            f"provider: {client.provider}\n"
+            f"model: {client.model}\n"
+            f"attempt_id: {attempt_id}\n"
+            "---\n\n"
+            "# LLM Exercise Feedback Draft\n\n"
+            f"Score suggestion: {suggestion['score_suggestion']}\n\n"
+            f"Misconception: {suggestion['misconception_id']}\n\n"
+            f"Analysis: {suggestion['analysis']}\n\n"
+            f"Repair suggestion: {suggestion['repair_suggestion']}\n\n"
+            f"Follow-up prompt: {suggestion['follow_up_prompt']}\n"
+        ),
+    )
+    record_llm_suggestion(
+        context.root,
+        artifact_path=artifact_path,
+        suggestion_type="exercise_feedback",
+        provider=client.provider,
+        model=client.model,
+        source_paths=[f"05_exercises/attempted/{attempt_id}.md"],
+        prompt_hash=sha256_text(attempt_text),
+    )
+    return artifact_path
+
+
 def _has_review_schedule(learning_state_path: Path) -> bool:
     state = read_json(learning_state_path) if learning_state_path.exists() else {}
     if not isinstance(state, dict):
@@ -245,12 +309,42 @@ def _has_review_schedule(learning_state_path: Path) -> bool:
     return isinstance(schedule, list) and bool(schedule)
 
 
+def _parse_feedback_suggestion(content: str) -> dict[str, str]:
+    required = (
+        "score_suggestion",
+        "misconception_id",
+        "analysis",
+        "repair_suggestion",
+        "follow_up_prompt",
+    )
+    data = parse_json_object(content, required_keys=required)
+    score = _feedback_score(data.get("score_suggestion"))
+    result = {key: str(data.get(key, "")).strip() for key in required}
+    result["score_suggestion"] = f"{score:g}"
+    missing = [key for key, value in result.items() if not value]
+    if missing:
+        raise ValueError(f"LLM feedback suggestion missing fields: {', '.join(missing)}")
+    return result
+
+
+def _feedback_score(value: object) -> float:
+    try:
+        score = float(str(value).strip())
+    except (TypeError, ValueError) as exc:
+        raise ValueError("LLM feedback score_suggestion must be a number") from exc
+    if score < 0 or score > 1:
+        raise ValueError("LLM feedback score_suggestion must be between 0 and 1")
+    return score
+
+
 def _attempts_by_exercise(project_root: Path) -> dict[str, list[str]]:
     attempted_dir = project_root / "05_exercises" / "attempted"
     attempts: dict[str, list[str]] = {}
     if not attempted_dir.exists():
         return attempts
     for attempt_path in sorted(attempted_dir.glob("*.md"), key=lambda path: path.stem):
+        if attempt_path.stem.endswith("_llm_feedback"):
+            continue
         text = attempt_path.read_text(encoding="utf-8")
         exercise_id = _frontmatter_value(text, "exercise_id") or _exercise_id_from_attempt(attempt_path.stem)
         attempts.setdefault(exercise_id, []).append(attempt_path.stem)

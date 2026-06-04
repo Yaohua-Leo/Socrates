@@ -1,5 +1,11 @@
 .omx/
 
+# Local secrets/config
+.env
+.env.local
+.env.*.local
+!.env.example
+
 __pycache__/
 *.py[cod]
 *$py.class

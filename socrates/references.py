@@ -10,6 +10,8 @@ import shutil
 
 from .context import append_project_log, load_project, write_text
 from .contracts import SourceRecord, yaml_scalar
+from .llm import LlmClient, LlmMessage, LlmRequest, parse_json_object, sha256_text
+from .llm_artifacts import record_llm_suggestion
 from .project import slugify_topic
 
 
@@ -192,6 +194,73 @@ def create_correction_patch(
     append_project_log(
         context,
         f"Wrote correction patch {patch_path.name} for reference {source_id}.",
+    )
+    return patch_path
+
+
+def suggest_correction_patch_with_llm(
+    project_path: Path | str,
+    source_id: str,
+    *,
+    client: LlmClient,
+    location_hint: str = "",
+) -> Path:
+    """Ask an LLM for a patch-only correction proposal for a curated reference."""
+
+    context = load_project(project_path)
+    registry_text = context.source_registry.read_text(encoding="utf-8")
+    record = _find_registry_record(registry_text, source_id)
+    if record is None:
+        raise ValueError(f"Unknown source id: {source_id}")
+    curated_relative = record.get("processed_paths.curated", "")
+    if not curated_relative:
+        raise ValueError(f"Reference {source_id} does not have a curated markdown path")
+    curated_path = context.root / curated_relative
+    curated_text = curated_path.read_text(encoding="utf-8")
+    response = client.complete(
+        LlmRequest(
+            purpose="reference_patch_suggestion",
+            messages=(
+                LlmMessage(
+                    role="system",
+                    content=(
+                        "Return one JSON object with keys location, original, "
+                        "proposed_correction, reason, risk_level. The original value "
+                        "must be an exact span from the curated reference."
+                    ),
+                ),
+                LlmMessage(
+                    role="user",
+                    content=(
+                        f"Source id: {source_id}\n"
+                        f"Location hint: {location_hint}\n\n"
+                        f"Curated reference:\n{curated_text[:12000]}"
+                    ),
+                ),
+            ),
+            temperature=0.1,
+        )
+    )
+    suggestion = _parse_patch_suggestion(response.content)
+    if suggestion["original"] not in curated_text:
+        raise ValueError("LLM suggested original text was not found in the curated reference")
+    patch_path = create_correction_patch(
+        context.root,
+        source_id,
+        location=suggestion["location"],
+        original=suggestion["original"],
+        proposed_correction=suggestion["proposed_correction"],
+        reason=suggestion["reason"],
+        risk_level=suggestion["risk_level"],
+    )
+    record_llm_suggestion(
+        context.root,
+        artifact_path=patch_path,
+        suggestion_type="reference_correction_patch",
+        provider=client.provider,
+        model=client.model,
+        source_paths=[curated_relative],
+        prompt_hash=sha256_text(curated_text + location_hint),
     )
     return patch_path
 
@@ -408,6 +477,18 @@ def _registry_value(value: str) -> str:
     return value
 
 
+def _parse_patch_suggestion(content: str) -> dict[str, str]:
+    required = ("location", "original", "proposed_correction", "reason", "risk_level")
+    data = parse_json_object(content, required_keys=required)
+    result = {key: str(data.get(key, "")).strip() for key in required}
+    missing = [key for key, value in result.items() if not value]
+    if missing:
+        raise ValueError(f"LLM patch suggestion missing fields: {', '.join(missing)}")
+    if result["risk_level"] not in {"low", "medium", "high"}:
+        raise ValueError("LLM patch suggestion risk_level must be low, medium, or high")
+    return result
+
+
 def _curated_markdown(record: dict[str, str], source_text: str) -> str:
     return (
         f"# Curated Reference: {record.get('title', record['id'])}\n\n"
@@ -490,6 +571,7 @@ def _correction_patch_markdown(
     title = record.get("title", record["id"])
     return (
         f"# Correction Patch: {title}\n\n"
+        "review_status: pending\n\n"
         f"## Patch {patch_number:03d}\n\n"
         "### Source\n\n"
         f"- source_id: {record['id']}\n"

@@ -9,6 +9,7 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
+from .deepseek import DeepSeekClient
 from .artifacts import (
     generate_atomic_note_draft,
     generate_exercise_drafts,
@@ -24,6 +25,7 @@ from .exercises import (
     grade_exercise_attempt,
     list_exercises,
     record_exercise_attempt,
+    suggest_exercise_feedback_with_llm,
 )
 from .kb import (
     CONCEPT_RELATIONSHIP_TYPES,
@@ -37,6 +39,9 @@ from .kb import (
     search_reference_kb,
 )
 from .learning_queue import QUEUE_SECTIONS, collect_learning_queue, format_learning_queue
+from .llm import LlmMessage, LlmProviderError, LlmRequest
+from .llm_artifacts import list_llm_suggestions
+from .llm_config import load_llm_config
 from .notes import (
     AtomicNoteSummary,
     NOTE_TYPES,
@@ -75,6 +80,7 @@ from .references import (
     list_correction_patches,
     list_source_registry,
     review_correction_patch,
+    suggest_correction_patch_with_llm,
 )
 from .reports import (
     REPORT_TYPES,
@@ -124,6 +130,7 @@ from .tutoring import (
     TutoringSessionSummary,
     list_tutoring_sessions,
     run_scripted_tutoring_session,
+    suggest_next_question_with_llm,
 )
 
 
@@ -133,6 +140,25 @@ def build_parser() -> argparse.ArgumentParser:
         description="Project-based mathematics learning CLI.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    llm_parser = subparsers.add_parser(
+        "llm",
+        help="Inspect and smoke-test the configured local LLM provider.",
+    )
+    llm_subparsers = llm_parser.add_subparsers(dest="llm_command", required=True)
+    llm_config_parser = llm_subparsers.add_parser(
+        "config",
+        help="Print redacted LLM provider configuration.",
+    )
+    llm_config_parser.add_argument("--root", default=".", help="Directory containing .env.")
+    llm_config_parser.set_defaults(func=_handle_llm_config)
+    llm_smoke_parser = llm_subparsers.add_parser(
+        "smoke",
+        help="Call the configured LLM provider with a short prompt.",
+    )
+    llm_smoke_parser.add_argument("--root", default=".", help="Directory containing .env.")
+    llm_smoke_parser.add_argument("--prompt", required=True, help="Short smoke-test prompt.")
+    llm_smoke_parser.set_defaults(func=_handle_llm_smoke)
 
     init_parser = subparsers.add_parser(
         "init",
@@ -255,6 +281,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by source registry id.",
     )
     patches_list_parser.set_defaults(func=_handle_patches_list)
+    patches_suggest_parser = patches_subparsers.add_parser(
+        "suggest",
+        help="Ask the configured LLM for one patch-only reference correction proposal.",
+    )
+    patches_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    patches_suggest_parser.add_argument("--source-id", required=True, help="Reference source id.")
+    patches_suggest_parser.add_argument(
+        "--location-hint",
+        default="",
+        help="Optional section or line hint to focus the LLM review.",
+    )
+    patches_suggest_parser.set_defaults(func=_handle_patches_suggest)
     patches_review_parser = patches_subparsers.add_parser(
         "review",
         help="Record a human review decision on a correction patch.",
@@ -693,6 +731,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional repair suggestion; defaults to the feedback text when a misconception is recorded.",
     )
     exercise_grade_parser.set_defaults(func=_handle_exercise_grade)
+    exercise_suggest_feedback_parser = exercise_subparsers.add_parser(
+        "suggest-feedback",
+        help="Ask the configured LLM for draft feedback on one exercise attempt.",
+    )
+    exercise_suggest_feedback_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_suggest_feedback_parser.add_argument("--attempt", required=True, help="Attempt id, without .md.")
+    exercise_suggest_feedback_parser.set_defaults(func=_handle_exercise_suggest_feedback)
 
     session_parser = subparsers.add_parser(
         "session",
@@ -718,6 +763,13 @@ def build_parser() -> argparse.ArgumentParser:
     session_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     session_check_parser.add_argument("--session-id", required=True, help="Session identifier.")
     session_check_parser.set_defaults(func=_handle_session_check)
+    session_suggest_parser = session_subparsers.add_parser(
+        "suggest-next",
+        help="Ask the configured LLM for a draft next Socratic question.",
+    )
+    session_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_suggest_parser.add_argument("--session-id", required=True, help="Tutoring session id.")
+    session_suggest_parser.set_defaults(func=_handle_session_suggest_next)
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -931,6 +983,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _handle_llm_config(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path(args.root))
+    print(config.redacted_summary(), end="")
+    return 0
+
+
+def _handle_llm_smoke(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path(args.root))
+    if not config.api_key_present:
+        print("error: DEEPSEEK_API_KEY is missing", file=sys.stderr)
+        return 1
+    client = DeepSeekClient(config)
+    try:
+        response = client.complete(
+            LlmRequest(
+                purpose="cli_smoke",
+                messages=(LlmMessage(role="user", content=args.prompt),),
+                temperature=0.0,
+                max_tokens=64,
+            )
+        )
+    except LlmProviderError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(response.content)
+    return 0
+
+
 def _handle_init(args: argparse.Namespace) -> int:
     spec = ProjectSpec(
         topic=args.topic,
@@ -1022,6 +1102,23 @@ def _handle_patch(args: argparse.Namespace) -> int:
 def _handle_patches_list(args: argparse.Namespace) -> int:
     patches = list_correction_patches(args.project, source_id=args.source_id)
     print(_correction_patches_text(patches), end="")
+    return 0
+
+
+def _handle_patches_suggest(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        patch = suggest_correction_patch_with_llm(
+            args.project,
+            args.source_id,
+            client=client,
+            location_hint=args.location_hint,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM correction patch for {args.source_id}: {patch}")
     return 0
 
 
@@ -1137,6 +1234,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     pending_correction_patch_count = sum(
         1 for patch in correction_patches if patch.status == "pending"
     )
+    llm_suggestion_draft_count = _count_llm_suggestion_drafts(context.root)
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_status = reference_kb_status(context.root)
     kb_object_count = kb_status.object_count
@@ -1198,6 +1296,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Conversion pending references: {conversion_pending_count}")
     print(f"Correction patches: {correction_patch_count}")
     print(f"Pending correction patches: {pending_correction_patch_count}")
+    print(f"LLM suggestion drafts: {llm_suggestion_draft_count}")
     print(f"Curated references: {curated_count}")
     print(f"KB objects: {kb_object_count}")
     print(f"Reference KB status: {kb_status.status}")
@@ -1762,6 +1861,22 @@ def _handle_exercise_grade(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_exercise_suggest_feedback(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        artifact = suggest_exercise_feedback_with_llm(
+            args.project,
+            args.attempt,
+            client=client,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM exercise-feedback draft: {artifact}")
+    return 0
+
+
 def _handle_session_list(args: argparse.Namespace) -> int:
     sessions = list_tutoring_sessions(args.project, status=args.status)
     print(_sessions_text(sessions), end="")
@@ -1792,6 +1907,22 @@ def _handle_session_check(args: argparse.Namespace) -> int:
     print(f"Checked session {result.session_id}: {result.status}")
     print(f"Tutoring quality report: {result.report_path}")
     print(f"Tutoring quality manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_suggest_next(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        artifact = suggest_next_question_with_llm(
+            args.project,
+            args.session_id,
+            client=client,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM next-question draft: {artifact}")
     return 0
 
 
@@ -2463,6 +2594,13 @@ def _failed_benchmark_gates(value: object) -> list[str]:
         if name:
             failed.append(name)
     return failed
+
+
+def _count_llm_suggestion_drafts(project_path: Path) -> int:
+    try:
+        return sum(1 for item in list_llm_suggestions(project_path) if item.status == "draft")
+    except (OSError, ValueError, json.JSONDecodeError):
+        return 0
 
 
 def _benchmark_failed_gates_text(benchmark_status: dict[str, object]) -> str:

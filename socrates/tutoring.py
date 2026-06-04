@@ -7,6 +7,8 @@ import json
 from pathlib import Path
 
 from socrates.context import load_project, write_text
+from socrates.llm import LlmClient, LlmMessage, LlmRequest, parse_json_object, sha256_text
+from socrates.llm_artifacts import record_llm_suggestion
 
 
 @dataclass(frozen=True)
@@ -115,6 +117,76 @@ def list_tutoring_sessions(
     return summaries
 
 
+def suggest_next_question_with_llm(
+    project_path: Path | str,
+    session_id: str,
+    *,
+    client: LlmClient,
+) -> Path:
+    """Write a reviewable LLM draft for the next Socratic question."""
+
+    context = load_project(project_path)
+    session_dir = context.sessions_dir / session_id
+    transcript = (session_dir / "transcript.md").read_text(encoding="utf-8")
+    summary = (session_dir / "summary.md").read_text(encoding="utf-8")
+    misconceptions = (session_dir / "detected_misconceptions.md").read_text(encoding="utf-8")
+    response = client.complete(
+        LlmRequest(
+            purpose="tutoring_next_question",
+            messages=(
+                LlmMessage(
+                    role="system",
+                    content=(
+                        "Return one JSON object with keys question, reason, "
+                        "expected_student_action. Ask a Socratic next question, "
+                        "not a full solution."
+                    ),
+                ),
+                LlmMessage(
+                    role="user",
+                    content=(
+                        f"Transcript:\n{transcript}\n\n"
+                        f"Summary:\n{summary}\n\n"
+                        f"Detected misconceptions:\n{misconceptions}"
+                    ),
+                ),
+            ),
+            temperature=0.2,
+        )
+    )
+    suggestion = _parse_next_question(response.content)
+    artifact_path = session_dir / "llm_next_question.md"
+    write_text(
+        artifact_path,
+        (
+            "---\n"
+            "status: draft\n"
+            "created_by: socrates_llm\n"
+            f"provider: {client.provider}\n"
+            f"model: {client.model}\n"
+            "---\n\n"
+            "# LLM Next Question Draft\n\n"
+            f"## Question\n\n{suggestion['question']}\n\n"
+            f"## Reason\n\n{suggestion['reason']}\n\n"
+            f"## Expected Student Action\n\n{suggestion['expected_student_action']}\n"
+        ),
+    )
+    record_llm_suggestion(
+        context.root,
+        artifact_path=artifact_path,
+        suggestion_type="tutoring_next_question",
+        provider=client.provider,
+        model=client.model,
+        source_paths=[
+            f"03_sessions/{session_id}/transcript.md",
+            f"03_sessions/{session_id}/summary.md",
+            f"03_sessions/{session_id}/detected_misconceptions.md",
+        ],
+        prompt_hash=sha256_text(transcript + summary + misconceptions),
+    )
+    return artifact_path
+
+
 def _tutoring_quality_by_session(project_root: Path) -> dict[str, tuple[str | None, int | None]]:
     manifest_path = project_root / "08_evals" / "tutoring_quality_manifest.json"
     if not manifest_path.exists():
@@ -139,6 +211,16 @@ def _tutoring_quality_by_session(project_root: Path) -> dict[str, tuple[str | No
         quality_score = score_value if type(score_value) is int and 0 <= score_value <= 100 else None
         quality_by_session[session_id] = (quality_status, quality_score)
     return quality_by_session
+
+
+def _parse_next_question(content: str) -> dict[str, str]:
+    required = ("question", "reason", "expected_student_action")
+    data = parse_json_object(content, required_keys=required)
+    result = {key: str(data.get(key, "")).strip() for key in required}
+    missing = [key for key, value in result.items() if not value]
+    if missing:
+        raise ValueError(f"LLM next-question suggestion missing fields: {', '.join(missing)}")
+    return result
 
 
 def _read_script(script_path: Path) -> _Script:

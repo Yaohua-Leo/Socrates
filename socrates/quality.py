@@ -18,6 +18,7 @@ from .contracts import (
 )
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .learning_queue import collect_learning_queue
+from .llm_artifacts import validate_llm_suggestion_manifest
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
 from .state import ensure_learning_state_readable
@@ -504,6 +505,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
             "Review schedule": _has_review_schedule(context.root, state),
             "Learning reports": _has_learning_reports(context.root),
             "Artifact quality": _has_clean_artifact_quality_manifests(context.root),
+            "LLM suggestion drafts": _has_valid_llm_suggestion_manifest(context.root),
             "Benchmark report": _has_benchmark_report(context.root),
             "Benchmark manifest": _has_benchmark_manifest(context.root),
             "Tool verification records": _has_tool_verification_records(context.root),
@@ -2164,6 +2166,13 @@ def _has_clean_artifact_quality_manifests(project_root: Path) -> bool:
         _valid_clean_quality_manifest(project_root / "08_evals" / manifest_name)
         for manifest_name in manifest_names
     )
+
+
+def _has_valid_llm_suggestion_manifest(project_root: Path) -> bool:
+    try:
+        return validate_llm_suggestion_manifest(project_root)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
 
 
 def _valid_clean_quality_manifest(manifest_path: Path) -> bool:

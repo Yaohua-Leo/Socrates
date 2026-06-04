@@ -68,6 +68,14 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `359e9f4 Reject malformed reference KB graph artifacts`
   - `1c9e53b Validate derived KB object provenance`
 
+## v0.3 LLM provider alpha
+
+- Added local `.env` based LLM provider configuration with redacted status output.
+- Added DeepSeek provider adapter using `DEEPSEEK_MODEL=deepseek-v4-pro`.
+- Added LLM suggestion artifacts for reference correction patches, tutoring next questions, and exercise feedback drafts.
+- Preserved the safety boundary: LLM output is reviewed draft material and does not directly mutate curated references, reviewed notes, graded attempts, or learning state.
+- Default gates remain offline; live DeepSeek smoke is opt-in.
+
 ## 当前未完成事项
 
 ### 集成状态

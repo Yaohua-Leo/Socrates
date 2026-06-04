@@ -1391,7 +1391,7 @@ v0.3：错因与学习状态
 
 目标：
 
-系统开始记住用户哪里不会
+系统开始记住用户哪里不会，并接入受控的智能建议层
 
 必须完成：
 
@@ -1404,6 +1404,14 @@ misconception detection
 exercise targeting
 
 review scheduling 初版
+
+当前状态（2026-06-04）：
+
+- 已完成 v0.3-alpha LLM provider 层：本地 `.env` 配置、redacted config 输出、stdlib-only DeepSeek adapter，默认模型为 `deepseek-v4-pro`。
+- 已完成三类 reviewable LLM draft artifact：reference correction patch proposal、tutoring next-question draft、exercise feedback draft。
+- 已完成 `08_evals/llm_suggestions_manifest.json` 与 `status` / lifecycle audit 可见性；损坏的 LLM manifest 会保守 fail，draft 存在本身不作为 readiness failure。
+- 默认门禁保持离线确定性；live DeepSeek smoke 需要显式运行，不进入默认 check gate。
+- OCR/PDF 后端、LLM judge、全自动 LLM tutoring、provider selection UI 仍后置到 v0.4+ / v0.5+。
 
 v0.4：题库与验证
 

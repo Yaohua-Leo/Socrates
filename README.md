@@ -6,11 +6,11 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.2 prototype. Its strongest surfaces are the
+The current codebase is a v0.3-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
-and Obsidian note workflow. It is not yet a full AI tutor: LLM generation,
-OCR/PDF extraction backends, LLM judges, and product UI layers remain future
-work.
+Obsidian note workflow, and an opt-in LLM provider layer for reviewable draft
+suggestions. It is not yet a full AI tutor: autonomous LLM tutoring, OCR/PDF
+extraction backends, LLM judges, and product UI layers remain future work.
 
 ## Quick Start
 
@@ -47,6 +47,13 @@ python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
 
+Inspect local LLM configuration or run an explicit DeepSeek smoke test:
+
+```powershell
+python -m socrates llm config --root .
+python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
+```
+
 ## Current Capabilities
 
 - Project initialization with stable metadata, reference, plan, session, note,
@@ -63,14 +70,20 @@ python -m socrates lifecycle audit --project ".\projects\group_theory"
   stale export cleanup, and lifecycle audit integration.
 - Exercise drafting, attempts, grading, review scheduling, learning-state
   updates, reports, tool-verification records, and checklist quality gates.
+- Opt-in DeepSeek-backed draft suggestions for reference correction patches,
+  tutoring next questions, and exercise feedback proposals, tracked through an
+  LLM suggestion manifest.
 
 ## Boundaries
 
 - No runtime third-party dependencies are required.
 - PDF/OCR conversion is intentionally not implemented yet; unsupported PDFs
   produce conversion-pending artifacts.
-- Tutoring, note, and exercise content generation is deterministic/template
-  driven in v0.2. The LLM/provider layer is a v0.3+ architecture decision.
+- v0.3 adds an opt-in LLM provider layer for draft suggestions only. The default
+  CLI workflow remains deterministic and offline; live DeepSeek calls require
+  local `.env` configuration and are not part of the default check gate.
+- LLM output never directly overwrites curated references, reviewed notes,
+  graded attempts, or learning-state truth.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

@@ -7,3 +7,8 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
+
+## Plans
+
+- `superpowers/plans/2026-06-04-v03-llm-provider-learning-state.md`: executable
+  v0.3 plan for the first LLM/provider layer and DeepSeek smoke testing.

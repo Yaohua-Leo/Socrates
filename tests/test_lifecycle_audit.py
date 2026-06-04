@@ -64,7 +64,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 1/16 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 2/17 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
@@ -180,6 +180,37 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertTrue(report_path.exists(), result.stderr)
             report_text = report_path.read_text(encoding="utf-8")
             self.assertIn("- Obsidian export: pass", report_text)
+
+    def test_lifecycle_audit_rejects_corrupt_llm_suggestion_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "08_evals" / "llm_suggestions_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- LLM suggestion drafts: fail", report_text)
 
     def test_lifecycle_audit_rejects_reviewed_notes_pending_obsidian_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -848,7 +879,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 18/18 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 19/19 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
