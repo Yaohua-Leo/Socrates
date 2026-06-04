@@ -411,6 +411,7 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Title: Group Theory", report_text)
             self.assertIn("## Artifact Inventory", report_text)
             self.assertIn("- KB objects: 1", report_text)
+            self.assertIn("- Reference KB status: current", report_text)
             self.assertIn("- Sessions completed: 1", report_text)
             self.assertIn("- Reviewed notes: 1", report_text)
             self.assertIn("- Obsidian exports: 1", report_text)
@@ -453,6 +454,47 @@ class ReportTests(unittest.TestCase):
             self.assertIn("Current phase: report_ready", status.stdout)
             self.assertIn("Learning reports: 1", status.stdout)
             self.assertIn("Tool verification check: not run", status.stdout)
+
+    def test_project_summary_marks_stale_reference_kb_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_time_ns = index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: Fresh Curated Comment\n"
+                + "This remark has not been rebuilt into the reference KB yet.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report = project / "07_exports" / "reports" / "project_summary.md"
+            report_text = report.read_text(encoding="utf-8")
+            self.assertIn("- Reference KB status: stale", report_text)
+            self.assertIn("## Reference KB Snapshot", report_text)
 
     def test_project_summary_counts_obsidian_manifest_backlinks(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

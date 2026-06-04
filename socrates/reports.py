@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
+from .kb import reference_kb_status
 from .tool_verification import ToolVerificationSummary, list_tool_verification_records
 
 
@@ -54,6 +55,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
     context = load_project(project_path)
     report_path = context.root / "07_exports" / "reports" / "project_summary.md"
     state = _read_learning_state(context.learning_state)
+    kb_status = reference_kb_status(context.root)
     write_text(
         report_path,
         _project_summary_text(
@@ -61,7 +63,8 @@ def generate_project_summary(project_path: Path | str) -> Path:
             project_root=context.root,
             imported_sources=_count_sources(context.source_registry),
             curated_references=_count_markdown(context.references_dir / "curated"),
-            kb_objects=_count_kb_objects(context.root),
+            kb_objects=kb_status.object_count,
+            kb_status=kb_status.status,
             kb_snapshot=_read_kb_snapshot(context.root),
             sessions_completed=_count_dirs(context.sessions_dir),
             reviewed_notes=_count_reviewed_notes(context.root),
@@ -301,6 +304,7 @@ def _project_summary_text(
     imported_sources: int,
     curated_references: int,
     kb_objects: int,
+    kb_status: str,
     kb_snapshot: list[dict[str, str]],
     sessions_completed: int,
     reviewed_notes: int,
@@ -328,6 +332,7 @@ def _project_summary_text(
         f"- Imported sources: {imported_sources}",
         f"- Curated references: {curated_references}",
         f"- KB objects: {kb_objects}",
+        f"- Reference KB status: {kb_status}",
         f"- Sessions completed: {sessions_completed}",
         f"- Reviewed notes: {reviewed_notes}",
         f"- Obsidian exports: {obsidian_exports}",
@@ -457,15 +462,6 @@ def _count_sources(registry_path: Path) -> int:
         for line in registry_path.read_text(encoding="utf-8").splitlines()
         if line.strip().startswith("- id:")
     )
-
-
-def _count_kb_objects(project_root: Path) -> int:
-    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
-    if not index_path.exists():
-        return 0
-    index = json.loads(index_path.read_text(encoding="utf-8"))
-    objects = index.get("objects", []) if isinstance(index, dict) else []
-    return len(objects) if isinstance(objects, list) else 0
 
 
 def _read_kb_snapshot(project_root: Path, *, limit: int = 10) -> list[dict[str, str]]:
