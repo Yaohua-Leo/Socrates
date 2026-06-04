@@ -273,6 +273,58 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertIn(pending_line, pdf_sources.stdout)
             self.assertNotIn("normal_subgroups_notes", pdf_sources.stdout)
 
+    def test_sources_list_cli_shows_checked_curated_quality_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            notes = root / "normal_subgroups.md"
+            notes.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                notes,
+                role="lecture_notes",
+                title="Normal Subgroups Notes",
+            )
+            curate_reference(project, record.id)
+
+            check = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            sources = subprocess.run(
+                [sys.executable, "-m", "socrates", "sources", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(check.returncode, 0, check.stderr)
+            self.assertEqual(sources.returncode, 0, sources.stderr)
+            self.assertIn(
+                "- normal_subgroups_notes | curated_draft | markdown | "
+                "lecture_notes | priority 1 | Normal Subgroups Notes",
+                sources.stdout,
+            )
+            self.assertIn("  - curated quality: pass", sources.stdout)
+
     def test_curate_markdown_reference_creates_curated_draft_and_updates_registry(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

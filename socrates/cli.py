@@ -985,6 +985,8 @@ def _source_registry_text(sources: list[SourceSummary]) -> str:
         lines.append(f"  - raw: {_display_path(source.local_path)}")
         lines.append(f"  - markdown: {_display_path(source.markdown_path)}")
         lines.append(f"  - curated: {_display_path(source.curated_path)}")
+        if source.curated_quality_status:
+            lines.append(f"  - curated quality: {source.curated_quality_status}")
         if source.notes:
             lines.append(f"  - notes: {source.notes}")
     return "\n".join(lines) + "\n"

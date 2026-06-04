@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
 import re
 import shutil
@@ -35,6 +36,7 @@ class SourceSummary:
     markdown_path: str
     curated_path: str
     notes: str
+    curated_quality_status: str | None = None
 
 
 @dataclass(frozen=True)
@@ -101,7 +103,11 @@ def list_source_registry(
 
     context = load_project(project_path)
     records = _registry_records(context.source_registry.read_text(encoding="utf-8"))
-    summaries = [_source_summary(record) for record in records]
+    quality_by_curated_path = _ingestion_quality_by_curated_path(context.root)
+    summaries = [
+        _source_summary(record, quality_by_curated_path=quality_by_curated_path)
+        for record in records
+    ]
     if status != "all":
         summaries = [summary for summary in summaries if summary.status == status]
     if role != "all":
@@ -349,7 +355,13 @@ def _registry_records(registry_text: str) -> list[dict[str, str]]:
     return records
 
 
-def _source_summary(record: dict[str, str]) -> SourceSummary:
+def _source_summary(
+    record: dict[str, str],
+    *,
+    quality_by_curated_path: dict[str, str] | None = None,
+) -> SourceSummary:
+    curated_path = record.get("processed_paths.curated", "")
+    quality_lookup = quality_by_curated_path or {}
     return SourceSummary(
         id=record.get("id", ""),
         type=record.get("type", ""),
@@ -359,9 +371,33 @@ def _source_summary(record: dict[str, str]) -> SourceSummary:
         status=record.get("status", ""),
         local_path=record.get("local_path", ""),
         markdown_path=record.get("processed_paths.markdown", ""),
-        curated_path=record.get("processed_paths.curated", ""),
+        curated_path=curated_path,
         notes=record.get("notes", ""),
+        curated_quality_status=quality_lookup.get(curated_path),
     )
+
+
+def _ingestion_quality_by_curated_path(project_root: Path) -> dict[str, str]:
+    manifest_path = project_root / "08_evals" / "ingestion_quality_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    references = manifest.get("curated_references", []) if isinstance(manifest, dict) else []
+    if not isinstance(references, list):
+        return {}
+
+    quality_by_path: dict[str, str] = {}
+    for item in references:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "")).strip()
+        quality_status = str(item.get("quality_status", "")).strip()
+        if path and quality_status:
+            quality_by_path[path] = quality_status
+    return quality_by_path
 
 
 def _registry_value(value: str) -> str:
