@@ -10,6 +10,7 @@ import re
 
 from socrates.context import load_project, write_text
 from socrates.contracts import AtomicNoteDraft, ExerciseDraft, yaml_scalar
+from socrates.kb import reference_kb_status
 from socrates.project import slugify_topic
 from socrates.state import MisconceptionSummary, list_misconceptions
 
@@ -31,6 +32,7 @@ def generate_atomic_note_draft(
     relative_path = Path("04_atomic_notes") / "drafts" / f"{note_id}.md"
     note_path = context.root / relative_path
     reference_object = _kb_reference_object(context.root, concept)
+    kb_status = reference_kb_status(context.root)
     related_concepts = _unique_concepts(
         [
             *_kb_related_concepts(reference_object),
@@ -39,7 +41,10 @@ def generate_atomic_note_draft(
     )
     related_links = [f"[[{_concept_title(item)}]]" for item in related_concepts]
     note_body = _with_required_note_sections(body.rstrip(), concept)
-    reference_context = _reference_context_section(reference_object)
+    reference_context = _reference_context_section(
+        reference_object,
+        kb_status=kb_status.status,
+    )
     if reference_context:
         note_body += "\n\n" + reference_context.rstrip()
     if related_links:
@@ -114,6 +119,7 @@ def generate_exercise_drafts(
     context = load_project(project_path)
     base_id = slugify_topic(concept)
     reference_object = _kb_reference_object(context.root, concept)
+    kb_status = reference_kb_status(context.root)
     prerequisite_list = (
         list(prerequisites)
         or _kb_related_concepts(reference_object)
@@ -133,6 +139,7 @@ def generate_exercise_drafts(
                 source_id=source_id,
                 prerequisites=prerequisite_list,
                 reference_object=reference_object,
+                kb_status=kb_status.status,
                 index=index,
                 difficulty=difficulty,
             ),
@@ -164,6 +171,7 @@ def generate_targeted_review_exercise_drafts(
 
     drafts: list[ExerciseDraft] = []
     concept_counts: dict[str, int] = {}
+    kb_status = reference_kb_status(context.root)
     for item in schedule:
         if not isinstance(item, dict):
             continue
@@ -189,6 +197,7 @@ def generate_targeted_review_exercise_drafts(
                     scheduled_for=str(item.get("scheduled_for", "")),
                     repair_context=item.get("repair_context", []),
                     reference_object=reference_object,
+                    kb_status=kb_status.status,
                 ),
             )
         else:
@@ -221,11 +230,15 @@ def _exercise_text(
     source_id: str,
     prerequisites: list[str],
     reference_object: dict[str, object] | None,
+    kb_status: str,
     index: int,
     difficulty: int,
 ) -> str:
     prerequisites_block = _bullet_list(prerequisites)
-    reference_context = _reference_context_section(reference_object)
+    reference_context = _reference_context_section(
+        reference_object,
+        kb_status=kb_status,
+    )
     return (
         _frontmatter(
             {
@@ -276,8 +289,12 @@ def _targeted_review_exercise_text(
     scheduled_for: str,
     repair_context: object,
     reference_object: dict[str, object] | None,
+    kb_status: str,
 ) -> str:
-    reference_context = _reference_context_section(reference_object)
+    reference_context = _reference_context_section(
+        reference_object,
+        kb_status=kb_status,
+    )
     repair_context_section = _repair_context_section(repair_context)
     prerequisites = _review_exercise_prerequisites(reference_object, concept)
     return (
@@ -564,7 +581,11 @@ def _unique_concepts(values: Iterable[str]) -> list[str]:
     return concepts
 
 
-def _reference_context_section(reference_object: dict[str, object] | None) -> str:
+def _reference_context_section(
+    reference_object: dict[str, object] | None,
+    *,
+    kb_status: str,
+) -> str:
     if reference_object is None:
         return ""
 
@@ -577,6 +598,7 @@ def _reference_context_section(reference_object: dict[str, object] | None) -> st
     lines = [
         "## Reference Context",
         "",
+        f"- Reference KB status: {kb_status}",
         f"- Object: {_reference_object_label(reference_object, object_type, title)}",
         f"- Source: {source.get('path', 'unknown')}",
     ]

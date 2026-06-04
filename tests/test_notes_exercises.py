@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import importlib.util
 from datetime import date
+import os
 from pathlib import Path
 import tempfile
 import unittest
@@ -251,6 +252,45 @@ class NotesExercisesTests(unittest.TestCase):
             )
             self.assertIn("- subgroup", text)
             self.assertIn("- conjugation", text)
+
+    def test_generated_exercises_record_stale_reference_kb_context(self) -> None:
+        artifacts = self._load_artifacts_module()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N of G is normal if gNg^{-1}=N for every g in G.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            kb_result = build_reference_kb(project)
+            index_time_ns = kb_result.index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: Fresh Exercise Context\n"
+                + "This curated remark is not in the current Reference KB index.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+
+            exercises = artifacts.generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="normality_notes",
+                count=5,
+            )
+
+            text = (project / exercises[0].path).read_text(encoding="utf-8")
+            self.assertIn("## Reference Context", text)
+            self.assertIn("- Reference KB status: stale", text)
 
     def test_generate_targeted_review_exercises_uses_review_schedule(self) -> None:
         artifacts = self._load_artifacts_module()
