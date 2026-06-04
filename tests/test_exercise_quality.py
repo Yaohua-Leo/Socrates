@@ -359,6 +359,71 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Graded exercises: 1", status.stdout)
 
+    def test_exercise_grade_cli_rejects_corrupt_learning_state_before_writing_grade(
+        self,
+    ) -> None:
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            feedback = root / "feedback.md"
+            answer.write_text(
+                "I would prove normality by checking gng^-1 remains in N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            feedback.write_text(
+                "Good use of conjugation invariance; subgroup closure still needs detail.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            record_exercise_attempt(project, "normal_subgroup_01", answer)
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.8",
+                    "--feedback",
+                    str(feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid learning_state.json", result.stderr)
+            self.assertIn("repair the JSON before grading exercise attempts", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+            graded = project / "05_exercises" / "graded" / "normal_subgroup_01_attempt_001_grade.md"
+            self.assertFalse(graded.exists())
+
     def test_low_score_grade_cli_schedules_targeted_review(self) -> None:
         from socrates.exercises import approve_exercise_draft, record_exercise_attempt
 
