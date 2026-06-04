@@ -501,7 +501,15 @@ class ExerciseQualityTests(unittest.TestCase):
             )
             self.assertEqual(
                 learning_state["misconceptions"]["normal_equals_central"],
-                {"concept": "normal_subgroup", "count": 1, "status": "active"},
+                {
+                    "concept": "normal_subgroup",
+                    "count": 1,
+                    "status": "active",
+                    "last_session_id": "normal_subgroup_01_attempt_001",
+                    "analysis": "Confuses normality with centrality or commutativity.",
+                    "repair_suggestion": "Compare gNg^-1=N with gn=ng.",
+                    "follow_up_exercises": ["normal_subgroup_01"],
+                },
             )
             self.assertEqual(
                 learning_state["review_schedule"][0]["reason"],

@@ -99,6 +99,10 @@ def update_learning_state(context: ProjectContext, patch: LearningStatePatch) ->
             "concept": mistake.concept,
             "count": previous_count + 1,
             "status": mistake.status,
+            "last_session_id": mistake.session_id,
+            "analysis": mistake.analysis,
+            "repair_suggestion": mistake.repair_suggestion,
+            "follow_up_exercises": list(mistake.follow_up_exercises),
         }
         mistake_entries.append(_mistake_bank_entry(mistake, is_recurrence=previous_count > 0))
 

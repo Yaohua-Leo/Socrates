@@ -54,7 +54,15 @@ class StateEvalTests(unittest.TestCase):
             self.assertEqual(learning_state["proof_skills"]["unfold_definition"], 0.82)
             self.assertEqual(
                 learning_state["misconceptions"]["normal_equals_central"],
-                {"concept": "normal_subgroup", "count": 1, "status": "active"},
+                {
+                    "concept": "normal_subgroup",
+                    "count": 1,
+                    "status": "active",
+                    "last_session_id": "session-001",
+                    "analysis": "Confuses normality with centrality.",
+                    "repair_suggestion": "Compare gNg^-1 = N with gn = ng.",
+                    "follow_up_exercises": ["Find a non-central normal subgroup."],
+                },
             )
 
             mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
@@ -96,6 +104,18 @@ class StateEvalTests(unittest.TestCase):
 
             learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
             self.assertEqual(learning_state["misconceptions"]["normal_equals_central"]["count"], 2)
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["last_session_id"],
+                "session-002",
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["analysis"],
+                "Same confusion recurred.",
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["repair_suggestion"],
+                "Contrast center Z(G) with normal subgroups.",
+            )
             mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
             self.assertIn("## session-002 - normal_subgroup", mistake_bank)
             self.assertIn("- Recurrence: yes", mistake_bank)
