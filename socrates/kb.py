@@ -54,6 +54,7 @@ RELATIONSHIP_METADATA_KEYS = {
     "special case of": "special_case_of",
     "equivalent to": "equivalent_to",
 }
+CONCEPT_RELATIONSHIP_TYPES = set(RELATIONSHIP_METADATA_KEYS.values())
 
 
 def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
@@ -177,6 +178,49 @@ def list_reference_kb_objects(
     return items
 
 
+def list_reference_kb_relationships(
+    project_path: Path | str,
+    *,
+    relationship_type: str = "all",
+) -> list[dict[str, str]]:
+    """Return explicit non-prerequisite concept-graph relationships."""
+
+    allowed_types = {"all", *CONCEPT_RELATIONSHIP_TYPES}
+    if relationship_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(
+            f"Unknown reference relationship type {relationship_type!r}; expected one of: {allowed}"
+        )
+
+    context = load_project(project_path)
+    graph = read_reference_concept_graph(context.root)
+    edges = graph.get("edges", []) if isinstance(graph, dict) else []
+    if not isinstance(edges, list):
+        return []
+
+    relationships: list[dict[str, str]] = []
+    for edge in edges:
+        if not isinstance(edge, dict):
+            continue
+        relationship = str(edge.get("relationship", "")).strip()
+        if relationship == "prerequisite":
+            continue
+        if relationship_type != "all" and relationship != relationship_type:
+            continue
+        source = str(edge.get("source", "")).strip()
+        target = str(edge.get("target", "")).strip()
+        if not source or not target:
+            continue
+        relationships.append(
+            {
+                "source": source,
+                "target": target,
+                "relationship": relationship,
+            }
+        )
+    return relationships
+
+
 def read_reference_chapter_index(project_path: Path | str) -> dict[str, object]:
     """Read the generated chapter index or raise an actionable rebuild error."""
 
@@ -200,6 +244,31 @@ def read_reference_chapter_index(project_path: Path | str) -> dict[str, object]:
             )
         )
     return index
+
+
+def read_reference_concept_graph(project_path: Path | str) -> dict[str, object]:
+    """Read the generated concept graph or raise an actionable rebuild error."""
+
+    context = load_project(project_path)
+    graph_path = context.root / "06_kb" / "concept_graph.json"
+    try:
+        graph = json.loads(graph_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(
+            _reference_concept_graph_rebuild_message(context.root, "is missing")
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            _reference_concept_graph_rebuild_message(context.root, "is invalid")
+        ) from exc
+    if not isinstance(graph, dict) or not isinstance(graph.get("edges", []), list):
+        raise ValueError(
+            _reference_concept_graph_rebuild_message(
+                context.root,
+                "has invalid schema",
+            )
+        )
+    return graph
 
 
 def _search_reference_objects(
@@ -256,6 +325,13 @@ def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
 def _reference_chapter_index_rebuild_message(project_root: Path, reason: str) -> str:
     return (
         f"Reference KB chapter index {reason}; "
+        f"run socrates kb build --project {project_root} to rebuild it."
+    )
+
+
+def _reference_concept_graph_rebuild_message(project_root: Path, reason: str) -> str:
+    return (
+        f"Reference KB concept graph {reason}; "
         f"run socrates kb build --project {project_root} to rebuild it."
     )
 

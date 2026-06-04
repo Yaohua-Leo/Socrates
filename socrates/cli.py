@@ -24,10 +24,12 @@ from .exercises import (
     record_exercise_attempt,
 )
 from .kb import (
+    CONCEPT_RELATIONSHIP_TYPES,
     OBJECT_TYPES,
     build_reference_kb,
     find_counterexamples,
     list_reference_kb_objects,
+    list_reference_kb_relationships,
     reference_kb_status,
     read_reference_chapter_index,
     search_reference_kb,
@@ -382,6 +384,18 @@ def build_parser() -> argparse.ArgumentParser:
     kb_counterexamples_parser.add_argument("--concept", required=True, help="Concept to search counterexamples for.")
     kb_counterexamples_parser.add_argument("--limit", type=int, default=10, help="Maximum matches.")
     kb_counterexamples_parser.set_defaults(func=_handle_kb_counterexamples)
+    kb_relationships_parser = kb_subparsers.add_parser(
+        "relationships",
+        help="List explicit concept-graph relationships from the Reference KB.",
+    )
+    kb_relationships_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_relationships_parser.add_argument(
+        "--type",
+        choices=("all", *sorted(CONCEPT_RELATIONSHIP_TYPES)),
+        default="all",
+        help="Filter by relationship type; defaults to all explicit non-prerequisite relationships.",
+    )
+    kb_relationships_parser.set_defaults(func=_handle_kb_relationships)
     kb_check_parser = kb_subparsers.add_parser(
         "check",
         help="Run checklist quality checks on curated references.",
@@ -1300,6 +1314,31 @@ def _chapter_object_location(item: dict[str, object]) -> str:
     if line:
         location = f"{location}:{line}"
     return location
+
+
+def _handle_kb_relationships(args: argparse.Namespace) -> int:
+    _warn_if_reference_kb_stale(args.project)
+    relationships = list_reference_kb_relationships(
+        args.project,
+        relationship_type=args.type,
+    )
+    print(_reference_kb_relationships_text(relationships), end="")
+    return 0
+
+
+def _reference_kb_relationships_text(relationships: list[dict[str, str]]) -> str:
+    lines = ["# Reference KB Relationships", ""]
+    if not relationships:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+    lines.extend(
+        (
+            f"- {relationship['source']} --{relationship['relationship']}--> "
+            f"{relationship['target']}"
+        )
+        for relationship in relationships
+    )
+    return "\n".join(lines) + "\n"
 
 
 def _handle_kb_search(args: argparse.Namespace) -> int:
