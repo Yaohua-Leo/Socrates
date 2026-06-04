@@ -292,7 +292,22 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
                 )
             )
             continue
+        if quality_status == "pass":
+            continue
         if quality_status != "fail":
+            issues = [
+                f"unexpected tool-verification quality status: {quality_status}",
+                *_tool_verification_issue_items(record.get("issues", [])),
+            ]
+            items.append(
+                _tool_quality_record_item(
+                    project_root,
+                    manifest_path,
+                    item_id=str(record.get("object_id") or f"record_{index}"),
+                    record_status="invalid_quality_status",
+                    issues=issues,
+                )
+            )
             continue
         object_id = str(record.get("object_id") or f"record_{index}")
         record_status = str(record.get("record_status") or "unknown")
