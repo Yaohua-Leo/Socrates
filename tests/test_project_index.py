@@ -1430,6 +1430,179 @@ class ProjectIndexTests(unittest.TestCase):
             self.assertIn("limit must be positive", result.stderr)
             self.assertFalse((root / "socrates_projects.json").exists())
 
+    def test_projects_refresh_briefs_project_id_json_writes_matching_project_only(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            other_fresh_project = create_project(
+                ProjectSpec(topic="Module Theory", path=root / "module_theory")
+            )
+            target_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "refresh-briefs",
+                    "--root",
+                    str(root),
+                    "--project-id",
+                    "ring_theory",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["project_ids"], ["ring_theory"])
+            self.assertEqual(payload["selected_count"], 1)
+            self.assertEqual(payload["refreshed_count"], 1)
+            self.assertEqual(payload["deferred_count"], 0)
+            self.assertEqual(payload["excluded_count"], 2)
+            self.assertEqual(payload["skipped_count"], 0)
+            self.assertEqual(
+                payload["selected"],
+                [
+                    {
+                        "id": "ring_theory",
+                        "title": "Ring Theory",
+                        "path": "ring_theory",
+                        "resume_state": "refresh_brief",
+                        "brief_path": "07_exports/briefs/study_brief.md",
+                    }
+                ],
+            )
+            self.assertEqual(payload["refreshed"], payload["selected"])
+            self.assertEqual(payload["deferred"], [])
+            self.assertEqual(
+                payload["excluded"],
+                [
+                    {
+                        "id": "group_theory",
+                        "title": "Group Theory",
+                        "path": "group_theory",
+                        "resume_state": "ready",
+                        "reason": "project_id_filter",
+                    },
+                    {
+                        "id": "module_theory",
+                        "title": "Module Theory",
+                        "path": "module_theory",
+                        "resume_state": "refresh_brief",
+                        "reason": "project_id_filter",
+                    },
+                ],
+            )
+            self.assertEqual(payload["skipped"], [])
+            self.assertTrue(
+                (target_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertTrue(
+                (
+                    target_project
+                    / "07_exports"
+                    / "briefs"
+                    / "study_brief_manifest.json"
+                ).exists()
+            )
+            self.assertIn(
+                "Generated study brief.",
+                (target_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+            self.assertFalse(
+                (other_fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (
+                    other_fresh_project
+                    / "07_exports"
+                    / "briefs"
+                    / "study_brief_manifest.json"
+                ).exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (other_fresh_project / "00_meta" / "project_log.md").read_text(
+                    encoding="utf-8"
+                ),
+            )
+            ready_log = (ready_project / "00_meta" / "project_log.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertEqual(ready_log.count("Generated study brief."), 1)
+            self.assertFalse((root / "socrates_projects.json").exists())
+
+    def test_projects_refresh_briefs_project_id_rejects_unknown_id_before_writing(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "refresh-briefs",
+                    "--root",
+                    str(root),
+                    "--project-id",
+                    "missing_project",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 2)
+            self.assertIn("unknown project id: missing_project", result.stderr)
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+            self.assertFalse((root / "socrates_projects.json").exists())
+
     def test_projects_refs_finds_reviewed_notes_across_projects(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "SocratesProjects"

@@ -2278,6 +2278,31 @@ non-positive limit rejection
 - `--limit 0` 与 negative limits 会在写入前失败。
 - 这不是新 selector、queue、scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit writer selection 的 batch-size control。
 
+v0.39：multi-project brief refresh project-id targeting
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以在 collection resume 或 dry-run preview 后精确刷新指定 child project，而不用依赖 deterministic order + limit。
+
+必须完成：
+
+`projects refresh-briefs --project-id <id>`
+
+repeatable project-id filter
+
+excluded rows for nonmatching child projects
+
+unknown project-id rejection before writes
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects refresh-briefs --root <root> --project-id <id>` 已只选择 matching child projects。
+- `--project-id` 可与 `--json`、`--dry-run` 和 `--limit` 共享同一 payload contract。
+- Nonmatching child projects 会进入 `excluded`，reason 为 `project_id_filter`，不会被混入 ready-only `skipped`。
+- Matching ready child projects 仍进入 `skipped`，reason 为 `resume_state_ready`。
+- Unknown project ids 会在写入前以 exit code 2 失败，避免 typo 导致静默 no-op 或部分写入。
+- 这不是新 readiness rule、scanner、queue、report refresh、repair runner、LLM call、score、tutor、approval、hidden discovery mode 或 learning-state truth mutation；它只是 explicit writer selection 的 target filter。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

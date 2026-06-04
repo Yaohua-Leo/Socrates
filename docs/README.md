@@ -7,8 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.38-alpha limit-controlled dry-run-previewable
-  structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, over v0.37
+- Current implementation baseline: v0.39-alpha targeted limit-controlled
+  dry-run-previewable structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, over v0.38
+  limit-controlled dry-run-previewable
+  structured batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, v0.37
   dry-run-previewable structured
   batch-refreshable commands-output command-summarized filterable readiness-counted multi-project resume indexes, v0.36
   structured batch-refreshable commands-output command-summarized filterable
@@ -120,3 +122,6 @@ from the source planning conversation.
 - `superpowers/plans/2026-06-04-v38-projects-refresh-briefs-limit.md`:
   executable v0.38 plan for limiting selected multi-project refresh-briefs
   writes and reporting deferred rows.
+- `superpowers/plans/2026-06-04-v39-projects-refresh-briefs-project-id.md`:
+  executable v0.39 plan for targeting refresh-briefs writes by child project id
+  and reporting excluded rows.
