@@ -110,13 +110,14 @@ def _misconception_notes_to_draft(project_root: Path) -> list[QueueItem]:
         if note_id in covered_ids:
             continue
         concept = str(value.get("concept", "general"))
+        status = str(value.get("status", "active"))
         items.append(
             QueueItem(
                 item_id=note_id,
                 path=learning_state.relative_to(project_root).as_posix(),
                 detail=(
-                    f"concept: {concept}; "
-                    "draft with: socrates note draft-misconceptions"
+                    f"concept: {concept}; status: {status}; "
+                    "draft with: socrates note draft-misconceptions --status all"
                 ),
             )
         )

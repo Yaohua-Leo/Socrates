@@ -16,6 +16,7 @@ from socrates.state import (
     LearningStatePatch,
     MistakeRecord,
     build_review_schedule,
+    resolve_active_misconceptions_for_concept,
     update_learning_state,
 )
 
@@ -190,7 +191,47 @@ class LearningQueueTests(unittest.TestCase):
             self.assertIn(
                 (
                     "- normal_equals_central | 00_meta/learning_state.json | "
-                    "concept: normal_subgroup; draft with: socrates note draft-misconceptions"
+                    "concept: normal_subgroup; status: active; "
+                    "draft with: socrates note draft-misconceptions --status all"
+                ),
+                result.stdout,
+            )
+
+    def test_queue_cli_lists_resolved_misconception_notes_with_actionable_draft_command(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        )
+                    ],
+                ),
+            )
+            resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                (
+                    "- normal_equals_central | 00_meta/learning_state.json | "
+                    "concept: normal_subgroup; status: resolved; "
+                    "draft with: socrates note draft-misconceptions --status all"
                 ),
                 result.stdout,
             )
