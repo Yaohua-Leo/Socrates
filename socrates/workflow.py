@@ -10,9 +10,7 @@ from .context import append_project_log, load_project, write_json
 from .planning import create_next_session_plan
 from .reports import generate_project_summary
 from .session_score import score_teaching_session
-
-
-SESSION_CLOSEOUT_BOUNDARY = "deterministic_session_closeout"
+from .workflow_manifest import SESSION_CLOSEOUT_BOUNDARY, SESSION_CLOSEOUT_MANIFEST_PATH
 
 
 @dataclass(frozen=True)
@@ -50,7 +48,7 @@ def close_tutoring_session(
     )
     project_summary_path = generate_project_summary(context.root)
     status = "ready" if score.status == "pass" else "needs_attention"
-    manifest_path = context.evals_dir / "session_closeout_manifest.json"
+    manifest_path = context.root / SESSION_CLOSEOUT_MANIFEST_PATH
     write_json(
         manifest_path,
         {

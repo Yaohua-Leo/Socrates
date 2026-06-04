@@ -6,15 +6,15 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.9-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.10-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
-next-session handoff planning, deterministic session closeout workflow, and an
-opt-in LLM provider layer for reviewable draft suggestions, including
-review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
-tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
-remain future work.
+next-session handoff planning, deterministic session closeout workflow with
+status/lifecycle visibility, and an opt-in LLM provider layer for reviewable
+draft suggestions, including review-only session judge drafts. It is not yet a
+full AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM
+judges, and product UI layers remain future work.
 
 ## Quick Start
 
@@ -100,6 +100,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.9 deterministic session closeout workflow that runs session scoring,
   next-session handoff planning, and project-summary refresh in one repeatable
   post-session command.
+- v0.10 status and lifecycle visibility for session closeout manifests, with
+  missing, corrupt, or `needs_attention` closeouts treated conservatively.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -129,7 +131,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   learning-state truth.
 - Session closeout is a deterministic workflow composition. It does not override
   failed session score gates; failed scores produce a `needs_attention`
-  closeout manifest for human follow-up.
+  closeout manifest for human follow-up, and lifecycle audit treats that as not
+  ready.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

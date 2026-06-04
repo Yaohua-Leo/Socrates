@@ -28,6 +28,7 @@ from .llm_artifacts import validate_llm_suggestion_manifest
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
 from .state import ensure_learning_state_readable
+from .workflow_manifest import has_ready_session_closeout
 
 
 @dataclass(frozen=True)
@@ -524,6 +525,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
             "LLM suggestion drafts": _has_valid_llm_suggestion_manifest(context.root),
             "Session score report": _has_session_score_report(context.root),
             "Session score manifest": _has_session_score_manifest(context.root),
+            "Session closeout manifest": has_ready_session_closeout(context.root),
             "Benchmark report": _has_benchmark_report(context.root),
             "Benchmark manifest": _has_benchmark_manifest(context.root),
             "Tool verification records": _has_tool_verification_records(context.root),

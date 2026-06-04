@@ -136,6 +136,7 @@ from .tool_verification import (
     write_tool_inventory,
 )
 from .workflow import close_tutoring_session
+from .workflow_manifest import read_session_closeout_status
 from .tutoring import (
     TutoringSessionSummary,
     list_tutoring_sessions,
@@ -1358,6 +1359,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     tool_verification_quality = _read_tool_verification_quality_status(context.root)
     benchmark_status = _read_benchmark_status(context.root)
     session_score_status = _read_session_score_status(context.root)
+    session_closeout_status = read_session_closeout_status(context.root)
     next_session_plan_status = _read_next_session_plan_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
@@ -1434,6 +1436,12 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Session score: {_session_score_status_text(session_score_status)}")
     print(f"Session score gates: {_session_score_gates_text(session_score_status)}")
     print(f"Session score failed gates: {_session_score_failed_gates_text(session_score_status)}")
+    print(f"Session closeout: {_session_closeout_status_text(session_closeout_status)}")
+    print(
+        "Session closeout sessions: "
+        f"{_session_closeout_sessions_text(session_closeout_status)}"
+    )
+    print(f"Session closeout score: {_session_closeout_score_text(session_closeout_status)}")
     print(f"Next session plan: {_next_session_plan_text(next_session_plan_status)}")
     print(
         "Next session due reviews: "
@@ -2905,6 +2913,28 @@ def _session_score_failed_gates_text(value: dict[str, object] | None) -> str:
     ):
         return "unknown"
     return "none"
+
+
+def _session_closeout_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    return str(value.get("status", "invalid"))
+
+
+def _session_closeout_sessions_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['session_id']} -> {value['next_session_id']}"
+
+
+def _session_closeout_score_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['session_score']}/100 ({value['session_score_status']})"
 
 
 def _next_session_plan_text(value: dict[str, object] | None) -> str:

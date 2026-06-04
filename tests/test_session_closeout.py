@@ -110,6 +110,50 @@ class SessionCloseoutTests(unittest.TestCase):
             self.assertTrue((project / "02_learning_plan" / "session_0002_plan.md").exists())
             self.assertTrue((project / "07_exports" / "reports" / "project_summary.md").exists())
 
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Session closeout: needs_attention", status.stdout)
+            self.assertIn("Session closeout sessions: session_0001 -> session_0002", status.stdout)
+            self.assertIn("Session closeout score: 0/100 (fail)", status.stdout)
+
+    def test_status_rejects_ready_closeout_with_failed_score_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _create_passing_session_fixture(root)
+            result = close_tutoring_session(
+                project,
+                session_id="session_0001",
+                next_session_id="session_0002",
+                as_of=date(2026, 6, 4),
+            )
+            manifest = json.loads(result.manifest_path.read_text(encoding="utf-8"))
+            manifest["session_score_status"] = "fail"
+            result.manifest_path.write_text(
+                json.dumps(manifest, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Session closeout: invalid", status.stdout)
+            self.assertIn("Session closeout sessions: invalid", status.stdout)
+            self.assertIn("Session closeout score: invalid", status.stdout)
+
 
 def _create_passing_session_fixture(root: Path) -> Path:
     project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))

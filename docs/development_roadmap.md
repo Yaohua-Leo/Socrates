@@ -1572,7 +1572,32 @@ failed scores remain visible as needs_attention
 - closeout status 只有在 deterministic session score pass 时才是 `ready`；score fail 时命令仍写出 artifacts，但 manifest 标记 `needs_attention`。
 - 这不是新的评分权威、LLM judge、自动通过 gate 或 learning-state truth mutation；它只是把既有确定性步骤组合成更稳定的 post-session workflow。
 
-v0.10：真实多 session 回归与产品闭环打磨
+v0.10：closeout status / lifecycle 可见性
+
+目标：
+
+让 v0.9 的 session closeout manifest 进入 `status` 与 lifecycle audit，避免新的 workflow evidence 游离在产品 readiness 检查之外。
+
+必须完成：
+
+closeout manifest reader
+
+status closeout snapshot
+
+lifecycle closeout manifest check
+
+corrupt/malformed closeout conservative failure
+
+needs_attention remains lifecycle failure
+
+当前状态（2026-06-04）：
+
+- `status` 已显示 closeout 状态、当前/下一 session，以及 closeout 内记录的 deterministic session score。
+- lifecycle audit 已增加 `Session closeout manifest` 检查。
+- 只有 valid 且 `status: ready` 的 closeout manifest 才通过 lifecycle；missing、corrupt、malformed 或 `needs_attention` 均保守 fail。
+- 这不是新的评分权威；它只是让 workflow evidence 进入可见性与 readiness gate。
+
+v0.11：真实多 session 回归与产品闭环打磨
 
 建议目标：
 
