@@ -623,6 +623,36 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(record["status"], "stale_reference_kb")
             self.assertEqual(record["reference_kb_status"], "stale")
 
+    def test_lean_skeleton_cli_reports_invalid_reference_kb_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_kernel_reference(root / "p")
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-skeleton",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB index is invalid", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+
     def test_tool_check_fails_stale_reference_kb_skeleton_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
@@ -1011,6 +1041,36 @@ class ToolVerificationTests(unittest.TestCase):
                 "reference KB status is stale",
                 quality_report.read_text(encoding="utf-8"),
             )
+
+    def test_lean_deps_cli_reports_invalid_reference_kb_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_resolved_kernel_dependencies(root / "p")
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-deps",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB index is invalid", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
 
     def test_tool_check_cli_writes_quality_report_for_persisted_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

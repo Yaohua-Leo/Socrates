@@ -148,7 +148,7 @@ def list_reference_kb_objects(
 
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
-    index = _read_reference_index(context.root, index_path)
+    index = read_reference_index(context.root, index_path)
     objects = index.get("objects", []) if isinstance(index, dict) else []
     if not isinstance(objects, list):
         return []
@@ -177,7 +177,7 @@ def _search_reference_objects(
 ) -> list[dict[str, object]]:
     context = load_project(project_path)
     index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
-    index = _read_reference_index(context.root, index_path)
+    index = read_reference_index(context.root, index_path)
     query_text = query.casefold()
     matches = []
     for item in index.get("objects", []):
@@ -193,7 +193,14 @@ def _search_reference_objects(
     return matches
 
 
-def _read_reference_index(project_root: Path, index_path: Path) -> dict[str, object]:
+def read_reference_index(
+    project_root: Path,
+    index_path: Path | None = None,
+) -> dict[str, object]:
+    """Read the generated reference index or raise an actionable rebuild error."""
+
+    if index_path is None:
+        index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
     try:
         index = json.loads(index_path.read_text(encoding="utf-8"))
     except FileNotFoundError as exc:

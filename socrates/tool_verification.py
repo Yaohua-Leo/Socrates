@@ -13,7 +13,7 @@ import shutil
 import subprocess
 
 from .context import append_project_log, load_project, write_json, write_text
-from .kb import reference_kb_status
+from .kb import read_reference_index, reference_kb_status
 from .project import slugify_topic
 
 
@@ -690,13 +690,13 @@ def check_tool_verification_records(project_path: Path | str) -> ToolVerificatio
 
 
 def _find_reference_object(project_root: Path, object_id: str) -> dict[str, object]:
-    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
-    if not index_path.exists():
-        raise FileNotFoundError(f"Missing reference KB index: {index_path}")
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index = read_reference_index(project_root)
     objects = index.get("objects", []) if isinstance(index, dict) else []
     if not isinstance(objects, list):
-        raise ValueError(f"Reference KB index has invalid object list: {index_path}")
+        raise ValueError(
+            f"Reference KB index has invalid object list; "
+            f"run socrates kb build --project {project_root} to rebuild it."
+        )
     for item in objects:
         if isinstance(item, dict) and str(item.get("id", "")) == object_id:
             return item
@@ -787,8 +787,7 @@ def _lean_dependency_rows(
 
 
 def _reference_object_lookup(project_root: Path) -> dict[str, dict[str, object]]:
-    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
-    index = json.loads(index_path.read_text(encoding="utf-8"))
+    index = read_reference_index(project_root)
     objects = index.get("objects", []) if isinstance(index, dict) else []
     lookup: dict[str, dict[str, object]] = {}
     if not isinstance(objects, list):
