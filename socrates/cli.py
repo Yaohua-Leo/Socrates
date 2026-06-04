@@ -75,6 +75,7 @@ from .quality import (
 from .references import (
     CorrectionPatchSummary,
     SourceSummary,
+    attach_converted_markdown,
     apply_correction_patch,
     create_correction_patch,
     curate_reference,
@@ -229,6 +230,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by exact source type; defaults to all.",
     )
     sources_list_parser.set_defaults(func=_handle_sources_list)
+    sources_attach_parser = sources_subparsers.add_parser(
+        "attach-conversion",
+        help="Attach an externally converted Markdown file to an imported source.",
+    )
+    sources_attach_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    sources_attach_parser.add_argument("--source-id", required=True, help="Source id from source_registry.yaml.")
+    sources_attach_parser.add_argument("--markdown", required=True, help="External converted Markdown file.")
+    sources_attach_parser.set_defaults(func=_handle_sources_attach_conversion)
 
     curate_parser = subparsers.add_parser(
         "curate",
@@ -1113,6 +1122,16 @@ def _source_registry_text(sources: list[SourceSummary]) -> str:
 
 def _display_path(value: str) -> str:
     return value if value else "none"
+
+
+def _handle_sources_attach_conversion(args: argparse.Namespace) -> int:
+    curated_path = attach_converted_markdown(args.project, args.source_id, args.markdown)
+    context = load_project(args.project)
+    converted_path = context.references_dir / "converted" / "markdown" / f"{args.source_id}.md"
+    print(f"Attached converted reference {args.source_id}")
+    print(f"Converted markdown: {converted_path}")
+    print(f"Curated reference: {curated_path}")
+    return 0
 
 
 def _handle_curate(args: argparse.Namespace) -> int:

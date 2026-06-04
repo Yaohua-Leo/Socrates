@@ -157,6 +157,53 @@ def curate_reference(project_path: Path | str, source_id: str) -> Path:
     return curated_path
 
 
+def attach_converted_markdown(
+    project_path: Path | str,
+    source_id: str,
+    markdown_path: Path | str,
+) -> Path:
+    """Attach an externally converted Markdown file and create a curated draft."""
+
+    context = load_project(project_path)
+    registry_text = context.source_registry.read_text(encoding="utf-8")
+    record = _find_registry_record(registry_text, source_id)
+    if record is None:
+        raise ValueError(f"Unknown source id: {source_id}")
+
+    conversion_source = Path(markdown_path).expanduser().resolve()
+    if not conversion_source.exists() or not conversion_source.is_file():
+        raise FileNotFoundError(f"Converted Markdown file does not exist: {conversion_source}")
+    converted_body = conversion_source.read_text(encoding="utf-8")
+    if not converted_body.strip():
+        raise ValueError(f"Converted Markdown file is empty: {conversion_source}")
+
+    converted_path = context.references_dir / "converted" / "markdown" / f"{source_id}.md"
+    converted_text = _external_converted_markdown(
+        context.root,
+        record,
+        converted_body,
+        conversion_source=conversion_source,
+    )
+    write_text(converted_path, converted_text)
+
+    curated_path = context.references_dir / "curated" / f"{source_id}.curated.md"
+    write_text(curated_path, _curated_markdown(record, converted_text))
+    relative_markdown_path = _relative_project_path(context.root, converted_path)
+    relative_curated_path = _relative_project_path(context.root, curated_path)
+    _update_registry_source(
+        context.source_registry,
+        source_id,
+        status="curated_draft",
+        markdown_path=relative_markdown_path,
+        curated_path=relative_curated_path,
+    )
+    append_project_log(
+        context,
+        f"Attached external Markdown conversion for reference {source_id}.",
+    )
+    return curated_path
+
+
 def create_correction_patch(
     project_path: Path | str,
     source_id: str,
@@ -514,6 +561,33 @@ def _converted_markdown(record: dict[str, str], source_text: str) -> str:
         "## Converted Content\n\n"
         f"{converted_text.rstrip()}\n"
     )
+
+
+def _external_converted_markdown(
+    project_root: Path,
+    record: dict[str, str],
+    source_text: str,
+    *,
+    conversion_source: Path,
+) -> str:
+    return (
+        f"# Converted Reference: {record.get('title', record['id'])}\n\n"
+        "<!-- socrates-external-conversion: review before building the reference KB -->\n\n"
+        "## Source Metadata\n\n"
+        f"- source_id: {record['id']}\n"
+        f"- raw_path: {record.get('local_path', '')}\n"
+        f"- external_conversion_source: {_conversion_source_label(project_root, conversion_source)}\n"
+        "- conversion_policy: external_markdown_handoff\n\n"
+        "## Converted Content\n\n"
+        f"{source_text.rstrip()}\n"
+    )
+
+
+def _conversion_source_label(project_root: Path, source: Path) -> str:
+    try:
+        return source.relative_to(project_root).as_posix()
+    except ValueError:
+        return source.as_posix()
 
 
 def _record_conversion_pending(context, record: dict[str, str]) -> Path:

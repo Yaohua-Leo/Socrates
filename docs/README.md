@@ -7,8 +7,8 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.5-alpha deterministic teaching-quality
-  session scoring over existing quality gates.
+- Current implementation baseline: v0.6-alpha external Markdown conversion
+  handoff for PDF/OCR workflows plus deterministic teaching-quality scoring.
 
 ## Plans
 
@@ -18,3 +18,5 @@ from the source planning conversation.
   v0.4 plan for structured exercise validation and bank readiness.
 - `superpowers/plans/2026-06-04-v05-teaching-quality-evaluation.md`: executable
   v0.5 plan for session score reports and teaching-quality evaluation.
+- `superpowers/plans/2026-06-04-v06-external-conversion-handoff.md`: executable
+  v0.6 plan for attaching externally converted Markdown to imported sources.

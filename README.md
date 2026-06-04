@@ -6,11 +6,11 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.5-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.6-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
-Obsidian note workflow, exercise validation and bank manifests, deterministic
-session score reports, and an opt-in LLM provider layer for reviewable draft
-suggestions. It is not yet a full AI
+external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
+exercise validation and bank manifests, deterministic session score reports,
+and an opt-in LLM provider layer for reviewable draft suggestions. It is not yet a full AI
 tutor: autonomous LLM tutoring, OCR/PDF extraction backends, LLM judges, and
 product UI layers remain future work.
 
@@ -27,6 +27,13 @@ Import and curate a local Markdown or text reference:
 ```powershell
 python -m socrates import --project ".\projects\group_theory" ".\normal_subgroups.md" --role lecture_notes --title "Normal Subgroup Notes"
 python -m socrates curate --project ".\projects\group_theory" --source-id normal_subgroup_notes
+```
+
+For a PDF or OCR workflow, attach an externally converted Markdown file before
+curation:
+
+```powershell
+python -m socrates sources attach-conversion --project ".\projects\group_theory" --source-id abstract_algebra --markdown ".\abstract_algebra.converted.md"
 ```
 
 Build and query the Reference KB:
@@ -65,6 +72,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   exercise, KB, export, and eval directories.
 - Local reference import, conversion-pending handling for unsupported PDFs, and
   patch-only curation correction proposals.
+- External Markdown conversion handoff for PDF/OCR workflows, preserving raw
+  reference bytes while creating a review-gated curated draft.
 - Reference KB extraction from curated Markdown into object, chunk, chapter,
   theorem, exercise, concept graph, and dependency graph artifacts.
 - Reader fail-fast behavior for malformed generated KB artifacts, with rebuild
@@ -87,8 +96,11 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 ## Boundaries
 
 - No runtime third-party dependencies are required.
-- PDF/OCR conversion is intentionally not implemented yet; unsupported PDFs
-  produce conversion-pending artifacts.
+- Bundled PDF/OCR conversion is intentionally not implemented yet; unsupported
+  PDFs produce conversion-pending artifacts until the user attaches an external
+  Markdown conversion.
+- External conversions are review-gated drafts. They do not bypass curation,
+  Reference KB provenance checks, or user review.
 - v0.3 adds an opt-in LLM provider layer for draft suggestions only. The default
   CLI workflow remains deterministic and offline; live DeepSeek calls require
   local `.env` configuration and are not part of the default check gate.

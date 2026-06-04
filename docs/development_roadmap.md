@@ -1466,6 +1466,31 @@ ingestion eval
 
 session score report
 
+v0.6：外部转换交接
+
+目标：
+
+在不引入内置 OCR/PDF 依赖的前提下，支持用户把外部工具生成的 Markdown 转换结果接入 Socrates。
+
+必须完成：
+
+attach external Markdown conversion
+
+preserve raw source bytes
+
+update source registry from conversion_pending to curated_draft
+
+create review-gated curated reference
+
+record conversion provenance
+
+当前状态（2026-06-04）：
+
+- `sources attach-conversion` 已支持为已导入 source 附加外部 Markdown 转换文件。
+- PDF 可从 `conversion_pending` 进入 `curated_draft`，但 raw PDF 文件不会被修改。
+- 转换产物记录 raw source path、external conversion source 和 `external_markdown_handoff` policy。
+- 这不是内置 OCR/PDF backend；外部转换结果仍需 curated draft review 与 Reference KB provenance gate。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

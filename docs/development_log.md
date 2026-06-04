@@ -114,6 +114,21 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 359 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 359 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
 
+## v0.6 External conversion handoff alpha
+
+- Added `attach_converted_markdown` and `python -m socrates sources attach-conversion` for explicit external Markdown conversion handoff.
+- A PDF or other imported source can move from `conversion_pending` to `curated_draft` when the user provides a converted Markdown file.
+- The raw imported source file is preserved; Socrates writes a project-local converted Markdown artifact and curated draft instead of mutating raw references.
+- Converted artifacts record the raw source path, external conversion source, and `external_markdown_handoff` policy.
+- Safety boundary: v0.6 does not bundle OCR/PDF extraction or trust external conversions automatically. The attached conversion remains a review-gated curated draft and must pass Reference KB/quality gates before downstream trust.
+- Verification evidence:
+  - `python -m unittest tests.test_reference_import` passed.
+  - `python -m unittest discover -s tests` passed with 361 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 361 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 361 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -150,7 +165,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，但二者都不等同于数学正确性证明或 LLM judge。PDF/OCR 后端、LLM judge、全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，但这些能力不等同于数学正确性证明、LLM judge 或内置 OCR/PDF backend。LLM judge、全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

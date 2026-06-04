@@ -10,7 +10,7 @@ import unittest
 
 from socrates.kb import build_reference_kb
 from socrates.project import ProjectSpec, create_project
-from socrates.references import curate_reference, import_reference
+from socrates.references import attach_converted_markdown, curate_reference, import_reference
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -144,6 +144,134 @@ class ReferenceImportTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Conversion pending references: 1", result.stdout)
+
+    def test_attach_external_conversion_upgrades_pdf_to_curated_draft(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "abstract_algebra.pdf"
+            source_bytes = b"%PDF placeholder"
+            source.write_bytes(source_bytes)
+            record = import_reference(
+                project,
+                source,
+                role="main_textbook",
+                title="Abstract Algebra",
+            )
+            curate_reference(project, record.id)
+            external_markdown = root / "abstract_algebra.converted.md"
+            external_markdown.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            raw_path = project / "01_references" / "raw" / "books" / "abstract_algebra.pdf"
+
+            curated = attach_converted_markdown(project, record.id, external_markdown)
+
+            self.assertEqual(raw_path.read_bytes(), source_bytes)
+            self.assertEqual(
+                curated.relative_to(project).as_posix(),
+                "01_references/curated/abstract_algebra.curated.md",
+            )
+            converted = project / "01_references" / "converted" / "markdown" / "abstract_algebra.md"
+            converted_text = converted.read_text(encoding="utf-8")
+            self.assertIn("# Converted Reference: Abstract Algebra", converted_text)
+            self.assertIn("socrates-external-conversion", converted_text)
+            self.assertIn("- source_id: abstract_algebra", converted_text)
+            self.assertIn("- raw_path: 01_references/raw/books/abstract_algebra.pdf", converted_text)
+            self.assertIn("- external_conversion_source:", converted_text)
+            self.assertIn("### Definition: Normal Subgroup", converted_text)
+            curated_text = curated.read_text(encoding="utf-8")
+            self.assertIn("# Curated Reference: Abstract Algebra", curated_text)
+            self.assertIn("source_id: abstract_algebra", curated_text)
+            self.assertIn("### Definition: Normal Subgroup", curated_text)
+            registry = (project / "01_references" / "source_registry.yaml").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("status: curated_draft", registry)
+            self.assertIn(
+                'markdown: "01_references/converted/markdown/abstract_algebra.md"',
+                registry,
+            )
+            self.assertIn(
+                'curated: "01_references/curated/abstract_algebra.curated.md"',
+                registry,
+            )
+
+            kb_result = build_reference_kb(project)
+            self.assertEqual(kb_result.object_count, 1)
+
+    def test_sources_attach_conversion_cli_prints_handoff_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "abstract_algebra.pdf"
+            source.write_bytes(b"%PDF placeholder")
+            record = import_reference(
+                project,
+                source,
+                role="main_textbook",
+                title="Abstract Algebra",
+            )
+            curate_reference(project, record.id)
+            external_markdown = root / "abstract_algebra.converted.md"
+            external_markdown.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "sources",
+                    "attach-conversion",
+                    "--project",
+                    str(project),
+                    "--source-id",
+                    record.id,
+                    "--markdown",
+                    str(external_markdown),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            sources = subprocess.run(
+                [sys.executable, "-m", "socrates", "sources", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Attached converted reference abstract_algebra", result.stdout)
+            self.assertIn(
+                "Converted markdown: "
+                f"{project / '01_references' / 'converted' / 'markdown' / 'abstract_algebra.md'}",
+                result.stdout,
+            )
+            self.assertIn(
+                "Curated reference: "
+                f"{project / '01_references' / 'curated' / 'abstract_algebra.curated.md'}",
+                result.stdout,
+            )
+            self.assertEqual(sources.returncode, 0, sources.stderr)
+            self.assertIn(
+                "- abstract_algebra | curated_draft | pdf | main_textbook | priority 1 | "
+                "Abstract Algebra",
+                sources.stdout,
+            )
+            self.assertIn("  - curated: 01_references/curated/abstract_algebra.curated.md", sources.stdout)
 
     def test_sources_list_cli_shows_registry_status_and_paths(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
