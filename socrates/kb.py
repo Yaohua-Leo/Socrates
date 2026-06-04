@@ -397,8 +397,14 @@ def _valid_reference_index_provenance(
     objects: list[object],
     chunks: list[object],
 ) -> bool:
+    object_locations: dict[str, tuple[str, int]] = {}
     for item in objects:
         if not isinstance(item, dict):
+            return False
+        object_id = item.get("id")
+        if not isinstance(object_id, str) or not object_id.strip():
+            return False
+        if object_id in object_locations:
             return False
         source = item.get("source")
         if not isinstance(source, dict):
@@ -411,11 +417,18 @@ def _valid_reference_index_provenance(
             source_line,
         ):
             return False
+        object_locations[object_id] = (source_path, source_line)
     for chunk in chunks:
         if not isinstance(chunk, dict):
             return False
+        object_id = chunk.get("object_id")
+        if not isinstance(object_id, str) or object_id not in object_locations:
+            return False
         metadata = chunk.get("metadata")
         if not isinstance(metadata, dict):
+            return False
+        metadata_object_id = metadata.get("object_id")
+        if metadata_object_id != object_id:
             return False
         source = metadata.get("source")
         if not isinstance(source, dict):
@@ -424,17 +437,22 @@ def _valid_reference_index_provenance(
         metadata_source_path = metadata.get("source_path")
         source_line = source.get("line")
         metadata_source_line = metadata.get("source_line")
+        object_location = object_locations[object_id]
         if not isinstance(source_path, str) or not _valid_curated_source_location(
             project_root,
             source_path,
             source_line,
         ):
             return False
+        if (source_path, source_line) != object_location:
+            return False
         if not isinstance(metadata_source_path, str) or not _valid_curated_source_location(
             project_root,
             metadata_source_path,
             metadata_source_line,
         ):
+            return False
+        if (metadata_source_path, metadata_source_line) != object_location:
             return False
     return True
 
