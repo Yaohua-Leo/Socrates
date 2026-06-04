@@ -90,15 +90,19 @@ def import_reference(
     return record
 
 
-def list_source_registry(project_path: Path | str, *, status: str = "all") -> list[SourceSummary]:
+def list_source_registry(
+    project_path: Path | str, *, status: str = "all", role: str = "all"
+) -> list[SourceSummary]:
     """List imported sources from ``source_registry.yaml``."""
 
     context = load_project(project_path)
     records = _registry_records(context.source_registry.read_text(encoding="utf-8"))
     summaries = [_source_summary(record) for record in records]
-    if status == "all":
-        return summaries
-    return [summary for summary in summaries if summary.status == status]
+    if status != "all":
+        summaries = [summary for summary in summaries if summary.status == status]
+    if role != "all":
+        summaries = [summary for summary in summaries if summary.role == role]
+    return summaries
 
 
 def curate_reference(project_path: Path | str, source_id: str) -> Path:
