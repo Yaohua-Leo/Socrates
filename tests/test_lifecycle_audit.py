@@ -245,6 +245,52 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
 
+    def test_lifecycle_audit_rejects_stale_reference_kb(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            kb_result = build_reference_kb(project)
+            index_time_ns = kb_result.index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: New Curated Content\n"
+                + "The Reference KB index has not been rebuilt for this content.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Reference KB: fail", report_text)
+
     def test_lifecycle_audit_rejects_broken_tool_verification_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

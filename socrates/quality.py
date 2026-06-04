@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 
 from .context import load_project, write_json, write_text
-from .kb import find_counterexamples, parse_object_heading
+from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .project import slugify_topic
 
 
@@ -459,9 +459,10 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
 
     context = load_project(project_path)
     state = _read_learning_state(context.learning_state)
+    kb_status = reference_kb_status(context.root)
     checks = {
         "Project metadata": context.project_file.exists() and context.learning_state.exists(),
-        "Reference KB": _reference_object_count(context.root) > 0,
+        "Reference KB": kb_status.object_count > 0 and kb_status.status == "current",
         "Learning plans": _has_learning_plans(context.root),
         "Tutoring session artifacts": _has_complete_session(context.sessions_dir),
         "Reviewed atomic notes": _reviewed_note_count(context.root) > 0,
@@ -1931,15 +1932,6 @@ def _read_learning_state(path: Path) -> dict[str, object]:
         return {}
     state = json.loads(path.read_text(encoding="utf-8"))
     return state if isinstance(state, dict) else {}
-
-
-def _reference_object_count(project_root: Path) -> int:
-    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
-    if not index_path.exists():
-        return 0
-    index = json.loads(index_path.read_text(encoding="utf-8"))
-    objects = index.get("objects", []) if isinstance(index, dict) else []
-    return len(objects) if isinstance(objects, list) else 0
 
 
 def _has_learning_plans(project_root: Path) -> bool:
