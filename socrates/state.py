@@ -337,7 +337,7 @@ def _review_items(
             if value.get("status", "active") != "active":
                 continue
             concept = str(value.get("concept", "general"))
-            count = int(value.get("count", 1))
+            count = _safe_count(value.get("count", 1)) or 1
             concept_reasons.setdefault(concept, []).append(
                 f"active misconception {misconception_id} x{count}"
             )
