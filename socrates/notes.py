@@ -201,19 +201,23 @@ def _prune_stale_obsidian_exports(
     obsidian_dir: Path,
     active_filenames: set[str],
 ) -> None:
+    stale_candidates: list[Path] = []
     manifest = read_obsidian_export_manifest(project_root)
     if not isinstance(manifest, dict):
-        return
-    exported_notes = manifest.get("exported_notes", [])
-    if not isinstance(exported_notes, list):
-        return
-    for note in exported_notes:
-        if not isinstance(note, dict):
-            continue
-        path_value = note.get("path")
-        if not isinstance(path_value, str) or not path_value:
-            continue
-        stale_path = obsidian_dir / path_value
+        stale_candidates = _socrates_obsidian_exports_from_files(obsidian_dir)
+    else:
+        exported_notes = manifest.get("exported_notes", [])
+        if not isinstance(exported_notes, list):
+            stale_candidates = _socrates_obsidian_exports_from_files(obsidian_dir)
+        else:
+            for note in exported_notes:
+                if not isinstance(note, dict):
+                    continue
+                path_value = note.get("path")
+                if not isinstance(path_value, str) or not path_value:
+                    continue
+                stale_candidates.append(obsidian_dir / path_value)
+    for stale_path in stale_candidates:
         if stale_path.name in active_filenames:
             continue
         try:
@@ -223,6 +227,19 @@ def _prune_stale_obsidian_exports(
         if stale_path.suffix != ".md" or not stale_path.is_file():
             continue
         stale_path.unlink()
+
+
+def _socrates_obsidian_exports_from_files(obsidian_dir: Path) -> list[Path]:
+    if not obsidian_dir.exists():
+        return []
+    paths: list[Path] = []
+    for path in obsidian_dir.glob("*.md"):
+        if path.name == "_socrates_index.md":
+            continue
+        text = path.read_text(encoding="utf-8")
+        if _frontmatter_value(text, "created_by") == "socrates":
+            paths.append(path)
+    return paths
 
 
 def _obsidian_backlinks(exported_notes: list[dict[str, object]]) -> dict[str, list[dict[str, str]]]:

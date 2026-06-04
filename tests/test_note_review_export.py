@@ -770,6 +770,50 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn("# Socrates Obsidian Export", export_index_text)
             self.assertIn("No reviewed notes exported.", export_index_text)
 
+    def test_export_reviewed_notes_to_obsidian_prunes_stale_files_when_manifest_is_corrupt(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            reviewed = review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            obsidian_dir = project / "07_exports" / "obsidian"
+            manual_note = obsidian_dir / "manual_note.md"
+            manual_note.write_text(
+                "# Manual Note\n\nThis file was not written by Socrates.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (obsidian_dir / "export_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            reviewed.unlink()
+            exported = export_reviewed_notes_to_obsidian(project)
+
+            self.assertEqual(exported, [])
+            self.assertFalse((obsidian_dir / "normal_subgroup.md").exists())
+            self.assertTrue(manual_note.exists())
+            manifest = json.loads((obsidian_dir / "export_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["version"], 3)
+            self.assertEqual(manifest["exported_notes"], [])
+            export_index_text = (obsidian_dir / "_socrates_index.md").read_text(encoding="utf-8")
+            self.assertIn("No reviewed notes exported.", export_index_text)
+            self.assertNotIn("normal_subgroup", export_index_text)
+
     def test_status_cli_counts_obsidian_manifest_backlinks(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
