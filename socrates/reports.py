@@ -12,6 +12,7 @@ from .obsidian import (
     obsidian_backlink_count,
     obsidian_export_count,
 )
+from .state import coerce_learning_score
 from .tool_verification import ToolVerificationSummary, list_tool_verification_records
 
 
@@ -530,7 +531,7 @@ def _count_approved_exercises(project_root: Path) -> int:
 def _score_lines(value: object) -> list[str]:
     if not isinstance(value, dict) or not value:
         return ["- none recorded"]
-    return [f"- {key}: {float(score):g}" for key, score in sorted(value.items())]
+    return [f"- {key}: {coerce_learning_score(score):g}" for key, score in sorted(value.items())]
 
 
 def _review_lines(value: object) -> list[str]:
@@ -707,7 +708,7 @@ def _weak_concept_lines(value: object, *, threshold: float = 0.7) -> list[str]:
         return ["- none below threshold"]
     lines: list[str] = []
     for concept, score_value in sorted(value.items()):
-        score = float(score_value)
+        score = coerce_learning_score(score_value)
         if score < threshold:
             lines.append(f"- {concept}: {score:g}")
     return lines or ["- none below threshold"]

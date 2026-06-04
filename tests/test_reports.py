@@ -382,6 +382,110 @@ class ReportTests(unittest.TestCase):
             self.assertIn("## Scheduled Review", report_text)
             self.assertIn("- quotient_group: high, next_session", report_text)
 
+    def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                "{\n"
+                '  "concept_mastery": {\n'
+                '    "normal_subgroup": "not-a-score",\n'
+                '    "quotient_group": 1.25,\n'
+                '    "subgroup": 0.84\n'
+                "  },\n"
+                '  "proof_skills": {\n'
+                '    "diagram_chasing": NaN\n'
+                "  },\n"
+                '  "misconceptions": {\n'
+                '    "normal_equals_central": {\n'
+                '      "concept": "normal_subgroup",\n'
+                '      "status": "active",\n'
+                '      "count": 1\n'
+                "    }\n"
+                "  },\n"
+                '  "review_schedule": []\n'
+                "}\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            monthly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            for result in (weekly, monthly, summary):
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+
+            weekly_text = (project / "07_exports" / "reports" / "weekly_report.md").read_text(
+                encoding="utf-8"
+            )
+            monthly_text = (project / "07_exports" / "reports" / "monthly_report.md").read_text(
+                encoding="utf-8"
+            )
+            summary_text = (project / "07_exports" / "reports" / "project_summary.md").read_text(
+                encoding="utf-8"
+            )
+
+            self.assertIn("- normal_subgroup: 0", weekly_text)
+            self.assertIn("- quotient_group: 0", weekly_text)
+            self.assertIn("- subgroup: 0.84", weekly_text)
+            self.assertIn("- diagram_chasing: 0", weekly_text)
+            self.assertNotIn("not-a-score", weekly_text)
+            self.assertNotIn("nan", weekly_text.casefold())
+            self.assertNotIn("1.25", weekly_text)
+
+            self.assertIn("- normal_subgroup: 0", monthly_text)
+            self.assertIn("- quotient_group: 0", monthly_text)
+            self.assertNotIn("- subgroup: 0.84", monthly_text.split("## Weak Concepts", 1)[1])
+            self.assertIn("- normal_equals_central: normal_subgroup, active x1", monthly_text)
+
+            self.assertIn("- normal_subgroup: 0", summary_text)
+            self.assertIn("- quotient_group: 0", summary_text)
+            self.assertIn("- diagram_chasing: 0", summary_text)
+
     def test_project_summary_cli_writes_lifecycle_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

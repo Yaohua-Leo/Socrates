@@ -524,6 +524,12 @@ def _score_summaries(
 
 
 def _safe_score(value: object) -> float:
+    return coerce_learning_score(value)
+
+
+def coerce_learning_score(value: object) -> float:
+    """Return a finite [0, 1] learning score, or 0 for invalid persisted data."""
+
     try:
         score = float(value)
     except (TypeError, ValueError):
