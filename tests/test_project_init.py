@@ -36,10 +36,14 @@ class ProjectInitTests(unittest.TestCase):
                 "02_learning_plan/long_term_plan.md",
                 "03_sessions",
                 "04_atomic_notes/drafts",
+                "04_atomic_notes/proof_patterns",
+                "04_atomic_notes/misconceptions",
                 "05_exercises/mistake_bank.md",
                 "06_kb/concept_graph.json",
                 "07_exports/obsidian",
+                "07_exports/reports",
                 "08_evals/note_quality_eval.md",
+                "08_evals/tool_verification",
             ]
             for relative_path in expected_paths:
                 self.assertTrue((created / relative_path).exists(), relative_path)

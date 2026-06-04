@@ -39,7 +39,9 @@ PROJECT_DIRECTORIES = (
     "04_atomic_notes/examples",
     "04_atomic_notes/counterexamples",
     "04_atomic_notes/techniques",
+    "04_atomic_notes/proof_patterns",
     "04_atomic_notes/exercises",
+    "04_atomic_notes/misconceptions",
     "05_exercises/generated",
     "05_exercises/attempted",
     "05_exercises/solutions",
@@ -48,9 +50,11 @@ PROJECT_DIRECTORIES = (
     "06_kb/chunks",
     "06_kb/retrieval_index",
     "07_exports/obsidian",
+    "07_exports/reports",
     "07_exports/latex_notes",
     "07_exports/pdf",
     "08_evals",
+    "08_evals/tool_verification",
 )
 
 

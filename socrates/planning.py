@@ -6,7 +6,9 @@ import json
 from pathlib import Path
 
 from socrates.context import load_project, write_text
-from socrates.contracts import SessionPlan
+from socrates.contracts import SessionPlan, yaml_scalar
+from socrates.kb import reference_kb_status, read_reference_chapter_index
+from socrates.state import ensure_learning_state_readable
 
 
 def create_learning_plan(project_path: Path | str) -> list[Path]:
@@ -15,6 +17,9 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
     context = load_project(project_path)
     project = _read_project_metadata(context.project_file)
     source_titles = _read_source_titles(context.source_registry)
+    reference_context = _read_reference_context(context.root, project["topic"])
+    chapter_outline = _read_chapter_outline(context.root)
+    kb_status = reference_kb_status(context.root)
     session = SessionPlan(
         session_id="session_0001",
         objective=f"Orient to {project['topic']} and convert the goal into a study map.",
@@ -25,18 +30,57 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
 
     plans = {
         context.learning_plan_dir / "long_term_plan.md": _long_term_plan(
-            project["topic"], project["goal"], source_titles
+            project["topic"],
+            project["goal"],
+            source_titles,
+            chapter_outline,
         ),
         context.learning_plan_dir / "short_term_plan.md": _short_term_plan(
             project["topic"], project["goal"], source_titles
         ),
         context.learning_plan_dir / "session_0001_plan.md": _session_plan(
-            project["topic"], project["goal"], source_titles, session
+            project["topic"],
+            project["goal"],
+            source_titles,
+            reference_context,
+            kb_status.status,
+            session,
         ),
     }
     for path, content in plans.items():
         write_text(path, content)
+    write_text(
+        context.learning_plan_dir / "chapter_sequence.yaml",
+        _chapter_sequence_yaml(chapter_outline),
+    )
+    write_text(
+        context.learning_plan_dir / "checkpoints.yaml",
+        _checkpoints_yaml(chapter_outline),
+    )
     return list(plans)
+
+
+def adjust_short_term_plan_from_review_schedule(project_path: Path | str) -> Path:
+    """Update the short-term plan with review tasks from learning state."""
+
+    context = load_project(project_path)
+    short_term_path = context.learning_plan_dir / "short_term_plan.md"
+    if short_term_path.exists():
+        current = short_term_path.read_text(encoding="utf-8")
+    else:
+        current = "# Short Term Plan\n"
+
+    ensure_learning_state_readable(
+        context.learning_state,
+        action="adjusting review plans",
+    )
+    state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    if not isinstance(schedule, list):
+        schedule = []
+
+    write_text(short_term_path, _replace_review_adjustments(current, schedule))
+    return short_term_path
 
 
 def _read_project_metadata(project_file: Path) -> dict[str, str]:
@@ -70,6 +114,46 @@ def _read_source_titles(source_registry: Path) -> list[str]:
     return titles
 
 
+def _read_reference_context(project_root: Path, topic: str, *, limit: int = 5) -> list[dict[str, object]]:
+    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
+    if not index_path.exists():
+        return []
+
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    if not isinstance(index, dict):
+        return []
+    objects = [item for item in index.get("objects", []) if isinstance(item, dict)]
+    query = topic.casefold()
+    matches: list[dict[str, object]] = []
+    for item in objects:
+        haystack = " ".join(
+            [
+                str(item.get("title", "")),
+                str(item.get("statement", "")),
+                " ".join(str(dep) for dep in item.get("dependencies", [])),
+            ]
+        ).casefold()
+        if query in haystack:
+            matches.append(item)
+        if len(matches) >= limit:
+            break
+    return matches or objects[:limit]
+
+
+def _read_chapter_outline(project_root: Path) -> list[dict[str, object]]:
+    try:
+        index = read_reference_chapter_index(project_root)
+    except ValueError:
+        return []
+    chapters = index.get("chapters", [])
+    if not isinstance(chapters, list):
+        return []
+    return [chapter for chapter in chapters if isinstance(chapter, dict)]
+
+
 def _yaml_value(value: str) -> str:
     if value == "null":
         return ""
@@ -86,7 +170,146 @@ def _source_section(source_titles: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _long_term_plan(topic: str, goal: str, source_titles: list[str]) -> str:
+def _reference_context_section(
+    reference_context: list[dict[str, object]],
+    *,
+    kb_status: str,
+) -> str:
+    lines = [f"- Reference KB status: {kb_status}"]
+    if not reference_context:
+        lines.append("- Reference KB context: none indexed yet.")
+        return "\n".join(lines) + "\n"
+    lines.append("- Reference KB context:")
+    for item in reference_context:
+        source = item.get("source", {})
+        source_path = "unknown"
+        if isinstance(source, dict):
+            source_path = str(source.get("path", "unknown"))
+        dependencies = [str(dep) for dep in item.get("dependencies", [])]
+        lines.append(f"  - {_reference_object_label(item)}")
+        lines.append(f"    Source: {source_path}")
+        if isinstance(source, dict) and source.get("page"):
+            lines.append(f"    Page: {source['page']}")
+        if dependencies:
+            lines.append(f"    Depends: {', '.join(dependencies)}")
+    return "\n".join(lines) + "\n"
+
+
+def _reference_object_label(item: dict[str, object]) -> str:
+    object_type = str(item.get("type", "object")).title()
+    number = str(item.get("number", "")).strip()
+    title = str(item.get("title", "Untitled"))
+    if number:
+        return f"{object_type} {number}: {title}"
+    return f"{object_type}: {title}"
+
+
+def _reference_reading_path_section(chapter_outline: list[dict[str, object]]) -> str:
+    lines = ["## Reference Reading Path", ""]
+    if not chapter_outline:
+        lines.append("- none indexed yet.")
+        return "\n".join(lines) + "\n"
+    for chapter in chapter_outline:
+        chapter_title = str(chapter.get("title") or "Unassigned")
+        lines.append(f"- {chapter_title}")
+        sections = chapter.get("sections", [])
+        if not isinstance(sections, list) or not sections:
+            continue
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            lines.append(f"  - {section.get('title') or 'Unassigned'}")
+            objects = section.get("objects", [])
+            if not isinstance(objects, list):
+                continue
+            for item in objects:
+                if isinstance(item, dict):
+                    lines.append(f"    - {_reference_object_label(item)}")
+    return "\n".join(lines) + "\n"
+
+
+def _chapter_sequence_yaml(chapter_outline: list[dict[str, object]]) -> str:
+    if not chapter_outline:
+        return "chapters: []\n"
+    lines = ["chapters:"]
+    for chapter in chapter_outline:
+        lines.append(f"  - title: {yaml_scalar(chapter.get('title') or 'Unassigned')}")
+        sections = chapter.get("sections", [])
+        if not isinstance(sections, list) or not sections:
+            lines.append("    sections: []")
+            continue
+        lines.append("    sections:")
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            lines.append(f"      - title: {yaml_scalar(section.get('title') or 'Unassigned')}")
+            lines.append(
+                f"        source_path: {yaml_scalar(section.get('source_path') or 'unknown')}"
+            )
+            objects = section.get("objects", [])
+            if not isinstance(objects, list) or not objects:
+                lines.append("        objects: []")
+                continue
+            lines.append("        objects:")
+            for item in objects:
+                if isinstance(item, dict):
+                    lines.extend(_chapter_sequence_object_yaml(item))
+    return "\n".join(lines) + "\n"
+
+
+def _chapter_sequence_object_yaml(item: dict[str, object]) -> list[str]:
+    lines = [
+        f"          - id: {item.get('id') or 'unknown'}",
+        f"            type: {item.get('type') or 'object'}",
+        f"            title: {yaml_scalar(item.get('title') or 'Untitled')}",
+    ]
+    number = str(item.get("number") or "").strip()
+    if number:
+        lines.append(f"            number: {yaml_scalar(number)}")
+    return lines
+
+
+def _checkpoints_yaml(chapter_outline: list[dict[str, object]]) -> str:
+    if not chapter_outline:
+        return "checkpoints: []\n"
+    lines = ["checkpoints:"]
+    checkpoint_number = 1
+    for chapter in chapter_outline:
+        object_count = _chapter_object_count(chapter)
+        title = str(chapter.get("title") or "Unassigned")
+        lines.extend(
+            [
+                f"  - id: checkpoint_{checkpoint_number:03d}",
+                f"    scope: {yaml_scalar(title)}",
+                f"    objective: {yaml_scalar(f'Review indexed objects from {title}.')}",
+                f"    object_count: {object_count}",
+                "    status: pending",
+            ]
+        )
+        checkpoint_number += 1
+    return "\n".join(lines) + "\n"
+
+
+def _chapter_object_count(chapter: dict[str, object]) -> int:
+    sections = chapter.get("sections", [])
+    if not isinstance(sections, list):
+        return 0
+    total = 0
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        objects = section.get("objects", [])
+        if isinstance(objects, list):
+            total += sum(1 for item in objects if isinstance(item, dict))
+    return total
+
+
+def _long_term_plan(
+    topic: str,
+    goal: str,
+    source_titles: list[str],
+    chapter_outline: list[dict[str, object]],
+) -> str:
     return f"""# Long Term Plan
 
 ## Topic
@@ -100,6 +323,7 @@ def _long_term_plan(topic: str, goal: str, source_titles: list[str]) -> str:
 ## Reference Base
 
 {_source_section(source_titles)}
+{_reference_reading_path_section(chapter_outline)}
 ## Milestones
 
 - Establish the core vocabulary and motivating examples for {topic}.
@@ -130,10 +354,61 @@ Use the first study cycle to turn {topic} into a concrete reading and practice p
 """
 
 
+def _replace_review_adjustments(current: str, schedule: list[object]) -> str:
+    marker = "## Review Adjustments"
+    before, separator, after = current.partition(marker)
+    if separator:
+        next_section_index = after.find("\n## ")
+        if next_section_index >= 0:
+            suffix = after[next_section_index + 1 :]
+        else:
+            suffix = ""
+        current = before.rstrip() + "\n\n" + suffix.lstrip()
+    section = _review_adjustments_section(schedule)
+    return current.rstrip() + "\n\n" + section
+
+
+def _review_adjustments_section(schedule: list[object]) -> str:
+    lines = ["## Review Adjustments", ""]
+    items = [item for item in schedule if isinstance(item, dict)]
+    if not items:
+        lines.append("- No scheduled review adjustments.")
+        return "\n".join(lines) + "\n"
+    for item in items:
+        concept = item.get("concept", "review")
+        priority = item.get("priority", "medium")
+        due = item.get("due", "within_3_days")
+        scheduled_for = item.get("scheduled_for", "")
+        reason = item.get("reason", "review scheduled")
+        suffix = f" | scheduled for {scheduled_for}" if scheduled_for else ""
+        lines.append(f"- {concept} ({priority}, {due}): {reason}{suffix}")
+        for suggestion in _review_repair_suggestions(item.get("repair_context", [])):
+            lines.append(f"  - Repair suggestion: {suggestion}")
+    return "\n".join(lines) + "\n"
+
+
+def _review_repair_suggestions(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for raw_context in value:
+        if not isinstance(raw_context, dict):
+            continue
+        suggestion = str(raw_context.get("repair_suggestion", "")).strip()
+        if not suggestion or suggestion in seen:
+            continue
+        seen.add(suggestion)
+        suggestions.append(suggestion)
+    return suggestions
+
+
 def _session_plan(
     topic: str,
     goal: str,
     source_titles: list[str],
+    reference_context: list[dict[str, object]],
+    kb_status: str,
     session: SessionPlan,
 ) -> str:
     prerequisites = "\n".join(f"- {item}" for item in session.prerequisites)
@@ -155,6 +430,9 @@ def _session_plan(
 ## Reference Base
 
 {_source_section(source_titles)}
+## Reference Context
+
+{_reference_context_section(reference_context, kb_status=kb_status)}
 ## Prerequisites
 
 {prerequisites}
