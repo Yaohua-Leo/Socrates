@@ -1224,13 +1224,21 @@ def _misconceptions_text(misconceptions: list[MisconceptionSummary]) -> str:
     if not misconceptions:
         lines.append("- none")
         return "\n".join(lines) + "\n"
-    lines.extend(
-        (
+    for item in misconceptions:
+        lines.append(
             f"- {item.misconception_id} | {item.status} | "
             f"{item.concept} | x{item.count}"
         )
-        for item in misconceptions
-    )
+        if item.last_session_id:
+            lines.append(f"  - Last session: {item.last_session_id}")
+        if item.analysis:
+            lines.append(f"  - Analysis: {item.analysis}")
+        if item.repair_suggestion:
+            lines.append(f"  - Repair suggestion: {item.repair_suggestion}")
+        if item.follow_up_exercises:
+            lines.append(
+                f"  - Follow-up exercises: {', '.join(item.follow_up_exercises)}"
+            )
     return "\n".join(lines) + "\n"
 
 

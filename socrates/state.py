@@ -64,6 +64,10 @@ class MisconceptionSummary:
     status: str
     concept: str
     count: int
+    last_session_id: str
+    analysis: str
+    repair_suggestion: str
+    follow_up_exercises: tuple[str, ...]
 
 
 @dataclass(frozen=True)
@@ -240,6 +244,16 @@ def list_misconceptions(
                 status=item_status,
                 concept=str(value.get("concept", "general")),
                 count=_safe_count(value.get("count", 0)),
+                last_session_id=str(value.get("last_session_id", "")),
+                analysis=str(value.get("analysis", "")),
+                repair_suggestion=str(value.get("repair_suggestion", "")),
+                follow_up_exercises=tuple(
+                    str(item)
+                    for item in value.get("follow_up_exercises", [])
+                    if str(item).strip()
+                )
+                if isinstance(value.get("follow_up_exercises"), list)
+                else (),
             )
         )
     return sorted(

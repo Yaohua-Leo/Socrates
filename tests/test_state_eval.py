@@ -233,6 +233,7 @@ class StateEvalTests(unittest.TestCase):
                 user_answer="Normal means central.",
                 analysis="Confuses normality with centrality.",
                 repair_suggestion="Compare normality with conjugation.",
+                follow_up_exercises=["normal_subgroup_review_01"],
             )
             update_learning_state(
                 context,
@@ -246,6 +247,7 @@ class StateEvalTests(unittest.TestCase):
                             user_answer="Every coset is a subgroup.",
                             analysis="Confuses cosets with subgroups.",
                             repair_suggestion="Check whether the identity is present.",
+                            follow_up_exercises=["quotient_group_review_01"],
                         ),
                     ],
                 ),
@@ -309,6 +311,29 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("# Misconceptions", all_items.stdout)
             self.assertIn(active_line, all_items.stdout)
             self.assertIn(resolved_line, all_items.stdout)
+            self.assertIn("  - Last session: session-002", all_items.stdout)
+            self.assertIn("  - Analysis: Confuses cosets with subgroups.", all_items.stdout)
+            self.assertIn(
+                "  - Repair suggestion: Check whether the identity is present.",
+                all_items.stdout,
+            )
+            self.assertIn(
+                "  - Follow-up exercises: quotient_group_review_01",
+                all_items.stdout,
+            )
+            self.assertIn("  - Last session: session-001", all_items.stdout)
+            self.assertIn(
+                "  - Analysis: Confuses normality with centrality.",
+                all_items.stdout,
+            )
+            self.assertIn(
+                "  - Repair suggestion: Compare normality with conjugation.",
+                all_items.stdout,
+            )
+            self.assertIn(
+                "  - Follow-up exercises: normal_subgroup_review_01",
+                all_items.stdout,
+            )
             self.assertLess(
                 all_items.stdout.index(active_line),
                 all_items.stdout.index(resolved_line),
