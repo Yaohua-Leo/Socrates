@@ -7,12 +7,14 @@ from json import JSONDecodeError
 from pathlib import Path
 
 from .context import load_project, read_json
+from .obsidian import obsidian_exported_note_ids
 from .project import slugify_topic
 
 
 QUEUE_SECTIONS = frozenset(
     {
         "notes",
+        "obsidian-exports",
         "misconceptions",
         "reviews",
         "exercise-drafts",
@@ -38,6 +40,7 @@ class LearningQueue:
     """Actionable artifact groups for CLI queue display."""
 
     notes_to_review: list[QueueItem]
+    obsidian_exports_to_run: list[QueueItem]
     misconception_notes_to_draft: list[QueueItem]
     scheduled_reviews: list[QueueItem]
     exercise_drafts_to_approve: list[QueueItem]
@@ -53,6 +56,7 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
     context = load_project(project_path)
     return LearningQueue(
         notes_to_review=_notes_to_review(context.root),
+        obsidian_exports_to_run=_obsidian_exports_to_run(context.root),
         misconception_notes_to_draft=_misconception_notes_to_draft(context.root),
         scheduled_reviews=_scheduled_reviews(context.root),
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
@@ -81,6 +85,7 @@ def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
 def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem]]]:
     return [
         ("notes", "Notes To Review", queue.notes_to_review),
+        ("obsidian-exports", "Obsidian Exports To Run", queue.obsidian_exports_to_run),
         ("misconceptions", "Misconception Notes To Draft", queue.misconception_notes_to_draft),
         ("reviews", "Scheduled Reviews", queue.scheduled_reviews),
         ("exercise-drafts", "Exercise Drafts To Approve", queue.exercise_drafts_to_approve),
@@ -101,6 +106,31 @@ def _notes_to_review(project_root: Path) -> list[QueueItem]:
         if draft_path.stem in reviewed_ids:
             continue
         items.append(_queue_item(draft_path, project_root))
+    return items
+
+
+def _obsidian_exports_to_run(project_root: Path) -> list[QueueItem]:
+    notes_root = project_root / "04_atomic_notes"
+    if not notes_root.exists():
+        return []
+    exported_ids = obsidian_exported_note_ids(project_root)
+    items: list[QueueItem] = []
+    for folder in sorted(notes_root.iterdir(), key=lambda path: path.name):
+        if not folder.is_dir() or folder.name == "drafts":
+            continue
+        for note_path in sorted(folder.glob("*.md"), key=lambda path: path.stem):
+            if note_path.stem in exported_ids:
+                continue
+            text = note_path.read_text(encoding="utf-8")
+            if _frontmatter_value(text, "reviewed_by_user") != "true":
+                continue
+            items.append(
+                QueueItem(
+                    item_id=note_path.stem,
+                    path=note_path.relative_to(project_root).as_posix(),
+                    detail="export with: socrates note export-obsidian --project <project>",
+                )
+            )
     return items
 
 

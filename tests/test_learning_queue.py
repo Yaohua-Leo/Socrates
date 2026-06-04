@@ -11,7 +11,7 @@ import unittest
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
 from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, record_exercise_attempt
-from socrates.notes import review_atomic_note
+from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
     LearningStatePatch,
@@ -117,6 +117,63 @@ class LearningQueueTests(unittest.TestCase):
             self.assertNotIn("## Exercises To Attempt", notes_only.stdout)
             self.assertNotIn("## Attempts To Grade", notes_only.stdout)
             self.assertNotIn("normal_subgroup_03", notes_only.stdout)
+
+    def test_queue_cli_lists_reviewed_notes_pending_obsidian_export(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What condition distinguishes normality from centrality?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality needed for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "quotient_group")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "obsidian-exports",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Obsidian Exports To Run", result.stdout)
+            self.assertIn(
+                (
+                    "- quotient_group | 04_atomic_notes/definitions/quotient_group.md | "
+                    "export with: socrates note export-obsidian --project <project>"
+                ),
+                result.stdout,
+            )
+            self.assertNotIn("normal_subgroup", result.stdout)
 
     def test_queue_cli_lists_scheduled_reviews(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
