@@ -399,10 +399,14 @@ def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
             return ("missing", 0)
         except json.JSONDecodeError:
             return ("invalid", 0)
-        if not isinstance(artifact, dict) or not all(
-            isinstance(artifact.get(key), list) for key in keys
-        ):
+        if not isinstance(artifact, dict):
             return ("invalid", 0)
+        for key in keys:
+            rows = artifact.get(key)
+            if not isinstance(rows, list) or not all(
+                isinstance(item, dict) for item in rows
+            ):
+                return ("invalid", 0)
         mtimes.append(path.stat().st_mtime_ns)
     return ("current", min(mtimes) if mtimes else 0)
 
