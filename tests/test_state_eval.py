@@ -2466,6 +2466,196 @@ class StateEvalTests(unittest.TestCase):
             self.assertNotIn("Invalid Review Schedule Items", due.stdout)
             self.assertNotIn("quotient_group", due.stdout)
 
+    def test_review_repair_schedule_json_repairs_and_reports_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "not-a-date",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "quotient_group",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "reason": "mastery 0.62",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            repair = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(repair.returncode, 0, repair.stderr)
+            self.assertNotIn("Repaired 2 review schedule items:", repair.stdout)
+            payload = json.loads(repair.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_repair_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "repaired_count": 2,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [
+                        {
+                            "concept": "normal_subgroup",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "mastery 0.4",
+                            "repair": "",
+                        },
+                        {
+                            "concept": "quotient_group",
+                            "priority": "medium",
+                            "due": "within_3_days",
+                            "scheduled_for": "2026-06-07",
+                            "reason": "mastery 0.62",
+                            "repair": "",
+                        },
+                    ],
+                },
+            )
+            repaired_state = json.loads(learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                repaired_state["review_schedule"],
+                [
+                    {
+                        "concept": "normal_subgroup",
+                        "priority": "high",
+                        "due": "next_session",
+                        "scheduled_for": "2026-06-04",
+                        "reason": "mastery 0.4",
+                    },
+                    {
+                        "concept": "quotient_group",
+                        "priority": "medium",
+                        "due": "within_3_days",
+                        "scheduled_for": "2026-06-07",
+                        "reason": "mastery 0.62",
+                    },
+                ],
+            )
+            schedule_text = schedule_path.read_text(encoding="utf-8")
+            self.assertIn("- Scheduled for: 2026-06-04", schedule_text)
+            self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
+            self.assertNotIn("not-a-date", schedule_text)
+
+    def test_review_repair_schedule_json_reports_noop_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "2026-06-04",
+                                "reason": "mastery 0.4",
+                                "repair_context": [
+                                    {
+                                        "misconception_id": "normal_equals_central",
+                                        "count": 1,
+                                        "repair_suggestion": "Compare normality with centrality.",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            repair = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(repair.returncode, 0, repair.stderr)
+            payload = json.loads(repair.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_repair_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "repaired_count": 0,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [
+                        {
+                            "concept": "normal_subgroup",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "mastery 0.4",
+                            "repair": "Compare normality with centrality.",
+                        }
+                    ],
+                },
+            )
+            self.assertTrue(schedule_path.exists())
+            self.assertIn("## normal_subgroup", schedule_path.read_text(encoding="utf-8"))
+
     def test_review_repair_schedule_cli_reports_corrupt_learning_state_json_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

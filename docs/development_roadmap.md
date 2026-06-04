@@ -2403,6 +2403,32 @@ same writer side effects as Markdown mode
 - 空 schedule 返回 `scheduled_count: 0` 和空 rows，同时仍写入 `02_learning_plan/review_schedule.md`。
 - 这不是 dry-run、read-only ledger、tutor、planner、repair command、exercise generator、report refresh、LLM call 或额外 learning-state truth；它只是现有 schedule writer 的 structured result output mode。
 
+v0.44：review-schedule repair writer JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 review schedule repair writer 的结果，而不用解析 `review repair-schedule` prose。
+
+必须完成：
+
+`review repair-schedule --json`
+
+structured repair writer-result payload
+
+repaired count
+
+post-write scheduled rows
+
+same repair side effects as prose mode
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review repair-schedule --project <project> --as-of 2026-06-04 --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_review_schedule_repair_writer`、`project`、`as_of`、`repaired_count`、`schedule_path` 和 `scheduled_reviews`。
+- JSON mode 仍会修复 missing/invalid persisted schedule dates，更新 `00_meta/learning_state.json`，并重写 `02_learning_plan/review_schedule.md`。
+- no-op repair 返回 `repaired_count: 0`，同时仍返回当前 post-write schedule rows。
+- 这不是 dry-run、read-only ledger、scheduler、tutor、planner、exercise generator、report refresh、LLM call 或额外 learning-state truth；它只是现有 repair writer 的 structured result output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

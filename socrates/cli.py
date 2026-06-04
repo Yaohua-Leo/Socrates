@@ -770,6 +770,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="ISO date used to repair missing or invalid dates; defaults to today.",
     )
+    review_repair_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
     review_repair_parser.set_defaults(func=_handle_review_repair_schedule)
     review_resolve_parser = review_subparsers.add_parser(
         "resolve",
@@ -2159,6 +2164,20 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    if args.json:
+        print(
+            json.dumps(
+                _review_schedule_repair_payload(
+                    context,
+                    as_of=as_of,
+                    repaired_count=repaired_count,
+                    schedule_path=schedule_path,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "item" if repaired_count == 1 else "items"
     print(f"Repaired {repaired_count} review schedule {noun}: {schedule_path}")
     return 0
@@ -3652,6 +3671,25 @@ def _review_schedule_payload(
         "as_of": as_of.isoformat(),
         "threshold": threshold,
         "scheduled_count": len(rows),
+        "schedule_path": str(schedule_path),
+        "scheduled_reviews": rows,
+    }
+
+
+def _review_schedule_repair_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    repaired_count: int,
+    schedule_path: Path,
+) -> dict[str, object]:
+    rows = _review_schedule_records(context.learning_state)
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_schedule_repair_writer",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "repaired_count": repaired_count,
         "schedule_path": str(schedule_path),
         "scheduled_reviews": rows,
     }

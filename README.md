@@ -6,14 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.43-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.44-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured schedule-writer, due-review,
-learning-mastery, and misconception-ledger JSON,
+long-term report-surface refresh, structured repair-writer, schedule-writer,
+due-review, learning-mastery, and misconception-ledger JSON,
 targeted limit-controlled dry-run-previewable structured batch-refreshable
 commands-output command-summarized filterable readiness-counted
 machine-readable and Markdown read-only multi-project resume indexes,
@@ -68,6 +68,7 @@ python -m socrates plan --project ".\projects\group_theory"
 python -m socrates teach --project ".\projects\group_theory" --session-id session_0001 --script ".\session.script"
 python -m socrates review schedule --project ".\projects\group_theory" --as-of 2026-06-04 --json
 python -m socrates review due --project ".\projects\group_theory" --as-of 2026-06-07 --json
+python -m socrates review repair-schedule --project ".\projects\group_theory" --as-of 2026-06-04 --json
 python -m socrates review mastery --project ".\projects\group_theory" --json
 python -m socrates review misconceptions --project ".\projects\group_theory" --json
 python -m socrates note review --project ".\projects\group_theory" --note normal_subgroup
@@ -244,6 +245,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   structured JSON, including invalid persisted schedule rows that need repair.
 - v0.43 `review schedule --json` emits the explicit schedule writer result as
   structured JSON without changing scheduler side effects or selection policy.
+- v0.44 `review repair-schedule --json` emits the explicit repair writer result
+  as structured JSON, including repaired counts and post-write rows.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -318,6 +321,11 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   read-only ledger, tutor, planner, repair command, exercise generator, report
   refresh, LLM call, or extra learning-state truth beyond the existing
   scheduler write.
+- `review repair-schedule --json` is a structured repair-writer result
+  payload. It still repairs `learning_state.json` and rewrites
+  `review_schedule.md`; it is not a dry-run, read-only ledger, scheduler,
+  tutor, planner, exercise generator, report refresh, LLM call, or extra
+  learning-state truth beyond the existing repair write.
 - Study dashboards are read-only compositions over existing deterministic
   evidence. They do not create new truth, run repairs, generate reports, call an
   LLM, approve artifacts, score learning, tutor, predict, or mutate project
