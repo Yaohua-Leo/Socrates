@@ -848,6 +848,127 @@ class ReportTests(unittest.TestCase):
                 stale_reports.stdout,
             )
 
+    def test_monthly_report_includes_recommended_focus(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "monthly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Recommended Focus", report_text)
+            self.assertIn(
+                "- Next action: workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+                report_text,
+            )
+            self.assertIn("- Weak concept: quotient_group: 0.42", report_text)
+            self.assertIn("- Next review: quotient_group | high | 2026-06-04", report_text)
+            self.assertIn("- Active misconception: none recorded", report_text)
+
+    def test_project_summary_recommended_focus_includes_active_misconception(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session_0001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses conjugation invariance with centrality.",
+                            repair_suggestion="Compare normality with containment in Z(G).",
+                        )
+                    ],
+                ),
+            )
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Recommended Focus", report_text)
+            self.assertIn(
+                "- Next action: workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+                report_text,
+            )
+            self.assertIn(
+                "- Active misconception: normal_equals_central | normal_subgroup | active x1",
+                report_text,
+            )
+
+    def test_weekly_report_recommended_focus_uses_empty_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Recommended Focus", report_text)
+            self.assertIn("- Next action: none", report_text)
+            self.assertIn("- Weak concept: none recorded", report_text)
+            self.assertIn("- Next review: none scheduled", report_text)
+            self.assertIn("- Active misconception: none recorded", report_text)
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

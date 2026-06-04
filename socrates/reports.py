@@ -308,6 +308,10 @@ def _weekly_report_text(
         "",
         *_priority_action_lines(priority_actions),
         "",
+        "## Recommended Focus",
+        "",
+        *_recommended_focus_lines(priority_actions=priority_actions, state=state),
+        "",
         *_state_warning_section(state),
         "## Learning State",
         "",
@@ -360,6 +364,10 @@ def _monthly_report_text(
         "## Priority Actions",
         "",
         *_priority_action_lines(priority_actions),
+        "",
+        "## Recommended Focus",
+        "",
+        *_recommended_focus_lines(priority_actions=priority_actions, state=state),
         "",
         "## Misconceptions",
         "",
@@ -434,6 +442,10 @@ def _project_summary_text(
         "## Priority Actions",
         "",
         *_priority_action_lines(priority_actions),
+        "",
+        "## Recommended Focus",
+        "",
+        *_recommended_focus_lines(priority_actions=priority_actions, state=state),
         "",
         "## Benchmark Snapshot",
         "",
@@ -795,6 +807,77 @@ def _priority_action_line(item: QueueItem) -> str:
     if item.detail:
         line = f"{line} | {item.detail}"
     return line
+
+
+def _recommended_focus_lines(
+    *,
+    priority_actions: list[QueueItem],
+    state: dict[str, object],
+) -> list[str]:
+    return [
+        f"- Next action: {_next_action_focus(priority_actions)}",
+        f"- Weak concept: {_weakest_concept_focus(state.get('concept_mastery', {}))}",
+        f"- Next review: {_next_review_focus(state.get('review_schedule', []))}",
+        (
+            "- Active misconception: "
+            f"{_active_misconception_focus(state.get('misconceptions', {}))}"
+        ),
+    ]
+
+
+def _next_action_focus(priority_actions: list[QueueItem]) -> str:
+    if not priority_actions:
+        return "none"
+    return _priority_action_line(priority_actions[0]).removeprefix("- ")
+
+
+def _weakest_concept_focus(value: object) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none recorded"
+    rows = [
+        (coerce_learning_score(score), str(concept))
+        for concept, score in value.items()
+        if str(concept).strip()
+    ]
+    if not rows:
+        return "none recorded"
+    score, concept = sorted(rows, key=lambda row: (row[0], row[1]))[0]
+    return f"{concept}: {score:g}"
+
+
+def _next_review_focus(value: object) -> str:
+    if not isinstance(value, list) or not value:
+        return "none scheduled"
+    rows: list[tuple[str, str, str, str]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        concept = str(item.get("concept", "review")).strip() or "review"
+        priority = str(item.get("priority", "medium")).strip() or "medium"
+        scheduled_for = str(item.get("scheduled_for", "")).strip()
+        due = str(item.get("due", "")).strip()
+        when = scheduled_for or due or "unscheduled"
+        sort_when = scheduled_for or "9999-99-99"
+        rows.append((sort_when, concept, priority, when))
+    if not rows:
+        return "none scheduled"
+    _sort_when, concept, priority, when = sorted(rows)[0]
+    return f"{concept} | {priority} | {when}"
+
+
+def _active_misconception_focus(value: object) -> str:
+    if not isinstance(value, dict) or not value:
+        return "none recorded"
+    for misconception_id, item in sorted(value.items(), key=lambda pair: str(pair[0])):
+        if not isinstance(item, dict):
+            continue
+        status = str(item.get("status", "active")).strip() or "active"
+        if status != "active":
+            continue
+        concept = str(item.get("concept", "general")).strip() or "general"
+        count = coerce_occurrence_count(item.get("count", 1))
+        return f"{misconception_id} | {concept} | {status} x{count}"
+    return "none recorded"
 
 
 def _score_lines(value: object) -> list[str]:

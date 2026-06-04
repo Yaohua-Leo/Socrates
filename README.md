@@ -6,17 +6,18 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.14-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.15-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression, workflow
 action queue visibility, priority action queue navigation, priority action
-snapshots in reports, and an opt-in LLM provider layer for reviewable draft
-suggestions, including review-only session judge drafts. It is not yet a full
-AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM
-judges, and product UI layers remain future work.
+snapshots in reports, recommended focus report summaries, and an opt-in LLM
+provider layer for reviewable draft suggestions, including review-only session
+judge drafts. It is not yet a full AI tutor: autonomous LLM tutoring, OCR/PDF
+extraction backends, trusted LLM judges, and product UI layers remain future
+work.
 
 ## Quick Start
 
@@ -122,6 +123,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.14 priority action snapshots in weekly, monthly, and project-summary
   reports, with report staleness tracking workflow/regression manifests that
   can change the next-action view.
+- v0.15 recommended focus summaries in weekly, monthly, and project-summary
+  reports, combining the first priority action, weakest concept, next review,
+  and active misconception from existing deterministic evidence.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -164,6 +168,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   do not create new artifacts, readiness gates, scores, or project mutations.
 - Report priority snapshots reuse the same queue evidence. They do not create a
   new report score, readiness gate, artifact writer, or learning-state truth.
+- Recommended focus rows are deterministic report summaries. They do not run
+  tutoring, plan a session, score learning quality, or mutate learning state.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

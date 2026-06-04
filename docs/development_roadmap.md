@@ -1699,6 +1699,29 @@ v0.15：报告行动建议与阶段复盘结构打磨
 
 继续把 priority actions、weak concepts、misconceptions、reviews 和 exercise progress 组合成更清晰的阶段复盘结构，让报告从 artifact inventory 进一步接近可执行学习建议。
 
+必须完成：
+
+recommended focus section in weekly report
+
+recommended focus section in monthly report
+
+recommended focus section in project summary
+
+deterministic fallback rows when no evidence exists
+
+当前状态（2026-06-04）：
+
+- weekly、monthly 与 project summary report 已包含 `## Recommended Focus` section。
+- Recommended Focus 汇总 first priority action、weakest concept、next scheduled review 与 first active misconception。
+- 空项目或缺失 evidence 会输出 `none` / `none recorded` / `none scheduled` fallback，不会制造伪建议。
+- 这不是 tutor、planner、session score、readiness gate 或 learning-state mutation；它只是把已有 deterministic evidence 压缩成报告中的下一步摘要。
+
+v0.16：报告与行动队列的完成度/阻塞摘要
+
+建议目标：
+
+继续把 priority/focus/report evidence 压缩成更清晰的 completion/blocker summary，帮助长期项目区分“下一步操作”“阻塞项”“可继续学习项”和“需要人工审核项”。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
