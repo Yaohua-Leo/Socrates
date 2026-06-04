@@ -57,6 +57,7 @@ from .quality import (
 from .references import (
     CorrectionPatchSummary,
     SourceSummary,
+    apply_correction_patch,
     create_correction_patch,
     curate_reference,
     import_reference,
@@ -249,6 +250,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional review note.",
     )
     patches_review_parser.set_defaults(func=_handle_patches_review)
+    patches_apply_parser = patches_subparsers.add_parser(
+        "apply",
+        help="Apply an accepted correction patch to its curated draft.",
+    )
+    patches_apply_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    patches_apply_parser.add_argument("--patch", required=True, help="Patch id, without .patch.md.")
+    patches_apply_parser.set_defaults(func=_handle_patches_apply)
 
     plan_parser = subparsers.add_parser(
         "plan",
@@ -924,6 +932,12 @@ def _handle_patches_review(args: argparse.Namespace) -> int:
         note=args.note,
     )
     print(f"Reviewed correction patch {args.patch}: {args.decision}")
+    return 0
+
+
+def _handle_patches_apply(args: argparse.Namespace) -> int:
+    target = apply_correction_patch(args.project, args.patch)
+    print(f"Applied correction patch {args.patch}: {target}")
     return 0
 
 
@@ -1808,6 +1822,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         return int(args.func(args))
     except ProjectExistsError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 

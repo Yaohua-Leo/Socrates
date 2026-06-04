@@ -667,6 +667,214 @@ class ReferenceImportTests(unittest.TestCase):
             self.assertEqual(converted.read_text(encoding="utf-8"), converted_before)
             self.assertEqual(curated.read_text(encoding="utf-8"), curated_before)
 
+    def test_patches_apply_replaces_accepted_correction_in_curated_reference_only(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.md"
+            source.write_text(
+                "### Definition: Normal Subgroup\n"
+                "Let G he a group. A subgroup N is normal when gNg^{-1}=N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normality OCR Notes",
+            )
+            curated = curate_reference(project, record.id)
+            raw = project / "01_references" / "raw" / "markdown" / "normal_subgroups.md"
+            converted = (
+                project
+                / "01_references"
+                / "converted"
+                / "markdown"
+                / "normality_ocr_notes.md"
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patch",
+                    "--project",
+                    str(project),
+                    "--source-id",
+                    record.id,
+                    "--location",
+                    "Definition paragraph 1",
+                    "--original",
+                    "Let G he a group.",
+                    "--proposed-correction",
+                    "Let G be a group.",
+                    "--reason",
+                    "OCR likely misread be as he.",
+                    "--risk-level",
+                    "low",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patches",
+                    "review",
+                    "--project",
+                    str(project),
+                    "--patch",
+                    "normality_ocr_notes_patch_001",
+                    "--decision",
+                    "accepted",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            raw_before = raw.read_text(encoding="utf-8")
+            converted_before = converted.read_text(encoding="utf-8")
+
+            apply_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patches",
+                    "apply",
+                    "--project",
+                    str(project),
+                    "--patch",
+                    "normality_ocr_notes_patch_001",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            list_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patches",
+                    "list",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(apply_result.returncode, 0, apply_result.stderr)
+            self.assertIn(
+                "Applied correction patch normality_ocr_notes_patch_001",
+                apply_result.stdout,
+            )
+            curated_text = curated.read_text(encoding="utf-8")
+            self.assertIn("Let G be a group.", curated_text)
+            self.assertNotIn("Let G he a group.", curated_text)
+            self.assertEqual(raw.read_text(encoding="utf-8"), raw_before)
+            self.assertEqual(converted.read_text(encoding="utf-8"), converted_before)
+            patch = (
+                project
+                / "01_references"
+                / "converted"
+                / "patches"
+                / "normality_ocr_notes_patch_001.patch.md"
+            )
+            patch_text = patch.read_text(encoding="utf-8")
+            self.assertIn("### Apply Result\n\n- status: applied", patch_text)
+            self.assertIn(
+                "- target: 01_references/curated/normality_ocr_notes.curated.md",
+                patch_text,
+            )
+            self.assertIn(
+                "- normality_ocr_notes_patch_001 | applied | normality_ocr_notes | low |",
+                list_result.stdout,
+            )
+
+    def test_patches_apply_rejects_unaccepted_patch_without_traceback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "project"))
+            source = root / "normal_subgroups.md"
+            source.write_text(
+                "### Definition: Normal Subgroup\n"
+                "Let G he a group. A subgroup N is normal when gNg^{-1}=N.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            record = import_reference(
+                project,
+                source,
+                role="lecture_notes",
+                title="Normality OCR Notes",
+            )
+            curated = curate_reference(project, record.id)
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patch",
+                    "--project",
+                    str(project),
+                    "--source-id",
+                    record.id,
+                    "--location",
+                    "Definition paragraph 1",
+                    "--original",
+                    "Let G he a group.",
+                    "--proposed-correction",
+                    "Let G be a group.",
+                    "--reason",
+                    "OCR likely misread be as he.",
+                    "--risk-level",
+                    "low",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+            curated_before = curated.read_text(encoding="utf-8")
+
+            apply_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "patches",
+                    "apply",
+                    "--project",
+                    str(project),
+                    "--patch",
+                    "normality_ocr_notes_patch_001",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(apply_result.returncode, 1)
+            self.assertEqual(apply_result.stdout, "")
+            self.assertIn(
+                "error: Correction patch normality_ocr_notes_patch_001 must be accepted before apply",
+                apply_result.stderr,
+            )
+            self.assertNotIn("Traceback", apply_result.stderr)
+            self.assertEqual(curated.read_text(encoding="utf-8"), curated_before)
+
 
 if __name__ == "__main__":
     unittest.main()

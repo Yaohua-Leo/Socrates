@@ -222,6 +222,48 @@ def review_correction_patch(
     return patch_path
 
 
+def apply_correction_patch(project_path: Path | str, patch_id: str) -> Path:
+    """Apply one accepted correction patch to its curated reference draft."""
+
+    context = load_project(project_path)
+    normalized_id = patch_id.removesuffix(".patch.md").removesuffix(".patch")
+    patch_path = context.references_dir / "converted" / "patches" / f"{normalized_id}.patch.md"
+    if not patch_path.exists():
+        raise FileNotFoundError(f"Correction patch does not exist: {patch_path}")
+
+    patch_text = patch_path.read_text(encoding="utf-8")
+    if _patch_review_status(patch_text) != "accepted":
+        raise ValueError(f"Correction patch {normalized_id} must be accepted before apply")
+
+    target_path = context.root / _patch_target_relative_path(patch_text)
+    if not target_path.exists():
+        raise FileNotFoundError(f"Curated reference does not exist: {target_path}")
+
+    original = _patch_fenced_section_value(patch_text, "Original")
+    proposed = _patch_fenced_section_value(patch_text, "Proposed Correction")
+    if not original or not proposed:
+        raise ValueError(f"Correction patch {normalized_id} is missing original or proposed text")
+
+    target_text = target_path.read_text(encoding="utf-8")
+    match_count = target_text.count(original)
+    if match_count != 1:
+        raise ValueError(
+            f"Correction patch {normalized_id} expected exactly one curated match, "
+            f"found {match_count}"
+        )
+
+    write_text(target_path, target_text.replace(original, proposed, 1))
+    write_text(
+        patch_path,
+        _with_apply_result(
+            patch_text,
+            target=target_path.relative_to(context.root).as_posix(),
+        ),
+    )
+    append_project_log(context, f"Applied correction patch {normalized_id} to curated reference.")
+    return target_path
+
+
 def _reference_type(source: Path) -> tuple[str, str]:
     return REFERENCE_TYPES.get(source.suffix.lower(), ("file", "files"))
 
@@ -460,6 +502,9 @@ def _patch_section_value(text: str, heading: str) -> str:
 
 
 def _patch_review_status(text: str) -> str:
+    apply_status = _patch_apply_field(text, "status")
+    if apply_status == "applied":
+        return "applied"
     decision = _patch_review_field(text, "decision")
     return decision if decision else "pending"
 
@@ -476,6 +521,60 @@ def _patch_review_field(text: str, key: str) -> str:
             return ""
         if in_review and stripped.startswith(prefix):
             return stripped.removeprefix(prefix).strip()
+    return ""
+
+
+def _patch_apply_field(text: str, key: str) -> str:
+    in_apply = False
+    prefix = f"- {key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped == "### Apply Result":
+            in_apply = True
+            continue
+        if in_apply and line.startswith("### "):
+            return ""
+        if in_apply and stripped.startswith(prefix):
+            return stripped.removeprefix(prefix).strip()
+    return ""
+
+
+def _patch_target_relative_path(text: str) -> Path:
+    curated_path = _patch_source_field(text, "curated_path")
+    if not curated_path or curated_path == "none":
+        raise ValueError("Correction patch does not reference a curated target")
+    return Path(curated_path)
+
+
+def _patch_source_field(text: str, key: str) -> str:
+    prefix = f"- {key}:"
+    for line in text.splitlines():
+        stripped = line.strip()
+        if stripped.startswith(prefix):
+            return stripped.removeprefix(prefix).strip()
+    return ""
+
+
+def _patch_fenced_section_value(text: str, heading: str) -> str:
+    marker = f"### {heading}"
+    lines = text.splitlines()
+    for index, line in enumerate(lines):
+        if line.strip() != marker:
+            continue
+        fence = ""
+        values: list[str] = []
+        for value in lines[index + 1 :]:
+            stripped = value.strip()
+            if not fence:
+                if not stripped:
+                    continue
+                if stripped.startswith("```"):
+                    fence = stripped[: len(stripped) - len(stripped.lstrip("`"))]
+                    continue
+                return stripped
+            if stripped == fence:
+                return "\n".join(values)
+            values.append(value)
     return ""
 
 
@@ -500,6 +599,26 @@ def _review_decision_markdown(*, decision: str, note: str) -> str:
     if note.strip():
         lines.append(f"- note: {note.strip()}")
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _with_apply_result(text: str, *, target: str) -> str:
+    apply_block = _apply_result_markdown(target=target)
+    marker = "\n### Apply Result\n"
+    if marker not in text:
+        return text.rstrip() + "\n\n" + apply_block
+    before, _, existing_tail = text.partition(marker)
+    _, separator, after = existing_tail.partition("\n### ")
+    if separator:
+        return before.rstrip() + "\n\n" + apply_block.rstrip() + "\n\n### " + after
+    return before.rstrip() + "\n\n" + apply_block
+
+
+def _apply_result_markdown(*, target: str) -> str:
+    return (
+        "### Apply Result\n\n"
+        "- status: applied\n"
+        f"- target: {target}\n"
+    )
 
 
 def _fenced_text(value: str) -> str:
