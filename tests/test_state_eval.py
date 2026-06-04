@@ -624,6 +624,48 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("Scheduled reviews: 1", status_result.stdout)
             self.assertIn("Generated exercises: 1", status_result.stdout)
 
+    def test_status_shows_next_review_repair_guidance(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            status_result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status_result.returncode, 0, status_result.stderr)
+            self.assertIn(
+                (
+                    "Next review: normal_subgroup | 2026-06-07 | medium | "
+                    "active misconception normal_equals_central x1"
+                ),
+                status_result.stdout,
+            )
+            self.assertIn(
+                "Next repair: Compare gNg^-1 = N with gn = ng.",
+                status_result.stdout,
+            )
+
     def test_review_schedule_cli_accepts_threshold_and_as_of_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

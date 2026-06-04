@@ -877,6 +877,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     obsidian_export_count = _count_obsidian_exports(context.root)
     obsidian_backlink_count = _count_obsidian_backlinks(context.root)
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
+    next_review = _next_scheduled_review(context.learning_state)
     report_count = _count_learning_reports(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
     tool_verification_quality = _read_tool_verification_quality_status(context.root)
@@ -924,6 +925,15 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Obsidian exports: {obsidian_export_count}")
     print(f"Obsidian backlinks: {obsidian_backlink_count}")
     print(f"Scheduled reviews: {scheduled_review_count}")
+    if next_review is not None:
+        print(
+            "Next review: "
+            f"{next_review['concept']} | {next_review['scheduled_for']} | "
+            f"{next_review['priority']} | {next_review['reason']}"
+        )
+        repair = next_review.get("repair", "")
+        if repair:
+            print(f"Next repair: {repair}")
     print(f"Learning reports: {report_count}")
     print(f"Tool verification records: {tool_verification_count}")
     print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
@@ -2176,6 +2186,41 @@ def _count_scheduled_reviews(learning_state: Path) -> int:
     state = json.loads(learning_state.read_text(encoding="utf-8"))
     schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
     return len(schedule) if isinstance(schedule, list) else 0
+
+
+def _next_scheduled_review(learning_state: Path) -> dict[str, str] | None:
+    if not learning_state.exists():
+        return None
+    state = json.loads(learning_state.read_text(encoding="utf-8"))
+    schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
+    if not isinstance(schedule, list):
+        return None
+
+    rows: list[dict[str, str]] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        scheduled_for = str(item.get("scheduled_for", "")).strip()
+        if not scheduled_for:
+            continue
+        try:
+            date.fromisoformat(scheduled_for)
+        except ValueError:
+            continue
+        rows.append(
+            {
+                "concept": str(item.get("concept", "review")),
+                "scheduled_for": scheduled_for,
+                "priority": str(item.get("priority", "medium")),
+                "reason": str(item.get("reason", "review scheduled")),
+                "repair": "; ".join(
+                    _due_review_repair_suggestions(item.get("repair_context", []))
+                ),
+            }
+        )
+    if not rows:
+        return None
+    return sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"]))[0]
 
 
 def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
