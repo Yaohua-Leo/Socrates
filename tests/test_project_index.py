@@ -114,6 +114,37 @@ class ProjectIndexTests(unittest.TestCase):
             self.assertIn("group_theory | Group Theory | active | group_theory", result.stdout)
             self.assertNotIn("Expecting property name", result.stderr)
 
+    def test_projects_list_rescans_when_cached_index_schema_is_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            root.mkdir()
+            create_project(ProjectSpec(topic="Group Theory", path=root / "group_theory"))
+            (root / "socrates_projects.json").write_text(
+                json.dumps({"version": 1, "projects": "not a list"}),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "list",
+                    "--root",
+                    str(root),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("group_theory | Group Theory | active | group_theory", result.stdout)
+            self.assertNotIn("No Socrates projects found", result.stdout)
+
     def test_projects_refs_finds_reviewed_notes_across_projects(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "SocratesProjects"

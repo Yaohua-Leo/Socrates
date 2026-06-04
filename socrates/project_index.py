@@ -36,8 +36,15 @@ def list_projects(root_path: Path | str) -> list[dict[str, str]]:
             index = json.loads(index_path.read_text(encoding="utf-8"))
         except json.JSONDecodeError:
             return discover_projects(root)
-        projects = index.get("projects", []) if isinstance(index, dict) else []
-        return [project for project in projects if _is_project_record(project)]
+        if not isinstance(index, dict):
+            return discover_projects(root)
+        projects = index.get("projects", [])
+        if not isinstance(projects, list):
+            return discover_projects(root)
+        records = [project for project in projects if _is_project_record(project)]
+        if projects and not records:
+            return discover_projects(root)
+        return records
     return discover_projects(root)
 
 
