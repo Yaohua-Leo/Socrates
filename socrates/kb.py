@@ -351,6 +351,17 @@ def _search_haystack(item: dict[str, object]) -> str:
         page = str(source.get("page", "")).strip()
         if page:
             source_terms.append(f"p{page}")
+    relationship_terms: list[str] = []
+    relationships = item.get("relationships", [])
+    if isinstance(relationships, list):
+        for relationship in relationships:
+            if not isinstance(relationship, dict):
+                continue
+            relationship_terms.extend(
+                str(value)
+                for key in ("relationship", "target")
+                if (value := relationship.get(key))
+            )
     return " ".join(
         [
             str(item.get("number", "")),
@@ -358,6 +369,7 @@ def _search_haystack(item: dict[str, object]) -> str:
             str(item.get("statement", "")),
             " ".join(str(dep) for dep in item.get("dependencies", [])),
             " ".join(source_terms),
+            " ".join(relationship_terms),
         ]
     ).casefold()
 
