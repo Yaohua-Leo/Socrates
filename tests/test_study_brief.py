@@ -94,6 +94,61 @@ class StudyBriefTests(unittest.TestCase):
             )
             self.assertEqual(manifest["action_type"], "human_review")
 
+    def test_brief_status_cli_reports_missing_brief_without_writing(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            project_log = project / "00_meta" / "project_log.md"
+
+            result = self._run_socrates("brief", "status", "--project", str(project))
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Study brief: not_run", result.stdout)
+            self.assertIn("Study brief path: 07_exports/briefs/study_brief.md", result.stdout)
+            self.assertIn("Study brief recorded next action: none", result.stdout)
+            self.assertIn("Study brief current next action: none", result.stdout)
+            self.assertFalse((project / "07_exports" / "briefs" / "study_brief.md").exists())
+            self.assertFalse(
+                (project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                project_log.read_text(encoding="utf-8"),
+            )
+
+    def test_brief_generate_cli_writes_then_status_reports_current(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+
+            generated = self._run_socrates("brief", "generate", "--project", str(project))
+            status = self._run_socrates("brief", "status", "--project", str(project))
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertIn("Wrote study brief:", generated.stdout)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Study brief: current", status.stdout)
+            self.assertIn("Study brief path: 07_exports/briefs/study_brief.md", status.stdout)
+            self.assertIn(f"Study brief recorded next action: {next_action}", status.stdout)
+            self.assertIn(f"Study brief current next action: {next_action}", status.stdout)
+
+    def test_brief_status_cli_marks_corrupt_manifest_invalid(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+
+            generated = self._run_socrates("brief", "generate", "--project", str(project))
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            manifest_path = project / "07_exports" / "briefs" / "study_brief_manifest.json"
+            manifest_path.write_text("{not valid json\n", encoding="utf-8", newline="\n")
+            status = self._run_socrates("brief", "status", "--project", str(project))
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Study brief: invalid", status.stdout)
+            self.assertIn("Study brief recorded next action: invalid", status.stdout)
+
     def test_dashboard_and_status_mark_corrupt_study_brief_manifest_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

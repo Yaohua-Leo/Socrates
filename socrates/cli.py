@@ -380,9 +380,34 @@ def build_parser() -> argparse.ArgumentParser:
 
     brief_parser = subparsers.add_parser(
         "brief",
+        help="Write or inspect deterministic study-start briefs.",
+    )
+    brief_parser.add_argument(
+        "--project",
+        default=None,
+        help="Socrates project directory for legacy brief generation.",
+    )
+    brief_subparsers = brief_parser.add_subparsers(dest="brief_command")
+    brief_generate_parser = brief_subparsers.add_parser(
+        "generate",
         help="Write a deterministic study-start brief.",
     )
-    brief_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    brief_generate_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    brief_generate_parser.set_defaults(func=_handle_brief)
+    brief_status_parser = brief_subparsers.add_parser(
+        "status",
+        help="Inspect study brief freshness without writing artifacts.",
+    )
+    brief_status_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    brief_status_parser.set_defaults(func=_handle_brief_status)
     brief_parser.set_defaults(func=_handle_brief)
 
     queue_parser = subparsers.add_parser(
@@ -1542,8 +1567,19 @@ def _handle_dashboard(args: argparse.Namespace) -> int:
 
 
 def _handle_brief(args: argparse.Namespace) -> int:
+    if args.project is None:
+        raise ValueError("brief requires --project or a subcommand")
     brief_path = generate_study_brief(args.project)
     print(f"Wrote study brief: {brief_path}")
+    return 0
+
+
+def _handle_brief_status(args: argparse.Namespace) -> int:
+    study_brief_status = summarize_study_brief(args.project)
+    print(f"Study brief: {study_brief_status.status}")
+    print(f"Study brief path: {study_brief_status.path}")
+    print(f"Study brief recorded next action: {study_brief_status.recorded_next_action}")
+    print(f"Study brief current next action: {study_brief_status.current_next_action}")
     return 0
 
 

@@ -6,14 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.25-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.26-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
 long-term report-surface refresh, read-only study dashboards, generated
-study-start briefs with manifest-backed next-action freshness visibility,
+study-start briefs with a read-only manifest-backed freshness command,
 workflow action queue visibility, priority action queue navigation, priority
 action snapshots in reports, recommended focus report summaries, action summary
 queue/report summaries, repair path queue/report summaries, risk summary report
@@ -77,7 +77,8 @@ python -m socrates report monthly --project ".\projects\group_theory"
 python -m socrates report project-summary --project ".\projects\group_theory"
 python -m socrates session judge-suggest --project ".\projects\group_theory" --session-id session_0001
 python -m socrates dashboard --project ".\projects\group_theory"
-python -m socrates brief --project ".\projects\group_theory"
+python -m socrates brief generate --project ".\projects\group_theory"
+python -m socrates brief status --project ".\projects\group_theory"
 python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
@@ -166,6 +167,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.25 generated study-start briefs also write
   `07_exports/briefs/study_brief_manifest.json`; status readers prefer this
   structured manifest and use Markdown parsing only as a legacy fallback.
+- v0.26 `brief status` reports the manifest-backed brief freshness fields
+  without writing artifacts; `brief generate` is the explicit write command,
+  while legacy `brief --project <project>` remains supported.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -240,6 +244,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - Study brief manifests are deterministic metadata for the brief artifact only.
   A malformed manifest is reported conservatively as invalid; manifest status is
   not mathematical validation, report freshness, tutoring, scoring, or approval.
+- `brief status` is a read-only inspection command over that status reader. It
+  does not generate briefs, append project-log entries, refresh reports, call an
+  LLM, repair artifacts, score learning, tutor, or mutate learning-state truth.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

@@ -1961,6 +1961,30 @@ manifest path and boundary documentation
 - 只有 manifest 不存在但 Markdown brief 存在时，reader 才 fallback 到 `- Next action:` 行解析。
 - 这不是数学验证、report freshness、approval、score、tutor、planner 或 mutation；manifest 只是 brief artifact 的确定性元数据。
 
+v0.26：study brief status command
+
+建议目标：
+
+把 v0.25 的 freshness reader 暴露成一个单独的只读 CLI 命令，让用户不必重新生成 brief 或打开完整 status/dashboard 才能检查当前 brief 是否可用。
+
+必须完成：
+
+top-level `brief status` CLI command
+
+explicit `brief generate` writer command
+
+legacy `brief --project` compatibility
+
+read-only status output with path, recorded next action, and current next action
+
+当前状态（2026-06-04）：
+
+- `python -m socrates brief status --project <project>` 已输出 study brief 状态、路径、记录的 next action 和当前 next action。
+- `python -m socrates brief generate --project <project>` 已作为显式写入命令保留生成行为。
+- `python -m socrates brief --project <project>` 仍保持向后兼容。
+- `brief status` 不写入 `study_brief.md`、`study_brief_manifest.json`，也不追加 project log。
+- 这不是生成器、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 learning-state mutation；它只是已有 manifest-backed freshness reader 的只读 CLI view。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
