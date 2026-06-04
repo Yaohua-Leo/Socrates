@@ -176,6 +176,9 @@ def _write_export_index(obsidian_dir: Path, exported_notes: list[dict[str, objec
         related = [str(item) for item in note.get("related", []) if str(item).strip()]
         if related:
             lines.append(f"  - Related: {', '.join(related)}")
+        backlink_links = _index_backlink_links(note)
+        if backlink_links:
+            lines.append(f"  - Backlinks: {', '.join(backlink_links)}")
     write_text(obsidian_dir / "_socrates_index.md", "\n".join(lines).rstrip() + "\n")
 
 
@@ -377,6 +380,22 @@ def _index_source_line(note: dict[str, object]) -> str:
     if parts:
         return ", ".join(parts)
     return source_id
+
+
+def _index_backlink_links(note: dict[str, object]) -> list[str]:
+    backlinks = note.get("backlinks", [])
+    if not isinstance(backlinks, list):
+        return []
+    links: list[str] = []
+    for backlink in backlinks:
+        if not isinstance(backlink, dict):
+            continue
+        note_id = str(backlink.get("note_id", "")).strip()
+        concept = str(backlink.get("concept", "")).strip()
+        if not note_id or not concept:
+            continue
+        links.append(f"[[{note_id}|{concept}]]")
+    return links
 
 
 def _require_note_quality(project_root: Path, note_path: Path, label: str) -> None:

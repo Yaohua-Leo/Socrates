@@ -382,8 +382,15 @@ class NoteReviewExportTests(unittest.TestCase):
             quotient_note = project / "07_exports" / "obsidian" / "quotient_group.md"
             normal_text = normal_note.read_text(encoding="utf-8")
             quotient_text = quotient_note.read_text(encoding="utf-8")
+            export_index_text = (
+                project / "07_exports" / "obsidian" / "_socrates_index.md"
+            ).read_text(encoding="utf-8")
             self.assertIn("## Socrates Backlinks", normal_text)
             self.assertIn("- [[quotient_group|Quotient Group]]", normal_text)
+            self.assertIn(
+                "  - Backlinks: [[quotient_group|Quotient Group]]",
+                export_index_text,
+            )
             self.assertNotIn("## Socrates Backlinks", quotient_text)
             manifest = json.loads(
                 (project / "07_exports" / "obsidian" / "export_manifest.json").read_text(
