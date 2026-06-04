@@ -7,8 +7,13 @@ from json import JSONDecodeError
 from pathlib import Path
 
 from .context import load_project, read_json
+from .multi_session import (
+    MULTI_SESSION_REGRESSION_MANIFEST_PATH,
+    read_multi_session_regression_status,
+)
 from .obsidian import obsidian_exported_note_ids
 from .project import slugify_topic
+from .workflow_manifest import SESSION_CLOSEOUT_MANIFEST_PATH, read_session_closeout_status
 
 
 QUEUE_SECTIONS = frozenset(
@@ -22,6 +27,7 @@ QUEUE_SECTIONS = frozenset(
         "attempts",
         "quality-checks",
         "tool-verifications",
+        "workflow",
     }
 )
 
@@ -46,6 +52,7 @@ class LearningQueue:
     exercise_drafts_to_approve: list[QueueItem]
     exercises_to_attempt: list[QueueItem]
     attempts_to_grade: list[QueueItem]
+    workflow_actions: list[QueueItem]
     quality_checks_to_fix: list[QueueItem]
     tool_verifications_to_fix: list[QueueItem]
 
@@ -62,6 +69,7 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
         exercises_to_attempt=_exercises_to_attempt(context.root),
         attempts_to_grade=_attempts_to_grade(context.root),
+        workflow_actions=_workflow_actions(context.root),
         quality_checks_to_fix=_artifact_quality_checks_to_fix(context.root),
         tool_verifications_to_fix=_tool_verifications_to_fix(context.root),
     )
@@ -91,6 +99,7 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("exercise-drafts", "Exercise Drafts To Approve", queue.exercise_drafts_to_approve),
         ("exercises", "Exercises To Attempt", queue.exercises_to_attempt),
         ("attempts", "Attempts To Grade", queue.attempts_to_grade),
+        ("workflow", "Workflow Actions", queue.workflow_actions),
         ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
     ]
@@ -276,6 +285,54 @@ def _attempts_to_grade(project_root: Path) -> list[QueueItem]:
             continue
         items.append(_queue_item(attempt_path, project_root))
     return items
+
+
+def _workflow_actions(project_root: Path) -> list[QueueItem]:
+    closeout = read_session_closeout_status(project_root)
+    regression = read_multi_session_regression_status(project_root)
+    if regression is None and closeout is not None and closeout.get("status") == "ready":
+        return [
+            QueueItem(
+                item_id="multi_session_regression",
+                path=SESSION_CLOSEOUT_MANIFEST_PATH.as_posix(),
+                detail=(
+                    "status: not_run; "
+                    "run with: socrates lifecycle regression --project <project>"
+                ),
+            )
+        ]
+    if regression is not None and regression.get("status") == "invalid":
+        return [
+            QueueItem(
+                item_id="multi_session_regression",
+                path=MULTI_SESSION_REGRESSION_MANIFEST_PATH.as_posix(),
+                detail=(
+                    "status: invalid; "
+                    "rerun with: socrates lifecycle regression --project <project>"
+                ),
+            )
+        ]
+    if regression is not None and regression.get("status") == "fail":
+        issues = regression.get("issues", [])
+        return [
+            QueueItem(
+                item_id="multi_session_regression",
+                path=MULTI_SESSION_REGRESSION_MANIFEST_PATH.as_posix(),
+                detail=(
+                    "status: fail; "
+                    f"issues: {_workflow_issue_text(issues)}; "
+                    "rerun with: socrates lifecycle regression --project <project>"
+                ),
+            )
+        ]
+    return []
+
+
+def _workflow_issue_text(value: object) -> str:
+    if not isinstance(value, list):
+        return "none recorded"
+    issues = [str(issue).strip() for issue in value if str(issue).strip()]
+    return "; ".join(issues) if issues else "none recorded"
 
 
 def _artifact_quality_checks_to_fix(project_root: Path) -> list[QueueItem]:

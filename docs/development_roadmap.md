@@ -1623,11 +1623,35 @@ missing/corrupt/malformed regression conservative failure
 - lifecycle audit 已增加 `Multi-session regression` 检查，只接受 valid 且 `status: pass` 的 regression manifest。
 - 这不是新的教学评分、LLM judge、数学证明、自动通过或 learning-state truth；它只是长期产品闭环的确定性 artifact 回归证据。
 
-v0.12：长期使用体验与报告打磨
+v0.12：workflow action queue 与长期使用体验打磨
 
 建议目标：
 
 在已经可见的多 session 回归基础上，继续打磨长期学习时的 CLI 导航、报告可读性、待办队列和阶段性复盘体验。除非显式扩展边界，否则继续优先修补真实使用路径中的 artifact consistency，而不是引入新的智能后端。
+
+必须完成：
+
+workflow queue section
+
+status workflow action count
+
+missing regression follow-up action
+
+invalid regression rerun action
+
+当前状态（2026-06-04）：
+
+- `queue --section workflow` 已显示 deterministic workflow follow-up actions。
+- 当 ready closeout 存在但 multi-session regression 尚未运行时，queue 提示运行 `socrates lifecycle regression --project <project>`。
+- 当 multi-session regression manifest 损坏时，queue 提示重新运行 lifecycle regression。
+- `status` 已显示 `Workflow actions: <count>`，让用户无需打开完整 queue 就能看到 workflow blocker 数量。
+- 这不是新的 readiness gate，也不会修改项目状态；它只是把已有 deterministic gate 的下一步命令变得可见。
+
+v0.13：长期报告与待办优先级打磨
+
+建议目标：
+
+继续把 workflow、quality、review、exercise 和 report 相关待办转成更明确的优先级/阶段化输出，减少长期项目中 status 信息过多但下一步不清楚的问题。
 
 v1.0：可长期使用的数学学习系统
 

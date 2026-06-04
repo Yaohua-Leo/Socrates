@@ -208,6 +208,21 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 375 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 375 tests OK and 1 skipped; WSL emitted a localhost/line-ending warning and a line-ending warning for `scripts/check.ps1`, but the script exit code was 0.
 
+## v0.12 Workflow action queue alpha
+
+- Extended `socrates.learning_queue` with a `workflow` queue section for deterministic follow-up commands.
+- `queue --section workflow` now lists a missing multi-session regression action after a ready closeout and an invalid regression rerun action for corrupt manifests.
+- `status` now reports `Workflow actions: <count>` alongside other queue/action counts.
+- Safety boundary: v0.12 workflow action queue entries are operational UX only. They do not create a new readiness gate, mutate project state, or replace lifecycle/regression checks.
+- Verification evidence:
+  - `python -m unittest tests.test_learning_queue` passed with 18 tests OK.
+  - `python -m unittest tests.test_learning_queue tests.test_status_quality_summary tests.test_multi_session_regression` passed with 44 tests OK.
+  - `python -m unittest discover -s tests` passed with 377 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 377 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 377 tests OK and 1 skipped; WSL emitted localhost and `scripts/check.ps1` line-ending warnings, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -244,7 +259,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

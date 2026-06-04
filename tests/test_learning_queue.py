@@ -11,6 +11,7 @@ import unittest
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
 from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
@@ -20,6 +21,8 @@ from socrates.state import (
     resolve_active_misconceptions_for_concept,
     update_learning_state,
 )
+from socrates.tutoring import run_scripted_tutoring_session
+from socrates.workflow import close_tutoring_session
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -725,6 +728,143 @@ class LearningQueueTests(unittest.TestCase):
                 ),
                 result.stdout,
             )
+
+    def test_queue_cli_lists_missing_multi_session_regression_action(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = _create_ready_closeout_fixture(Path(temp_dir))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "workflow",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Workflow Actions", result.stdout)
+            self.assertIn(
+                (
+                    "- multi_session_regression | 08_evals/session_closeout_manifest.json | "
+                    "status: not_run; run with: socrates lifecycle regression --project <project>"
+                ),
+                result.stdout,
+            )
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Workflow actions: 1", status.stdout)
+
+    def test_queue_cli_lists_invalid_multi_session_regression_action(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "08_evals" / "multi_session_regression_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "workflow",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Workflow Actions", result.stdout)
+            self.assertIn(
+                (
+                    "- multi_session_regression | "
+                    "08_evals/multi_session_regression_manifest.json | "
+                    "status: invalid; rerun with: socrates lifecycle regression --project <project>"
+                ),
+                result.stdout,
+            )
+
+def _create_ready_closeout_fixture(root: Path) -> Path:
+    project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+    curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+    curated.write_text(
+        "# Group Theory\n"
+        "## Source Metadata\n"
+        "- source_id: df-1\n"
+        "- title: Normal Subgroups\n"
+        "- role: lecture_notes\n"
+        "### Definition: Normal Subgroup\n"
+        "A normal subgroup is stable under conjugation.\n"
+        "Depends: subgroup, conjugation\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    build_reference_kb(project)
+    generate_atomic_note_draft(
+        project,
+        concept="Normal Subgroup",
+        note_type="definition",
+        body=(
+            "A normal subgroup is stable under conjugation.\n\n"
+            "## Review Questions\n\n"
+            "- What condition distinguishes normality from centrality?\n"
+        ),
+        source_id="df-1",
+    )
+    generate_exercise_drafts(
+        project,
+        concept="Normal Subgroup",
+        source_id="df-1",
+        prerequisites=["subgroup", "conjugation"],
+        count=5,
+    )
+    _write_session_script(root / "session_0001.script", "session_0001")
+    _write_session_script(root / "session_0002.script", "session_0002")
+    run_scripted_tutoring_session(project, root / "session_0001.script", session_id="session_0001")
+    run_scripted_tutoring_session(project, root / "session_0002.script", session_id="session_0002")
+    close_tutoring_session(
+        project,
+        session_id="session_0001",
+        next_session_id="session_0002",
+        as_of=date(2026, 6, 4),
+    )
+    return project
+
+
+def _write_session_script(path: Path, session_id: str) -> None:
+    path.write_text(
+        "topic: Normal Subgroup\n"
+        f"goal: Continue workflow action loop {session_id}.\n"
+        "question: What does normality require?\n"
+        "hint: Check conjugation invariance.\n"
+        "hint: Compare gNg^-1=N with elementwise commutativity.\n"
+        "attempt: It requires gNg^-1=N.\n"
+        "next: Prove kernels are normal.\n",
+        encoding="utf-8",
+        newline="\n",
+    )
 
 
 if __name__ == "__main__":

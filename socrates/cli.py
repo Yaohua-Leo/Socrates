@@ -1334,6 +1334,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     misconception_note_draft_count = len(queue.misconception_notes_to_draft)
     obsidian_exports_to_run_count = len(queue.obsidian_exports_to_run)
     quality_checks_to_fix_count = len(queue.quality_checks_to_fix)
+    workflow_action_count = len(queue.workflow_actions)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     converted_count = _count_converted_references(context.references_dir)
     conversion_pending_count = _count_sources_with_status(
@@ -1439,6 +1440,7 @@ def _handle_status(args: argparse.Namespace) -> int:
         if repair:
             print(f"Next repair: {repair}")
     print(f"Learning reports: {report_count}")
+    print(f"Workflow actions: {workflow_action_count}")
     print(f"Quality checks to fix: {quality_checks_to_fix_count}")
     print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
     print(f"Note quality check: {_quality_manifest_status_text(note_quality)}")
