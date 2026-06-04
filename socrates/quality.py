@@ -91,7 +91,9 @@ NOTE_REQUIRED_FRONTMATTER = (
     "review_status:",
     "reviewed_by_user:",
     "type:",
+    "topic:",
     "concept:",
+    "created_by:",
     "source_id:",
     "tags:",
     "related:",
@@ -1287,7 +1289,9 @@ def _note_frontmatter(text: str) -> dict[str, object]:
         "review_status",
         "reviewed_by_user",
         "type",
+        "topic",
         "concept",
+        "created_by",
         "source_id",
         "source_title",
         "source_location",
@@ -1337,8 +1341,12 @@ def atomic_note_quality_issues(path: Path, project_root: Path) -> list[str]:
         issues.append("invalid review_status")
     if _invalid_note_type(text):
         issues.append("invalid type")
+    if _missing_note_topic(text):
+        issues.append("missing topic")
     if _missing_note_concept(text):
         issues.append("missing concept")
+    if _invalid_note_creator(text):
+        issues.append("invalid created_by")
     if _missing_note_source_id(text):
         issues.append("missing source id")
     if _invalid_reviewed_by_user(text):
@@ -1383,6 +1391,18 @@ def _missing_note_source_id(text: str) -> bool:
 def _missing_note_concept(text: str) -> bool:
     value = _frontmatter_value(text, "concept")
     return value is None or value.casefold() in {"", "null"}
+
+
+def _missing_note_topic(text: str) -> bool:
+    value = _frontmatter_value(text, "topic")
+    return value is None or value.casefold() in {"", "null"}
+
+
+def _invalid_note_creator(text: str) -> bool:
+    value = _frontmatter_value(text, "created_by")
+    if value is None:
+        return False
+    return value.casefold() != "socrates"
 
 
 def _invalid_reviewed_by_user(text: str) -> bool:
