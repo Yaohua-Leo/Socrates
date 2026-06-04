@@ -45,6 +45,15 @@ OBJECT_TYPES = {
 
 OBJECT_NUMBER_PATTERN = re.compile(r"^[A-Za-z]?\d+(?:\.\d+)*(?:[a-z])?$")
 SOURCE_METADATA_KEYS = {"source_id", "title", "role", "raw_path"}
+RELATIONSHIP_METADATA_KEYS = {
+    "example of": "example_of",
+    "counterexample to": "counterexample_to",
+    "proof of": "used_in_proof_of",
+    "used in proof of": "used_in_proof_of",
+    "generalizes": "generalizes",
+    "special case of": "special_case_of",
+    "equivalent to": "equivalent_to",
+}
 
 
 def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
@@ -290,9 +299,11 @@ def _extract_objects(project_root: Path, markdown_path: Path) -> list[dict[str, 
         nonlocal body, current
         if current is None:
             return
-        statement, dependencies, page = _split_statement_and_metadata(body)
+        statement, dependencies, page, relationships = _split_statement_and_metadata(body)
         current["statement"] = statement
         current["dependencies"] = dependencies
+        if relationships:
+            current["relationships"] = relationships
         if page:
             source = current.get("source")
             if isinstance(source, dict):
@@ -386,23 +397,35 @@ def parse_object_heading(heading: str) -> tuple[str, str, str | None] | None:
     return object_type, title.strip(), number
 
 
-def _split_statement_and_metadata(lines: list[str]) -> tuple[str, list[str], str | None]:
+def _split_statement_and_metadata(
+    lines: list[str],
+) -> tuple[str, list[str], str | None, list[dict[str, str]]]:
     statement_lines: list[str] = []
     dependencies: list[str] = []
     page: str | None = None
+    relationships: list[dict[str, str]] = []
     for line in lines:
         stripped = line.strip()
-        if stripped.casefold().startswith("depends:"):
+        key = _metadata_key(stripped)
+        if key == "depends":
             dependencies.extend(
                 item.strip()
                 for item in stripped.split(":", 1)[1].split(",")
                 if item.strip()
             )
-        elif _metadata_key(stripped) == "page":
+        elif key == "page":
             page = _metadata_value(stripped)
+        elif key in RELATIONSHIP_METADATA_KEYS:
+            relationships.extend(
+                {
+                    "relationship": RELATIONSHIP_METADATA_KEYS[key],
+                    "target": item,
+                }
+                for item in _metadata_list(stripped)
+            )
         else:
             statement_lines.append(line)
-    return "\n".join(statement_lines).strip(), dependencies, page
+    return "\n".join(statement_lines).strip(), dependencies, page, relationships
 
 
 def _metadata_key(line: str) -> str:
@@ -413,6 +436,14 @@ def _metadata_key(line: str) -> str:
 def _metadata_value(line: str) -> str:
     _, _, value = line.removeprefix("-").strip().partition(":")
     return value.strip().strip('"')
+
+
+def _metadata_list(line: str) -> list[str]:
+    return [
+        item.strip().strip('"')
+        for item in _metadata_value(line).split(",")
+        if item.strip()
+    ]
 
 
 def _chunk_from_object(item: dict[str, object]) -> dict[str, object]:
@@ -479,7 +510,46 @@ def _concept_graph(objects: list[dict[str, object]]) -> dict[str, list[dict[str,
                     "relationship": "prerequisite",
                 }
             )
+        for relationship in _explicit_relationship_edges(item):
+            target_id = relationship["target"]
+            nodes.setdefault(
+                target_id,
+                {
+                    "id": target_id,
+                    "label": relationship["target_label"],
+                    "type": "concept",
+                },
+            )
+            edges.append(
+                {
+                    "source": object_id,
+                    "target": target_id,
+                    "relationship": relationship["relationship"],
+                }
+            )
     return {"nodes": list(nodes.values()), "edges": edges}
+
+
+def _explicit_relationship_edges(item: dict[str, object]) -> list[dict[str, str]]:
+    relationships = item.get("relationships", [])
+    if not isinstance(relationships, list):
+        return []
+    edges: list[dict[str, str]] = []
+    for relationship in relationships:
+        if not isinstance(relationship, dict):
+            continue
+        relationship_type = str(relationship.get("relationship", "")).strip()
+        target_label = str(relationship.get("target", "")).strip()
+        if not relationship_type or not target_label:
+            continue
+        edges.append(
+            {
+                "relationship": relationship_type,
+                "target": slugify_topic(target_label),
+                "target_label": target_label,
+            }
+        )
+    return edges
 
 
 def _dependency_graph(objects: list[dict[str, object]]) -> dict[str, list[dict[str, object]]]:
