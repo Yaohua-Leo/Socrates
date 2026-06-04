@@ -110,13 +110,11 @@ def _scheduled_reviews(project_root: Path) -> list[QueueItem]:
         if not isinstance(item, dict):
             continue
         concept = str(item.get("concept", "review"))
-        scheduled_for = str(item.get("scheduled_for", "")).strip()
-        detail = f"scheduled for {scheduled_for}" if scheduled_for else ""
         items.append(
             QueueItem(
                 item_id=concept,
                 path=schedule_path.relative_to(project_root).as_posix(),
-                detail=detail,
+                detail=_scheduled_review_detail(item),
             )
         )
     return items
@@ -209,6 +207,36 @@ def _queue_item(path: Path, project_root: Path) -> QueueItem:
         item_id=path.stem,
         path=path.relative_to(project_root).as_posix(),
     )
+
+
+def _scheduled_review_detail(item: dict[str, object]) -> str:
+    details: list[str] = []
+    scheduled_for = str(item.get("scheduled_for", "")).strip()
+    if scheduled_for:
+        details.append(f"scheduled for {scheduled_for}")
+    reason = str(item.get("reason", "")).strip()
+    if reason:
+        details.append(f"reason: {reason}")
+    repair_suggestions = _scheduled_repair_suggestions(item.get("repair_context", []))
+    if repair_suggestions:
+        details.append(f"repair: {'; '.join(repair_suggestions)}")
+    return "; ".join(details)
+
+
+def _scheduled_repair_suggestions(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for raw_context in value:
+        if not isinstance(raw_context, dict):
+            continue
+        suggestion = str(raw_context.get("repair_suggestion", "")).strip()
+        if not suggestion or suggestion in seen:
+            continue
+        seen.add(suggestion)
+        suggestions.append(suggestion)
+    return suggestions
 
 
 def _scheduled_review_sort_key(item: object) -> tuple[str, str]:

@@ -12,7 +12,12 @@ from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, record_exercise_attempt
 from socrates.notes import review_atomic_note
 from socrates.project import ProjectSpec, create_project
-from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+from socrates.state import (
+    LearningStatePatch,
+    MistakeRecord,
+    build_review_schedule,
+    update_learning_state,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -109,6 +114,46 @@ class LearningQueueTests(unittest.TestCase):
             self.assertIn("## Scheduled Reviews", result.stdout)
             self.assertIn(
                 "- normal_subgroup | 02_learning_plan/review_schedule.md | scheduled for 2026-06-04",
+                result.stdout,
+            )
+
+    def test_queue_cli_shows_scheduled_review_reason_and_repair_suggestion(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                (
+                    "- normal_subgroup | 02_learning_plan/review_schedule.md | "
+                    "scheduled for 2026-06-07; "
+                    "reason: active misconception normal_equals_central x1; "
+                    "repair: Compare gNg^-1=N with gn=ng."
+                ),
                 result.stdout,
             )
 
