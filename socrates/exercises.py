@@ -158,6 +158,9 @@ def grade_exercise_attempt(
     attempt_path = context.root / "05_exercises" / "attempted" / f"{attempt_id}.md"
     if not attempt_path.exists():
         raise FileNotFoundError(f"Attempt does not exist: {attempt_path}")
+    grade_path = context.root / "05_exercises" / "graded" / f"{attempt_id}_grade.md"
+    if grade_path.exists():
+        raise ValueError(f"Attempt {attempt_id} is already graded: {grade_path}")
 
     attempt_text = attempt_path.read_text(encoding="utf-8")
     exercise_id = _frontmatter_value(attempt_text, "exercise_id") or _exercise_id_from_attempt(attempt_id)
@@ -177,7 +180,6 @@ def grade_exercise_attempt(
         action="grading exercise attempts",
     )
 
-    grade_path = context.root / "05_exercises" / "graded" / f"{attempt_id}_grade.md"
     write_text(
         grade_path,
         _grade_text(

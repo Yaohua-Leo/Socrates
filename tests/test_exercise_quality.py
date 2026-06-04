@@ -461,6 +461,95 @@ class ExerciseQualityTests(unittest.TestCase):
             graded = project / "05_exercises" / "graded" / "normal_subgroup_01_attempt_001_grade.md"
             self.assertFalse(graded.exists())
 
+    def test_exercise_grade_cli_rejects_duplicate_grade_without_rewriting_state(
+        self,
+    ) -> None:
+        from socrates.exercises import approve_exercise_draft, record_exercise_attempt
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
+            answer = root / "answer.md"
+            first_feedback = root / "first_feedback.md"
+            second_feedback = root / "second_feedback.md"
+            answer.write_text("I treated normality as commutativity.\n", encoding="utf-8", newline="\n")
+            first_feedback.write_text("Needs a conjugation argument.\n", encoding="utf-8", newline="\n")
+            second_feedback.write_text("Overwrite attempt.\n", encoding="utf-8", newline="\n")
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            approve_exercise_draft(project, "normal_subgroup_01")
+            record_exercise_attempt(project, "normal_subgroup_01", answer)
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.4",
+                    "--feedback",
+                    str(first_feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+
+            duplicate = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "grade",
+                    "--project",
+                    str(project),
+                    "--attempt",
+                    "normal_subgroup_01_attempt_001",
+                    "--score",
+                    "0.9",
+                    "--feedback",
+                    str(second_feedback),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(duplicate.returncode, 1)
+            self.assertEqual(duplicate.stdout, "")
+            self.assertIn(
+                "error: Attempt normal_subgroup_01_attempt_001 is already graded",
+                duplicate.stderr,
+            )
+            grade_path = (
+                project
+                / "05_exercises"
+                / "graded"
+                / "normal_subgroup_01_attempt_001_grade.md"
+            )
+            grade_text = grade_path.read_text(encoding="utf-8")
+            self.assertIn("score: 0.4", grade_text)
+            self.assertIn("Needs a conjugation argument.", grade_text)
+            self.assertNotIn("Overwrite attempt.", grade_text)
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(learning_state["concept_mastery"]["normal_subgroup"], 0.4)
+
     def test_low_score_grade_cli_schedules_targeted_review(self) -> None:
         from socrates.exercises import approve_exercise_draft, record_exercise_attempt
 
