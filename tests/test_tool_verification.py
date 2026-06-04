@@ -905,6 +905,89 @@ class ToolVerificationTests(unittest.TestCase):
                 check_result.stdout,
             )
 
+    def test_lean_deps_cli_marks_stale_reference_kb_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_resolved_kernel_dependencies(root / "p")
+            curated = project / "01_references" / "curated" / "kernel_dependencies.curated.md"
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_time_ns = index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: New Kernel Dependency Context\n"
+                + "The existing Reference KB index is stale for this dependency map.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-deps",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Lean dependency map status: stale_reference_kb", result.stdout)
+            verification_dir = project / "08_evals" / "tool_verification"
+            artifact_path = verification_dir / "kernel_normality_lean_dependencies.json"
+            report_path = verification_dir / "kernel_normality_lean_dependencies_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            artifact = json.loads(artifact_path.read_text(encoding="utf-8"))
+            self.assertEqual(artifact["status"], "stale_reference_kb")
+            self.assertEqual(artifact["mapping_status"], "mapped")
+            self.assertEqual(artifact["reference_kb_status"], "stale")
+            self.assertEqual(artifact["dependency_count"], 3)
+            self.assertEqual(artifact["resolved_count"], 3)
+            report_text = report_path.read_text(encoding="utf-8")
+            self.assertIn("- Status: stale_reference_kb", report_text)
+            self.assertIn("- Reference KB status: stale", report_text)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = manifest["records"][0]
+            self.assertEqual(record["status"], "stale_reference_kb")
+            self.assertEqual(record["reference_kb_status"], "stale")
+
+            check_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(check_result.returncode, 1)
+            self.assertIn(
+                "Checked 1 tool-verification record: 0 passed, 1 failed",
+                check_result.stdout,
+            )
+            quality_report = project / "08_evals" / "tool_verification_eval.md"
+            self.assertIn(
+                "reference KB status is stale",
+                quality_report.read_text(encoding="utf-8"),
+            )
+
     def test_tool_check_cli_writes_quality_report_for_persisted_records(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

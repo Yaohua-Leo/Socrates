@@ -268,13 +268,18 @@ def map_lean_dependencies(
     """Persist a Lean-oriented dependency map for one reference-KB object."""
 
     context = load_project(project_path)
+    kb_status = reference_kb_status(context.root)
     item = _find_reference_object(context.root, object_id)
     verification_dir = context.evals_dir / "tool_verification"
     safe_id = _lean_identifier(f"{object_id}_lean_dependencies")
     artifact_path = verification_dir / f"{safe_id}.json"
     report_path = verification_dir / f"{safe_id}_report.md"
     manifest_path = verification_dir / "manifest.json"
-    artifact = _lean_dependency_map_artifact(context.root, item)
+    artifact = _lean_dependency_map_artifact(
+        context.root,
+        item,
+        reference_kb_status=kb_status.status,
+    )
     write_json(artifact_path, artifact)
     write_text(
         report_path,
@@ -293,6 +298,7 @@ def map_lean_dependencies(
                 artifact_path=artifact_path,
                 report_path=report_path,
                 status=str(artifact["status"]),
+                reference_kb_status=kb_status.status,
             ),
         ),
     )
@@ -699,6 +705,8 @@ def _find_reference_object(project_root: Path, object_id: str) -> dict[str, obje
 def _lean_dependency_map_artifact(
     project_root: Path,
     item: dict[str, object],
+    *,
+    reference_kb_status: str,
 ) -> dict[str, object]:
     dependencies = [
         str(dependency).strip()
@@ -707,7 +715,12 @@ def _lean_dependency_map_artifact(
     ]
     dependency_rows = _lean_dependency_rows(project_root, dependencies)
     resolved_count = sum(1 for row in dependency_rows if row["status"] == "resolved")
-    status = "mapped" if resolved_count == len(dependencies) else "partial"
+    mapping_status = "mapped" if resolved_count == len(dependencies) else "partial"
+    status = (
+        "stale_reference_kb"
+        if reference_kb_status == "stale"
+        else mapping_status
+    )
     issues = [
         f"Unresolved dependency: {row['label']}"
         for row in dependency_rows
@@ -720,6 +733,8 @@ def _lean_dependency_map_artifact(
         "title": str(item.get("title", "")),
         "object_type": str(item.get("type", "")),
         "status": status,
+        "mapping_status": mapping_status,
+        "reference_kb_status": reference_kb_status,
         "dependency_count": len(dependencies),
         "resolved_count": resolved_count,
         "dependencies": dependency_rows,
@@ -803,6 +818,7 @@ def _lean_dependency_map_report(
         f"- Title: {artifact.get('title', '')}",
         f"- Type: {artifact.get('object_type', '')}",
         f"- Status: {artifact.get('status', '')}",
+        f"- Reference KB status: {artifact.get('reference_kb_status', 'unknown')}",
         f"- Dependencies: {artifact.get('dependency_count', 0)}",
         f"- Resolved: {artifact.get('resolved_count', 0)}",
         f"- Artifact: {artifact_path}",
@@ -855,6 +871,7 @@ def _lean_dependency_map_record(
     artifact_path: Path,
     report_path: Path,
     status: str,
+    reference_kb_status: str,
 ) -> dict[str, object]:
     source = item.get("source", {})
     return {
@@ -863,6 +880,7 @@ def _lean_dependency_map_record(
         "object_type": str(item.get("type", "")),
         "title": str(item.get("title", "")),
         "status": status,
+        "reference_kb_status": reference_kb_status,
         "artifact_path": artifact_path.relative_to(project_root).as_posix(),
         "report_path": report_path.relative_to(project_root).as_posix(),
         "source": source if isinstance(source, dict) else {},
