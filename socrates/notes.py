@@ -43,12 +43,15 @@ def review_atomic_note(project_path: Path | str, note_id: str) -> Path:
     if not draft_path.exists():
         raise FileNotFoundError(f"Draft note does not exist: {draft_path}")
 
-    _require_note_quality(context.root, draft_path, f"Draft note {note_id}")
-
     text = draft_path.read_text(encoding="utf-8")
     note_type = _frontmatter_value(text, "type") or "definition"
     target_dir = NOTE_TYPE_DIRS.get(note_type, f"{note_type}s")
     reviewed_path = context.root / "04_atomic_notes" / target_dir / draft_path.name
+    if reviewed_path.exists():
+        raise ValueError(f"Atomic note {note_id} is already reviewed: {reviewed_path}")
+
+    _require_note_quality(context.root, draft_path, f"Draft note {note_id}")
+
     reviewed_text = _set_frontmatter_values(
         text,
         {

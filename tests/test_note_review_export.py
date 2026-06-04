@@ -45,6 +45,56 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn("reviewed_by_user: true", text)
             self.assertIn("[[Subgroup]]", text)
 
+    def test_note_review_cli_rejects_duplicate_review_without_overwriting_user_edit(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            review_atomic_note(project, "normal_subgroup")
+            reviewed = project / "04_atomic_notes" / "definitions" / "normal_subgroup.md"
+            reviewed.write_text(
+                reviewed.read_text(encoding="utf-8").rstrip()
+                + "\n\nReviewer edit: preserve this formulation.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "review",
+                    "--project",
+                    str(project),
+                    "--note",
+                    "normal_subgroup",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: Atomic note normal_subgroup is already reviewed", result.stderr)
+            reviewed_text = reviewed.read_text(encoding="utf-8")
+            self.assertIn("Reviewer edit: preserve this formulation.", reviewed_text)
+            self.assertIn('status: "reviewed"', reviewed_text)
+
     def test_status_excludes_reviewed_notes_from_pending_drafts(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
