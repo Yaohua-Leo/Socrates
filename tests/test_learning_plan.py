@@ -11,7 +11,12 @@ from socrates.contracts import SourceRecord
 from socrates.kb import build_reference_kb
 from socrates.planning import create_learning_plan
 from socrates.project import ProjectSpec, create_project
-from socrates.state import LearningStatePatch, build_review_schedule, update_learning_state
+from socrates.state import (
+    LearningStatePatch,
+    MistakeRecord,
+    build_review_schedule,
+    update_learning_state,
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -123,7 +128,19 @@ class LearningPlanTests(unittest.TestCase):
             context = load_project(project)
             update_learning_state(
                 context,
-                LearningStatePatch(concept_mastery={"normal_subgroup": 0.41}),
+                LearningStatePatch(
+                    concept_mastery={"normal_subgroup": 0.41},
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                        )
+                    ],
+                ),
             )
             build_review_schedule(context)
 
@@ -165,7 +182,15 @@ class LearningPlanTests(unittest.TestCase):
                 project / "02_learning_plan" / "short_term_plan.md"
             ).read_text(encoding="utf-8")
             self.assertEqual(short_term_plan.count("## Review Adjustments"), 1)
-            self.assertIn("- normal_subgroup (high, next_session): mastery 0.41", short_term_plan)
+            self.assertIn(
+                "- normal_subgroup (high, next_session): "
+                "mastery 0.41; active misconception normal_equals_central x1",
+                short_term_plan,
+            )
+            self.assertIn(
+                "  - Repair suggestion: Compare gNg^-1=N with gn=ng.",
+                short_term_plan,
+            )
 
 
 if __name__ == "__main__":
