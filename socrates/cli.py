@@ -2213,10 +2213,7 @@ def _due_reviews_text(learning_state: Path, as_of: date) -> str:
         lines.append("- none")
     else:
         lines.extend(
-            (
-                f"- {row['concept']} | {row['scheduled_for']} | "
-                f"{row['priority']} | {row['reason']}"
-            )
+            _due_review_row_text(row)
             for row in rows
         )
     if invalid_rows:
@@ -2265,9 +2262,39 @@ def _due_review_rows(
                 "scheduled_for": scheduled_for,
                 "priority": str(item.get("priority", "medium")),
                 "reason": str(item.get("reason", "review scheduled")),
+                "repair": "; ".join(
+                    _due_review_repair_suggestions(item.get("repair_context", []))
+                ),
             }
         )
     return (
         sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"])),
         sorted(invalid_rows, key=lambda row: (row["concept"], row["scheduled_for"])),
     )
+
+
+def _due_review_row_text(row: dict[str, str]) -> str:
+    line = (
+        f"- {row['concept']} | {row['scheduled_for']} | "
+        f"{row['priority']} | {row['reason']}"
+    )
+    repair = row.get("repair", "")
+    if repair:
+        line = f"{line} | repair: {repair}"
+    return line
+
+
+def _due_review_repair_suggestions(value: object) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    suggestions: list[str] = []
+    seen: set[str] = set()
+    for raw_context in value:
+        if not isinstance(raw_context, dict):
+            continue
+        suggestion = str(raw_context.get("repair_suggestion", "")).strip()
+        if not suggestion or suggestion in seen:
+            continue
+        seen.add(suggestion)
+        suggestions.append(suggestion)
+    return suggestions

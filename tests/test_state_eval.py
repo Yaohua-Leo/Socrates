@@ -849,6 +849,55 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("- zeta_urgent_review | 2026-06-04 | high | mastery 0.4", later.stdout)
             self.assertIn("- alpha_medium_review | 2026-06-07 | medium | mastery 0.62", later.stdout)
 
+    def test_review_due_cli_shows_misconception_repair_suggestion(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1=N with gn=ng.",
+                        )
+                    ],
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                (
+                    "- normal_subgroup | 2026-06-07 | medium | "
+                    "active misconception normal_equals_central x1 | "
+                    "repair: Compare gNg^-1=N with gn=ng."
+                ),
+                result.stdout,
+            )
+
     def test_review_due_cli_rejects_invalid_as_of_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
