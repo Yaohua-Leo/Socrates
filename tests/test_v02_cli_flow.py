@@ -174,6 +174,74 @@ class V02CliFlowTests(unittest.TestCase):
 
             self.assertIn("- none", missing_source_objects)
 
+    def test_kb_chapters_displays_chapter_section_and_object_index(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Curated Reference: Normality Notes\n\n"
+                "## Source Metadata\n\n"
+                "- source_id: normality_notes\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n\n"
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "Page: 82\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n\n"
+                "### Theorem 3.2: Kernel Normality\n"
+                "The kernel of a group homomorphism is normal.\n"
+                "Depends: kernel, homomorphism\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            self._run_cli("kb", "build", "--project", str(project))
+            chapters = self._run_cli("kb", "chapters", "--project", str(project)).stdout
+
+            self.assertIn("# Reference KB Chapters", chapters)
+            self.assertIn("## Chapter 3: Quotient Groups", chapters)
+            self.assertIn(
+                "- Section 3.1 Normal Subgroups | 01_references/curated/normality.curated.md",
+                chapters,
+            )
+            self.assertIn(
+                "  - definition 3.1: Normal Subgroup | "
+                "01_references/curated/normality.curated.md:p82:11",
+                chapters,
+            )
+            self.assertIn(
+                "  - theorem 3.2: Kernel Normality | "
+                "01_references/curated/normality.curated.md:16",
+                chapters,
+            )
+
+    def test_kb_chapters_reports_missing_index_with_rebuild_hint(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "kb",
+                    "chapters",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("Reference KB chapter index is missing", result.stderr)
+            self.assertIn("socrates kb build --project", result.stderr)
+            self.assertNotIn("No such file or directory", result.stderr)
+
     def test_kb_list_reports_invalid_index_with_rebuild_hint(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

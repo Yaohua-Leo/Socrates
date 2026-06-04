@@ -29,6 +29,7 @@ from .kb import (
     find_counterexamples,
     list_reference_kb_objects,
     reference_kb_status,
+    read_reference_chapter_index,
     search_reference_kb,
 )
 from .learning_queue import collect_learning_queue, format_learning_queue
@@ -361,6 +362,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by source registry id.",
     )
     kb_list_parser.set_defaults(func=_handle_kb_list)
+    kb_chapters_parser = kb_subparsers.add_parser(
+        "chapters",
+        help="List the generated chapter and section index.",
+    )
+    kb_chapters_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    kb_chapters_parser.set_defaults(func=_handle_kb_chapters)
     kb_search_parser = kb_subparsers.add_parser("search", help="Search the reference KB.")
     kb_search_parser.add_argument("--project", required=True, help="Socrates project directory.")
     kb_search_parser.add_argument("--query", required=True, help="Search query.")
@@ -1229,6 +1236,65 @@ def _reference_kb_objects_text(objects: list[dict[str, object]]) -> str:
             f"- {_object_label(item)}{_source_label(source)} | {_source_location(source)}"
         )
     return "\n".join(lines) + "\n"
+
+
+def _handle_kb_chapters(args: argparse.Namespace) -> int:
+    _warn_if_reference_kb_stale(args.project)
+    index = read_reference_chapter_index(args.project)
+    print(_reference_kb_chapters_text(index), end="")
+    return 0
+
+
+def _reference_kb_chapters_text(index: dict[str, object]) -> str:
+    lines = ["# Reference KB Chapters", ""]
+    chapters = index.get("chapters", [])
+    if not isinstance(chapters, list) or not chapters:
+        lines.append("- none")
+        return "\n".join(lines) + "\n"
+
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            continue
+        title = str(chapter.get("title") or "Unassigned")
+        lines.append(f"## {title}")
+        sections = chapter.get("sections", [])
+        if not isinstance(sections, list) or not sections:
+            lines.append("- none")
+            continue
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            section_title = str(section.get("title") or "Unassigned")
+            source_path = str(section.get("source_path") or "unknown")
+            lines.append(f"- {section_title} | {source_path}")
+            objects = section.get("objects", [])
+            if isinstance(objects, list):
+                lines.extend(
+                    f"  - {_chapter_object_label(item)} | {_chapter_object_location(item)}"
+                    for item in objects
+                    if isinstance(item, dict)
+                )
+    return "\n".join(lines) + "\n"
+
+
+def _chapter_object_label(item: dict[str, object]) -> str:
+    object_type = str(item.get("type") or "object")
+    title = str(item.get("title") or "Untitled")
+    number = str(item.get("number") or "").strip()
+    if number:
+        return f"{object_type} {number}: {title}"
+    return f"{object_type}: {title}"
+
+
+def _chapter_object_location(item: dict[str, object]) -> str:
+    location = str(item.get("source_path") or "unknown")
+    page = str(item.get("page") or "").strip()
+    line = item.get("line")
+    if page:
+        location = f"{location}:p{page}"
+    if line:
+        location = f"{location}:{line}"
+    return location
 
 
 def _handle_kb_search(args: argparse.Namespace) -> int:

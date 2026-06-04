@@ -168,6 +168,31 @@ def list_reference_kb_objects(
     return items
 
 
+def read_reference_chapter_index(project_path: Path | str) -> dict[str, object]:
+    """Read the generated chapter index or raise an actionable rebuild error."""
+
+    context = load_project(project_path)
+    index_path = context.root / "06_kb" / "chapter_index.json"
+    try:
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    except FileNotFoundError as exc:
+        raise ValueError(
+            _reference_chapter_index_rebuild_message(context.root, "is missing")
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            _reference_chapter_index_rebuild_message(context.root, "is invalid")
+        ) from exc
+    if not isinstance(index, dict) or not isinstance(index.get("chapters", []), list):
+        raise ValueError(
+            _reference_chapter_index_rebuild_message(
+                context.root,
+                "has invalid schema",
+            )
+        )
+    return index
+
+
 def _search_reference_objects(
     project_path: Path | str,
     query: str,
@@ -215,6 +240,13 @@ def read_reference_index(
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
     return (
         f"Reference KB index {reason}; "
+        f"run socrates kb build --project {project_root} to rebuild it."
+    )
+
+
+def _reference_chapter_index_rebuild_message(project_root: Path, reason: str) -> str:
+    return (
+        f"Reference KB chapter index {reason}; "
         f"run socrates kb build --project {project_root} to rebuild it."
     )
 
