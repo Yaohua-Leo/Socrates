@@ -1985,6 +1985,30 @@ read-only status output with path, recorded next action, and current next action
 - `brief status` 不写入 `study_brief.md`、`study_brief_manifest.json`，也不追加 project log。
 - 这不是生成器、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 learning-state mutation；它只是已有 manifest-backed freshness reader 的只读 CLI view。
 
+v0.27：project resume command
+
+建议目标：
+
+给长期学习项目增加一个返回学习时使用的只读 resume card，让用户快速知道当前 saved brief 是否可直接使用，或者是否需要先重新生成 brief。
+
+必须完成：
+
+top-level `resume` CLI command
+
+read-only resume formatter
+
+ready vs refresh_brief resume state
+
+recommended `brief generate` command when the saved brief is not current
+
+当前状态（2026-06-04）：
+
+- `python -m socrates resume --project <project>` 已输出 `# Resume Project` Markdown。
+- Resume snapshot 已显示项目标题、root、resume state、study brief 状态、brief path、当前 next action 和推荐命令。
+- 当前 brief 可用时显示 `Resume state: ready` 与 `Recommended command: none`。
+- missing/stale/invalid brief 显示 `Resume state: refresh_brief` 并推荐 `brief generate`，但不会自动运行。
+- 这不是 generator、report refresh、repair runner、LLM call、score、tutor、planner、approval、readiness gate 或 learning-state mutation；它只是 returning learner 的只读导航视图。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

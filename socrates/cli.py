@@ -105,6 +105,7 @@ from .reports import (
     list_learning_reports,
     summarize_report_history,
 )
+from .resume import format_project_resume
 from .session_score import score_teaching_session
 from .state import (
     EvalReportUpdate,
@@ -377,6 +378,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     dashboard_parser.add_argument("--project", required=True, help="Socrates project directory.")
     dashboard_parser.set_defaults(func=_handle_dashboard)
+
+    resume_parser = subparsers.add_parser(
+        "resume",
+        help="Show a compact read-only resume card for a returning learner.",
+    )
+    resume_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    resume_parser.set_defaults(func=_handle_resume)
 
     brief_parser = subparsers.add_parser(
         "brief",
@@ -1563,6 +1571,11 @@ def _handle_queue(args: argparse.Namespace) -> int:
 
 def _handle_dashboard(args: argparse.Namespace) -> int:
     print(format_study_dashboard(args.project), end="")
+    return 0
+
+
+def _handle_resume(args: argparse.Namespace) -> int:
+    print(format_project_resume(args.project), end="")
     return 0
 
 
