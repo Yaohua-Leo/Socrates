@@ -7,10 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.16-alpha action summaries in queue and
-  reports, over v0.15 recommended focus summaries, v0.14 priority action
-  snapshots, v0.13 priority action queue navigation, and v0.12 workflow action
-  queue visibility
+- Current implementation baseline: v0.17-alpha repair paths in queue and
+  reports, over v0.16 action summaries, v0.15 recommended focus summaries,
+  v0.14 priority action snapshots, v0.13 priority action queue navigation, and
+  v0.12 workflow action queue visibility
   over deterministic multi-session regression, status/lifecycle visibility,
   deterministic session closeout workflow, review-only LLM session judge drafts,
   deterministic next-session handoff planning, external Markdown conversion
@@ -46,3 +46,5 @@ from the source planning conversation.
   v0.15 plan for recommended focus summaries in reports.
 - `superpowers/plans/2026-06-04-v16-action-summary.md`: executable v0.16
   plan for action summaries in queue and reports.
+- `superpowers/plans/2026-06-04-v17-repair-paths.md`: executable v0.17 plan
+  for blocker repair paths in queue and reports.

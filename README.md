@@ -6,7 +6,7 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.16-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.17-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
@@ -14,10 +14,11 @@ next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression, workflow
 action queue visibility, priority action queue navigation, priority action
 snapshots in reports, recommended focus report summaries, action summary
-queue/report summaries, and an opt-in LLM provider layer for reviewable draft
-suggestions, including review-only session judge drafts. It is not yet a full
-AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM
-judges, and product UI layers remain future work.
+queue/report summaries, repair path queue/report summaries, and an opt-in LLM
+provider layer for reviewable draft suggestions, including review-only session
+judge drafts. It is not yet a full AI tutor: autonomous LLM tutoring, OCR/PDF
+extraction backends, trusted LLM judges, and product UI layers remain future
+work.
 
 ## Quick Start
 
@@ -64,6 +65,7 @@ python -m socrates session plan-next --project ".\projects\group_theory" --sessi
 python -m socrates session closeout --project ".\projects\group_theory" --session-id session_0001 --next-session-id session_0002
 python -m socrates lifecycle regression --project ".\projects\group_theory"
 python -m socrates queue --project ".\projects\group_theory" --section summary
+python -m socrates queue --project ".\projects\group_theory" --section repairs
 python -m socrates queue --project ".\projects\group_theory" --section priority
 python -m socrates queue --project ".\projects\group_theory" --section workflow
 python -m socrates report weekly --project ".\projects\group_theory"
@@ -130,6 +132,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.16 action summary rows in queue and learning reports, classifying open
   work into blocker, continue-learning, and human-review counts with the same
   deterministic next action used by the priority queue.
+- v0.17 repair path rows in queue and learning reports, showing blocker-only
+  workflow, quality-check, and tool-verification actions without mixing in
+  ordinary study or review work.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -176,6 +181,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   tutoring, plan a session, score learning quality, or mutate learning state.
 - Action summary rows are deterministic queue/report summaries. They do not
   create a new readiness gate, score, planner, tutor, or learning-state truth.
+- Repair path rows are deterministic blocker summaries. They do not run repair
+  commands, fix artifacts, create a readiness gate, or mutate project state.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

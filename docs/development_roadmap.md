@@ -1745,6 +1745,29 @@ v0.17：报告阻塞项的修复路径与阶段趋势
 
 在 action summary 之后继续打磨 blocker repair path 和阶段趋势，让长期报告更清楚地区分“马上修复哪个命令”“哪些学习项可以继续”和“哪些状态正在积累风险”。
 
+必须完成：
+
+repair paths section in queue all view
+
+selectable queue repairs section
+
+repair paths section in weekly/monthly/project summary reports
+
+deterministic fallback rows when no blockers exist
+
+当前状态（2026-06-04）：
+
+- `queue --section repairs` 已显示 `## Repair Paths`，并且默认 queue all view 在 action summary 后、priority actions 前显示该摘要。
+- weekly、monthly 与 project summary report 已包含 `## Repair Paths` section。
+- Repair Paths 只汇总 workflow、quality-checks 与 tool-verifications blocker buckets；普通 note/review/exercise 学习项不会进入 repair path。
+- 这不是 fixer、command runner、readiness gate、score、planner 或 learning-state mutation；它只是把已有 blocker queue evidence 压缩成修复路径摘要。
+
+v0.18：阶段趋势与风险累积摘要
+
+建议目标：
+
+在 repair path 之后继续打磨 report trend summary，让报告能看到 quality、review、exercise、misconception 等长期信号是在改善、持平还是积累风险。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

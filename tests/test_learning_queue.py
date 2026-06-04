@@ -919,6 +919,75 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_includes_repair_paths_for_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = _create_ready_closeout_fixture(Path(temp_dir))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Repair Paths", result.stdout)
+            self.assertLess(
+                result.stdout.index("## Action Summary"),
+                result.stdout.index("## Repair Paths"),
+            )
+            self.assertLess(
+                result.stdout.index("## Repair Paths"),
+                result.stdout.index("## Priority Actions"),
+            )
+            self.assertIn(
+                (
+                    "- workflow:multi_session_regression | "
+                    "08_evals/session_closeout_manifest.json | "
+                    "status: not_run; run with: socrates lifecycle regression --project <project>"
+                ),
+                result.stdout,
+            )
+            self.assertNotIn(
+                "- notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md",
+                result.stdout.split("## Priority Actions", 1)[0],
+            )
+
+    def test_queue_cli_repair_paths_section_is_empty_without_blockers(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "repairs",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Repair Paths", result.stdout)
+            self.assertIn("- none", result.stdout)
+            self.assertNotIn("## Priority Actions", result.stdout)
+            self.assertNotIn("## Action Summary", result.stdout)
+
     def test_queue_cli_prioritizes_workflow_actions_before_note_review(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = _create_ready_closeout_fixture(Path(temp_dir))

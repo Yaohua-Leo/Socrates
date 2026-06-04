@@ -1038,6 +1038,86 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Needs human review: 0", report_text)
             self.assertIn("- Next action: none", report_text)
 
+    def test_project_summary_includes_repair_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Repair Paths", report_text)
+            self.assertLess(
+                report_text.index("## Action Summary"),
+                report_text.index("## Repair Paths"),
+            )
+            self.assertIn(
+                (
+                    "- workflow:multi_session_regression | "
+                    "08_evals/session_closeout_manifest.json | "
+                    "status: not_run; run with: socrates lifecycle regression --project <project>"
+                ),
+                report_text,
+            )
+            repair_section = report_text.split("## Repair Paths", 1)[1].split(
+                "## Benchmark Snapshot",
+                1,
+            )[0]
+            self.assertNotIn(
+                "- reviews:quotient_group | 02_learning_plan/review_schedule.md",
+                repair_section,
+            )
+
+    def test_weekly_report_repair_paths_uses_empty_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Repair Paths", report_text)
+            self.assertIn("## Action Summary", report_text)
+            self.assertLess(
+                report_text.index("## Action Summary"),
+                report_text.index("## Repair Paths"),
+            )
+            self.assertIn("- none", report_text.split("## Repair Paths", 1)[1])
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -2166,7 +2246,7 @@ class ReportTests(unittest.TestCase):
             context=context,
             patch=LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
         )
-        build_review_schedule(context)
+        build_review_schedule(context, as_of=date(2026, 6, 4))
         tool_verification_dir = project / "08_evals" / "tool_verification"
         tool_verification_dir.mkdir(exist_ok=True)
         (tool_verification_dir / "manifest.json").write_text(

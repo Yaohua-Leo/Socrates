@@ -19,6 +19,7 @@ from .workflow_manifest import SESSION_CLOSEOUT_MANIFEST_PATH, read_session_clos
 QUEUE_SECTIONS = frozenset(
     {
         "summary",
+        "repairs",
         "priority",
         "notes",
         "obsidian-exports",
@@ -92,6 +93,11 @@ def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
         if section == "summary":
             return "\n".join(lines).rstrip() + "\n"
 
+    if section in {"all", "repairs"}:
+        lines.extend(_section("Repair Paths", repair_path_items(queue)))
+        if section == "repairs":
+            return "\n".join(lines).rstrip() + "\n"
+
     for section_id, title, items in _queue_sections(queue):
         if section != "all" and section != section_id:
             continue
@@ -113,6 +119,18 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
     ]
+
+
+def repair_path_items(queue: LearningQueue) -> list[QueueItem]:
+    """Return blocker queue items in deterministic repair order."""
+
+    return _prefixed_queue_items(
+        (
+            ("workflow", queue.workflow_actions),
+            ("quality-checks", queue.quality_checks_to_fix),
+            ("tool-verifications", queue.tool_verifications_to_fix),
+        )
+    )
 
 
 def action_summary_lines(queue: LearningQueue) -> list[str]:
@@ -166,6 +184,12 @@ def _priority_actions(queue: LearningQueue) -> list[QueueItem]:
         ("exercises", queue.exercises_to_attempt),
         ("attempts", queue.attempts_to_grade),
     )
+    return _prefixed_queue_items(ordered_sections)
+
+
+def _prefixed_queue_items(
+    ordered_sections: tuple[tuple[str, list[QueueItem]], ...],
+) -> list[QueueItem]:
     actions: list[QueueItem] = []
     for section_id, items in ordered_sections:
         actions.extend(

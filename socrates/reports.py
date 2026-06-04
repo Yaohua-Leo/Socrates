@@ -13,6 +13,7 @@ from .learning_queue import (
     action_summary_lines,
     collect_learning_queue,
     priority_queue_items,
+    repair_path_items,
 )
 from .obsidian import (
     obsidian_backlink_count,
@@ -51,6 +52,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
     queue = collect_learning_queue(context.root)
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
+    repair_paths = repair_path_items(queue)
     write_text(
         report_path,
         _weekly_report_text(
@@ -64,6 +66,7 @@ def generate_weekly_report(project_path: Path | str) -> Path:
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             priority_actions=priority_actions,
             action_summary=action_summary,
+            repair_paths=repair_paths,
             state=state,
         ),
     )
@@ -81,6 +84,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
     queue = collect_learning_queue(context.root)
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
+    repair_paths = repair_path_items(queue)
     write_text(
         report_path,
         _project_summary_text(
@@ -103,6 +107,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             priority_actions=priority_actions,
             action_summary=action_summary,
+            repair_paths=repair_paths,
             tool_verification_records=list_tool_verification_records(context.root),
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
@@ -125,6 +130,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
     queue = collect_learning_queue(context.root)
     priority_actions = priority_queue_items(queue)
     action_summary = action_summary_lines(queue)
+    repair_paths = repair_path_items(queue)
     write_text(
         report_path,
         _monthly_report_text(
@@ -138,6 +144,7 @@ def generate_monthly_report(project_path: Path | str) -> Path:
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             priority_actions=priority_actions,
             action_summary=action_summary,
+            repair_paths=repair_paths,
             state=state,
         ),
     )
@@ -300,6 +307,7 @@ def _weekly_report_text(
     graded_exercises: int,
     priority_actions: list[QueueItem],
     action_summary: list[str],
+    repair_paths: list[QueueItem],
     state: dict[str, object],
 ) -> str:
     lines = [
@@ -327,6 +335,10 @@ def _weekly_report_text(
         "## Action Summary",
         "",
         *action_summary,
+        "",
+        "## Repair Paths",
+        "",
+        *_priority_action_lines(repair_paths),
         "",
         *_state_warning_section(state),
         "## Learning State",
@@ -356,6 +368,7 @@ def _monthly_report_text(
     graded_exercises: int,
     priority_actions: list[QueueItem],
     action_summary: list[str],
+    repair_paths: list[QueueItem],
     state: dict[str, object],
 ) -> str:
     concept_mastery = state.get("concept_mastery", {})
@@ -389,6 +402,10 @@ def _monthly_report_text(
         "## Action Summary",
         "",
         *action_summary,
+        "",
+        "## Repair Paths",
+        "",
+        *_priority_action_lines(repair_paths),
         "",
         "## Misconceptions",
         "",
@@ -426,6 +443,7 @@ def _project_summary_text(
     graded_exercises: int,
     priority_actions: list[QueueItem],
     action_summary: list[str],
+    repair_paths: list[QueueItem],
     tool_verification_records: list[ToolVerificationSummary],
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
@@ -472,6 +490,10 @@ def _project_summary_text(
         "## Action Summary",
         "",
         *action_summary,
+        "",
+        "## Repair Paths",
+        "",
+        *_priority_action_lines(repair_paths),
         "",
         "## Benchmark Snapshot",
         "",
