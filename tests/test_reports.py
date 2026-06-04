@@ -486,6 +486,76 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- quotient_group: 0", summary_text)
             self.assertIn("- diagram_chasing: 0", summary_text)
 
+    def test_report_clis_warn_and_continue_with_corrupt_learning_state_json(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            monthly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            for result in (weekly, monthly, summary):
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertNotIn("Expecting property name", result.stderr)
+
+            for report_name in ("weekly_report.md", "monthly_report.md", "project_summary.md"):
+                report_text = (project / "07_exports" / "reports" / report_name).read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("## State Warnings", report_text)
+                self.assertIn(
+                    "- invalid learning_state.json; repair the JSON to restore learning-state sections.",
+                    report_text,
+                )
+
     def test_project_summary_cli_writes_lifecycle_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

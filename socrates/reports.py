@@ -31,6 +31,7 @@ REPORT_SPECS = (
     ("monthly", "Monthly Learning Report", "monthly_report.md"),
     ("project-summary", "Project Summary", "project_summary.md"),
 )
+_STATE_WARNING_KEY = "_state_warnings"
 
 
 def generate_weekly_report(project_path: Path | str) -> Path:
@@ -243,6 +244,7 @@ def _weekly_report_text(
         f"- Attempted exercises: {attempted_exercises}",
         f"- Graded exercises: {graded_exercises}",
         "",
+        *_state_warning_section(state),
         "## Learning State",
         "",
         *_score_lines(state.get("concept_mastery", {})),
@@ -273,6 +275,7 @@ def _monthly_report_text(
     lines = [
         "# Monthly Learning Report",
         "",
+        *_state_warning_section(state),
         "## Concepts Studied",
         "",
         *_score_lines(concept_mastery),
@@ -332,6 +335,7 @@ def _project_summary_text(
         f"- Title: {title}",
         f"- Root: {project_root}",
         "",
+        *_state_warning_section(state),
         "## Artifact Inventory",
         "",
         f"- Imported sources: {imported_sources}",
@@ -381,7 +385,14 @@ def _project_summary_text(
 def _read_learning_state(path: Path) -> dict[str, object]:
     if not path.exists():
         return {}
-    loaded = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            _STATE_WARNING_KEY: [
+                "invalid learning_state.json; repair the JSON to restore learning-state sections."
+            ]
+        }
     return loaded if isinstance(loaded, dict) else {}
 
 
@@ -526,6 +537,16 @@ def _count_approved_exercises(project_root: Path) -> int:
         if 'status: "approved"' in text and "reviewed_by_user: true" in text:
             approved += 1
     return approved
+
+
+def _state_warning_section(state: dict[str, object]) -> list[str]:
+    warnings = state.get(_STATE_WARNING_KEY, [])
+    if not isinstance(warnings, list):
+        return []
+    warning_lines = [f"- {warning}" for warning in warnings if str(warning).strip()]
+    if not warning_lines:
+        return []
+    return ["## State Warnings", "", *warning_lines, ""]
 
 
 def _score_lines(value: object) -> list[str]:
