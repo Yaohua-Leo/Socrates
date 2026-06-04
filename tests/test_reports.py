@@ -1291,6 +1291,41 @@ class ReportTests(unittest.TestCase):
             self.assertEqual(history["snapshots"][0]["report_type"], "project-summary")
             self.assertEqual(history["snapshots"][0]["risk_level"], "blocked")
 
+    def test_project_summary_includes_report_history_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Report History Snapshot", report_text)
+            self.assertLess(
+                report_text.index("## Trend Summary"),
+                report_text.index("## Report History Snapshot"),
+            )
+            self.assertIn("- Report history: current", report_text)
+            self.assertIn("- Report history snapshots: 1", report_text)
+            self.assertIn("- Latest report history: #1 project-summary blocked", report_text)
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

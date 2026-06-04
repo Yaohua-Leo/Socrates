@@ -8,9 +8,11 @@ import tempfile
 import unittest
 
 from socrates.artifacts import generate_atomic_note_draft, generate_exercise_drafts
+from socrates.context import load_project
 from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.project import ProjectSpec, create_project
+from socrates.state import LearningStatePatch, update_learning_state
 from socrates.tutoring import run_scripted_tutoring_session
 
 
@@ -18,6 +20,61 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class StatusQualitySummaryTests(unittest.TestCase):
+    def test_status_cli_summarizes_report_history(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+
+            update_learning_state(
+                load_project(project),
+                LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
+            )
+            second = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(second.returncode, 0, second.stderr)
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Report history: current", status.stdout)
+            self.assertIn("Report history snapshots: 2", status.stdout)
+            self.assertIn("Latest report history: #2 weekly attention", status.stdout)
+
     def test_status_cli_summarizes_artifact_quality_manifests(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

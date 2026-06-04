@@ -47,6 +47,17 @@ class RiskMetrics:
     active_misconceptions: int
 
 
+@dataclass(frozen=True)
+class ReportHistorySummary:
+    """A compact audit summary for report risk history."""
+
+    status: str
+    total_snapshots: int
+    latest_snapshot_id: int | None
+    latest_report_type: str
+    latest_risk_level: str
+
+
 REPORT_SPECS = (
     ("weekly", "Weekly Learning Report", "weekly_report.md"),
     ("monthly", "Monthly Learning Report", "monthly_report.md"),
@@ -111,9 +122,24 @@ def generate_project_summary(project_path: Path | str) -> Path:
     repair_paths = repair_path_items(queue)
     risk_metrics = _risk_metrics(queue=queue, state=state)
     risk_summary = _risk_summary_lines(risk_metrics)
+    risk_history = _read_risk_history(context.root)
+    current_risk_snapshot = _risk_snapshot(
+        report_type="project-summary",
+        metrics=risk_metrics,
+        snapshot_id=_next_risk_snapshot_id(risk_history),
+    )
     trend_summary = _trend_summary_lines(
-        previous=_latest_risk_snapshot(context.root, report_type="project-summary"),
+        previous=_latest_risk_snapshot_from_snapshots(
+            risk_history,
+            report_type="project-summary",
+        ),
         current=risk_metrics,
+    )
+    report_history = _report_history_lines(
+        _report_history_summary_from_snapshots(
+            [*risk_history, current_risk_snapshot],
+            status="current",
+        )
     )
     write_text(
         report_path,
@@ -140,6 +166,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             repair_paths=repair_paths,
             risk_summary=risk_summary,
             trend_summary=trend_summary,
+            report_history=report_history,
             tool_verification_records=list_tool_verification_records(context.root),
             artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
@@ -153,6 +180,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
         context.root,
         report_type="project-summary",
         metrics=risk_metrics,
+        snapshot=current_risk_snapshot,
     )
     append_project_log(context, "Generated project summary report.")
     return report_path
@@ -512,6 +540,7 @@ def _project_summary_text(
     repair_paths: list[QueueItem],
     risk_summary: list[str],
     trend_summary: list[str],
+    report_history: list[str],
     tool_verification_records: list[ToolVerificationSummary],
     artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
@@ -570,6 +599,10 @@ def _project_summary_text(
         "## Trend Summary",
         "",
         *trend_summary,
+        "",
+        "## Report History Snapshot",
+        "",
+        *report_history,
         "",
         "## Benchmark Snapshot",
         "",
@@ -1045,22 +1078,38 @@ def _risk_history_path(project_root: Path) -> Path:
     return project_root / "07_exports" / "reports" / _RISK_HISTORY_FILE
 
 
-def _read_risk_history(project_root: Path) -> list[dict[str, object]]:
+def summarize_report_history(project_path: Path | str) -> ReportHistorySummary:
+    """Return an audit summary for persisted report risk history."""
+
+    status, snapshots = _load_risk_history_snapshots(Path(project_path))
+    return _report_history_summary_from_snapshots(snapshots, status=status)
+
+
+def _load_risk_history_snapshots(project_root: Path) -> tuple[str, list[dict[str, object]]]:
     history_path = _risk_history_path(project_root)
     if not history_path.exists():
-        return []
+        return "not_run", []
     try:
         loaded = json.loads(history_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
-        return []
+        return "invalid", []
     if not isinstance(loaded, dict):
-        return []
+        return "invalid", []
     if loaded.get("schema_version") != _RISK_HISTORY_SCHEMA_VERSION:
-        return []
+        return "invalid", []
     snapshots = loaded.get("snapshots", [])
     if not isinstance(snapshots, list):
-        return []
-    return [snapshot for snapshot in snapshots if isinstance(snapshot, dict)]
+        return "invalid", []
+    if any(not isinstance(snapshot, dict) for snapshot in snapshots):
+        return "invalid", []
+    if not snapshots:
+        return "not_run", []
+    return "current", snapshots
+
+
+def _read_risk_history(project_root: Path) -> list[dict[str, object]]:
+    status, snapshots = _load_risk_history_snapshots(project_root)
+    return snapshots if status == "current" else []
 
 
 def _latest_risk_snapshot(
@@ -1068,7 +1117,18 @@ def _latest_risk_snapshot(
     *,
     report_type: str,
 ) -> dict[str, object] | None:
-    for snapshot in reversed(_read_risk_history(project_root)):
+    return _latest_risk_snapshot_from_snapshots(
+        _read_risk_history(project_root),
+        report_type=report_type,
+    )
+
+
+def _latest_risk_snapshot_from_snapshots(
+    snapshots: list[dict[str, object]],
+    *,
+    report_type: str,
+) -> dict[str, object] | None:
+    for snapshot in reversed(snapshots):
         if snapshot.get("report_type") == report_type:
             return snapshot
     return None
@@ -1079,26 +1139,85 @@ def _append_risk_history_snapshot(
     *,
     report_type: str,
     metrics: RiskMetrics,
+    snapshot: dict[str, object] | None = None,
 ) -> None:
     snapshots = _read_risk_history(project_root)
-    snapshot_id = max((_snapshot_int(item.get("snapshot_id")) for item in snapshots), default=0) + 1
     snapshots.append(
-        {
-            "snapshot_id": snapshot_id,
-            "report_type": report_type,
-            "risk_level": metrics.risk_level,
-            "blocker_pressure": metrics.blocker_pressure,
-            "review_pressure": metrics.review_pressure,
-            "human_review_backlog": metrics.human_review_backlog,
-            "weak_concepts": metrics.weak_concepts,
-            "active_misconceptions": metrics.active_misconceptions,
-        }
+        snapshot
+        or _risk_snapshot(
+            report_type=report_type,
+            metrics=metrics,
+            snapshot_id=_next_risk_snapshot_id(snapshots),
+        )
     )
     payload = {
         "schema_version": _RISK_HISTORY_SCHEMA_VERSION,
         "snapshots": snapshots[-50:],
     }
     write_text(_risk_history_path(project_root), json.dumps(payload, indent=2) + "\n")
+
+
+def _risk_snapshot(
+    *,
+    report_type: str,
+    metrics: RiskMetrics,
+    snapshot_id: int,
+) -> dict[str, object]:
+    return {
+        "snapshot_id": snapshot_id,
+        "report_type": report_type,
+        "risk_level": metrics.risk_level,
+        "blocker_pressure": metrics.blocker_pressure,
+        "review_pressure": metrics.review_pressure,
+        "human_review_backlog": metrics.human_review_backlog,
+        "weak_concepts": metrics.weak_concepts,
+        "active_misconceptions": metrics.active_misconceptions,
+    }
+
+
+def _next_risk_snapshot_id(snapshots: list[dict[str, object]]) -> int:
+    return max((_snapshot_int(item.get("snapshot_id")) for item in snapshots), default=0) + 1
+
+
+def _report_history_summary_from_snapshots(
+    snapshots: list[dict[str, object]],
+    *,
+    status: str,
+) -> ReportHistorySummary:
+    if status != "current" or not snapshots:
+        return ReportHistorySummary(
+            status=status,
+            total_snapshots=0,
+            latest_snapshot_id=None,
+            latest_report_type="none",
+            latest_risk_level="none",
+        )
+    latest = snapshots[-1]
+    return ReportHistorySummary(
+        status="current",
+        total_snapshots=len(snapshots),
+        latest_snapshot_id=_snapshot_int(latest.get("snapshot_id")) or None,
+        latest_report_type=str(latest.get("report_type", "unknown")),
+        latest_risk_level=str(latest.get("risk_level", "unknown")),
+    )
+
+
+def _report_history_lines(summary: ReportHistorySummary) -> list[str]:
+    return [
+        f"- Report history: {summary.status}",
+        f"- Report history snapshots: {summary.total_snapshots}",
+        f"- Latest report history: {_latest_report_history_text(summary)}",
+    ]
+
+
+def _latest_report_history_text(summary: ReportHistorySummary) -> str:
+    if summary.latest_snapshot_id is None:
+        return "none"
+    return (
+        f"#{summary.latest_snapshot_id} "
+        f"{summary.latest_report_type} "
+        f"{summary.latest_risk_level}"
+    )
 
 
 def _snapshot_int(value: object) -> int:

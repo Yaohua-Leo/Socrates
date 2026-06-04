@@ -1816,6 +1816,29 @@ v0.20：真实长期使用回归与报告 UX 打磨
 
 在 risk trend summary 之后继续用真实多 session fixture 打磨长期学习回归和报告 UX，确保 report/action surfaces 对实际学习节奏有用，而不是只通过单点 artifact checks。
 
+必须完成：
+
+status report-history health lines
+
+project summary report-history snapshot section
+
+public report-history summary reader owned by report module
+
+invalid/missing history fallback rows
+
+当前状态（2026-06-04）：
+
+- `status` 已显示 report history health、snapshot count 与 latest snapshot。
+- Project summary report 已包含 `## Report History Snapshot` section，显示当前 report 写入后的 history preview。
+- Report history 读取逻辑留在 `socrates.reports`，CLI 不直接解析 `risk_history.json`。
+- 这不是新的 readiness gate、score、prediction、planner、tutor 或 learning-state mutation；它只是暴露已有 trend artifact 的健康状态和最近快照。
+
+v0.21：真实多 session fixture 与长期使用回归
+
+建议目标：
+
+用更接近真实学习节奏的 multi-session fixture 覆盖 source -> plan -> sessions -> closeout -> regression -> reports -> status 的长链路，检查 v0.12-v0.20 的 action/report/status surfaces 是否在连续使用中保持一致。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

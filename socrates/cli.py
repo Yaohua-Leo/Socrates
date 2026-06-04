@@ -96,11 +96,13 @@ from .references import (
 )
 from .reports import (
     REPORT_TYPES,
+    ReportHistorySummary,
     ReportSummary,
     generate_monthly_report,
     generate_project_summary,
     generate_weekly_report,
     list_learning_reports,
+    summarize_report_history,
 )
 from .session_score import score_teaching_session
 from .state import (
@@ -1356,6 +1358,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     next_review = _next_scheduled_review(context.learning_state)
     report_count = _count_learning_reports(context.root)
+    report_history = summarize_report_history(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
     ingestion_quality = _read_quality_manifest_status(
         context.root,
@@ -1440,6 +1443,9 @@ def _handle_status(args: argparse.Namespace) -> int:
         if repair:
             print(f"Next repair: {repair}")
     print(f"Learning reports: {report_count}")
+    print(f"Report history: {report_history.status}")
+    print(f"Report history snapshots: {report_history.total_snapshots}")
+    print(f"Latest report history: {_latest_report_history_text(report_history)}")
     print(f"Workflow actions: {workflow_action_count}")
     print(f"Quality checks to fix: {quality_checks_to_fix_count}")
     print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
@@ -2737,6 +2743,16 @@ def _count_learning_reports(project_root: Path) -> int:
     if not reports_dir.exists():
         return 0
     return len(list(reports_dir.glob("*.md")))
+
+
+def _latest_report_history_text(summary: ReportHistorySummary) -> str:
+    if summary.latest_snapshot_id is None:
+        return "none"
+    return (
+        f"#{summary.latest_snapshot_id} "
+        f"{summary.latest_report_type} "
+        f"{summary.latest_risk_level}"
+    )
 
 
 def _count_tool_verification_records(project_root: Path) -> int:
