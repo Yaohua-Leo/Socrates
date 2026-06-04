@@ -1688,6 +1688,8 @@ def _exercises_text(exercises: list[ExerciseSummary]) -> str:
         if exercise.detail:
             line = f"{line} | {exercise.detail}"
         lines.append(line)
+        if exercise.quality_status:
+            lines.append(f"  - quality: {exercise.quality_status}")
     return "\n".join(lines) + "\n"
 
 

@@ -1882,6 +1882,49 @@ class ExerciseQualityTests(unittest.TestCase):
                 "not_run",
             )
 
+    def test_exercise_list_cli_shows_checked_quality_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=1,
+            )
+
+            check = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            exercises = subprocess.run(
+                [sys.executable, "-m", "socrates", "exercise", "list", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(check.returncode, 0, check.stderr)
+            self.assertEqual(exercises.returncode, 0, exercises.stderr)
+            self.assertIn(
+                "- normal_subgroup_01 | draft | generated_exercise | Normal Subgroup | "
+                "05_exercises/generated/normal_subgroup_01.md",
+                exercises.stdout,
+            )
+            self.assertIn("  - quality: pass", exercises.stdout)
+
     def test_exercise_quality_manifest_records_reviewed_by_user_for_approved_exercises(
         self,
     ) -> None:

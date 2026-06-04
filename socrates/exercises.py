@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 import math
 from pathlib import Path
 
@@ -34,6 +35,7 @@ class ExerciseSummary:
     concept: str
     path: str
     detail: str = ""
+    quality_status: str | None = None
 
 
 def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
@@ -86,10 +88,12 @@ def list_exercises(
     context = load_project(project_path)
     attempts_by_exercise = _attempts_by_exercise(context.root)
     graded_attempts = _graded_attempts(context.root)
+    quality_by_path = _exercise_quality_by_path(context.root)
     summaries: list[ExerciseSummary] = []
     for exercise_path in sorted(context.generated_exercises_dir.glob("*.md"), key=lambda path: path.stem):
         exercise_id = exercise_path.stem
         text = exercise_path.read_text(encoding="utf-8")
+        relative_path = exercise_path.relative_to(context.root).as_posix()
         summary_status, detail = _exercise_lifecycle_status(
             text=text,
             attempts=attempts_by_exercise.get(exercise_id, []),
@@ -101,8 +105,9 @@ def list_exercises(
                 status=summary_status,
                 exercise_type=_frontmatter_value(text, "type") or "generated_exercise",
                 concept=_frontmatter_value(text, "concept") or exercise_id,
-                path=exercise_path.relative_to(context.root).as_posix(),
+                path=relative_path,
                 detail=detail,
+                quality_status=quality_by_path.get(relative_path),
             )
         )
     if status != "all":
@@ -263,6 +268,29 @@ def _graded_attempts(project_root: Path) -> dict[str, str]:
         score = _frontmatter_value(text, "score")
         graded[attempt_id] = f"score {score}" if score else "graded"
     return graded
+
+
+def _exercise_quality_by_path(project_root: Path) -> dict[str, str]:
+    manifest_path = project_root / "08_evals" / "exercise_quality_manifest.json"
+    if not manifest_path.exists():
+        return {}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    exercises = manifest.get("exercises", []) if isinstance(manifest, dict) else []
+    if not isinstance(exercises, list):
+        return {}
+
+    quality_by_path: dict[str, str] = {}
+    for item in exercises:
+        if not isinstance(item, dict):
+            continue
+        path = str(item.get("path", "")).strip()
+        quality_status = str(item.get("quality_status", "")).strip()
+        if path and quality_status:
+            quality_by_path[path] = quality_status
+    return quality_by_path
 
 
 def _exercise_lifecycle_status(
