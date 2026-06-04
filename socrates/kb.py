@@ -55,6 +55,13 @@ RELATIONSHIP_METADATA_KEYS = {
     "equivalent to": "equivalent_to",
 }
 CONCEPT_RELATIONSHIP_TYPES = set(RELATIONSHIP_METADATA_KEYS.values())
+REFERENCE_KB_ARTIFACTS = (
+    ("concept_graph.json", ("nodes", "edges")),
+    ("dependency_graph.json", ("nodes", "edges")),
+    ("chapter_index.json", ("chapters",)),
+    ("theorem_index.json", ("theorems",)),
+    ("exercise_index.json", ("exercises",)),
+)
 
 
 def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
@@ -116,7 +123,14 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
             )
         objects = index["objects"]
         object_count = len(objects)
-        index_mtime_ns = index_path.stat().st_mtime_ns
+        artifact_status, artifact_mtime_ns = _reference_kb_artifacts_status(context.root)
+        if artifact_status != "current":
+            return ReferenceKbStatus(
+                index_path=index_path,
+                object_count=0,
+                status=artifact_status,
+            )
+        index_mtime_ns = min(index_path.stat().st_mtime_ns, artifact_mtime_ns)
         index_status = "current" if curated_paths else "not_applicable"
 
     if curated_paths and index_path.exists():
@@ -372,6 +386,25 @@ def _valid_reference_index_schema(index: object) -> bool:
     return all(isinstance(item, dict) for item in objects) and all(
         isinstance(item, dict) for item in chunks
     )
+
+
+def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
+    mtimes: list[int] = []
+    kb_dir = project_root / "06_kb"
+    for filename, keys in REFERENCE_KB_ARTIFACTS:
+        path = kb_dir / filename
+        try:
+            artifact = json.loads(path.read_text(encoding="utf-8"))
+        except FileNotFoundError:
+            return ("missing", 0)
+        except json.JSONDecodeError:
+            return ("invalid", 0)
+        if not isinstance(artifact, dict) or not all(
+            isinstance(artifact.get(key), list) for key in keys
+        ):
+            return ("invalid", 0)
+        mtimes.append(path.stat().st_mtime_ns)
+    return ("current", min(mtimes) if mtimes else 0)
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
