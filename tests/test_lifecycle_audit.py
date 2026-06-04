@@ -339,6 +339,58 @@ class LifecycleAuditTests(unittest.TestCase):
             )
             self.assertIn("- Misconception notes: fail", report_text)
 
+    def test_lifecycle_audit_requires_notes_for_each_recorded_misconception(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare gNg^-1 = N with gn = ng.",
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether arbitrary cosets contain the identity.",
+                        ),
+                    ],
+                ),
+            )
+            generate_misconception_note_drafts(project)
+            review_atomic_note(project, "normal_equals_central")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Misconception notes: fail", report_text)
+
     def test_lifecycle_audit_cli_reports_complete_learning_loop(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

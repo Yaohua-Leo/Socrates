@@ -2010,7 +2010,7 @@ def _has_reviewed_misconception_notes(
         if _frontmatter_value(text, "reviewed_by_user") != "true":
             continue
         reviewed_ids.add(note_path.stem)
-    return bool(expected_note_ids & reviewed_ids)
+    return expected_note_ids <= reviewed_ids
 
 
 def _markdown_count(path: Path) -> int:
