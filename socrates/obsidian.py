@@ -9,25 +9,20 @@ from pathlib import Path
 def obsidian_export_count(project_root: Path) -> int:
     """Count exported notes, falling back to markdown files when metadata is unusable."""
 
-    manifest = read_obsidian_export_manifest(project_root)
-    if isinstance(manifest, dict):
-        exported_notes = manifest.get("exported_notes", [])
-        if isinstance(exported_notes, list):
-            return len(exported_notes)
+    exported_notes = _manifest_exported_notes(project_root)
+    if exported_notes is not None:
+        return len(exported_notes)
     return len(obsidian_exported_note_ids_from_files(project_root))
 
 
 def obsidian_backlink_count(project_root: Path) -> int:
     """Count manifest-recorded backlinks when the export manifest can be read."""
 
-    manifest = read_obsidian_export_manifest(project_root)
-    exported_notes = manifest.get("exported_notes", []) if isinstance(manifest, dict) else []
-    if not isinstance(exported_notes, list):
+    exported_notes = _manifest_exported_notes(project_root)
+    if exported_notes is None:
         return 0
     backlink_count = 0
     for note in exported_notes:
-        if not isinstance(note, dict):
-            continue
         backlinks = note.get("backlinks", [])
         if isinstance(backlinks, list):
             backlink_count += len(backlinks)
@@ -37,15 +32,9 @@ def obsidian_backlink_count(project_root: Path) -> int:
 def obsidian_exported_note_ids(project_root: Path) -> set[str]:
     """Return exported note ids from metadata, or from exported markdown files."""
 
-    manifest = read_obsidian_export_manifest(project_root)
-    if isinstance(manifest, dict):
-        exported_notes = manifest.get("exported_notes", [])
-        if isinstance(exported_notes, list):
-            return {
-                str(item.get("note_id"))
-                for item in exported_notes
-                if isinstance(item, dict) and item.get("note_id")
-            }
+    exported_notes = _manifest_exported_notes(project_root)
+    if exported_notes is not None:
+        return {str(item["note_id"]) for item in exported_notes}
     return obsidian_exported_note_ids_from_files(project_root)
 
 
@@ -59,6 +48,40 @@ def read_obsidian_export_manifest(project_root: Path) -> object | None:
         return json.loads(manifest_path.read_text(encoding="utf-8"))
     except json.JSONDecodeError:
         return None
+
+
+def _manifest_exported_notes(project_root: Path) -> list[dict[str, object]] | None:
+    manifest = read_obsidian_export_manifest(project_root)
+    if not isinstance(manifest, dict):
+        return None
+    exported_notes = manifest.get("exported_notes", [])
+    if not isinstance(exported_notes, list):
+        return None
+
+    obsidian_dir = project_root / "07_exports" / "obsidian"
+    obsidian_root = obsidian_dir.resolve()
+    valid_notes: list[dict[str, object]] = []
+    for item in exported_notes:
+        if not isinstance(item, dict):
+            continue
+        note_id = str(item.get("note_id") or "").strip()
+        path_value = item.get("path")
+        if not note_id or not isinstance(path_value, str):
+            continue
+        export_path = (obsidian_dir / path_value).resolve()
+        try:
+            export_path.relative_to(obsidian_root)
+        except ValueError:
+            continue
+        if (
+            export_path.name == "_socrates_index.md"
+            or export_path.suffix != ".md"
+            or export_path.stem != note_id
+            or not export_path.is_file()
+        ):
+            continue
+        valid_notes.append(item)
+    return valid_notes
 
 
 def obsidian_exported_note_ids_from_files(project_root: Path) -> set[str]:
