@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -120,6 +121,54 @@ class LearningPlanTests(unittest.TestCase):
             )
             self.assertIn("Page: 82", session_plan)
             self.assertIn("Depends: subgroup, conjugation", session_plan)
+
+    def test_plan_cli_warns_and_records_stale_reference_kb_context(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=Path(temp_dir) / "normal_subgroup",
+                    goal="Understand the definition before quotient groups.",
+                )
+            )
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Group Theory\n"
+                "## Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N of G is normal when it is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            kb_result = build_reference_kb(project)
+            index_time_ns = kb_result.index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: Fresh Curated Planning Note\n"
+                + "This note is newer than the existing Reference KB index.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "plan", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("warning: Reference KB status is stale", result.stderr)
+            session_plan = (
+                project / "02_learning_plan" / "session_0001_plan.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("- Reference KB status: stale", session_plan)
 
     def test_review_adjust_plan_command_updates_short_term_plan_from_schedule(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -7,6 +7,7 @@ from pathlib import Path
 
 from socrates.context import load_project, write_text
 from socrates.contracts import SessionPlan
+from socrates.kb import reference_kb_status
 
 
 def create_learning_plan(project_path: Path | str) -> list[Path]:
@@ -16,6 +17,7 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
     project = _read_project_metadata(context.project_file)
     source_titles = _read_source_titles(context.source_registry)
     reference_context = _read_reference_context(context.root, project["topic"])
+    kb_status = reference_kb_status(context.root)
     session = SessionPlan(
         session_id="session_0001",
         objective=f"Orient to {project['topic']} and convert the goal into a study map.",
@@ -32,7 +34,12 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
             project["topic"], project["goal"], source_titles
         ),
         context.learning_plan_dir / "session_0001_plan.md": _session_plan(
-            project["topic"], project["goal"], source_titles, reference_context, session
+            project["topic"],
+            project["goal"],
+            source_titles,
+            reference_context,
+            kb_status.status,
+            session,
         ),
     }
     for path, content in plans.items():
@@ -130,10 +137,16 @@ def _source_section(source_titles: list[str]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _reference_context_section(reference_context: list[dict[str, object]]) -> str:
+def _reference_context_section(
+    reference_context: list[dict[str, object]],
+    *,
+    kb_status: str,
+) -> str:
+    lines = [f"- Reference KB status: {kb_status}"]
     if not reference_context:
-        return "- Reference KB context: none indexed yet.\n"
-    lines = ["- Reference KB context:"]
+        lines.append("- Reference KB context: none indexed yet.")
+        return "\n".join(lines) + "\n"
+    lines.append("- Reference KB context:")
     for item in reference_context:
         source = item.get("source", {})
         source_path = "unknown"
@@ -256,6 +269,7 @@ def _session_plan(
     goal: str,
     source_titles: list[str],
     reference_context: list[dict[str, object]],
+    kb_status: str,
     session: SessionPlan,
 ) -> str:
     prerequisites = "\n".join(f"- {item}" for item in session.prerequisites)
@@ -279,7 +293,7 @@ def _session_plan(
 {_source_section(source_titles)}
 ## Reference Context
 
-{_reference_context_section(reference_context)}
+{_reference_context_section(reference_context, kb_status=kb_status)}
 ## Prerequisites
 
 {prerequisites}

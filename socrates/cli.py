@@ -958,6 +958,7 @@ def _correction_patches_text(patches: list[CorrectionPatchSummary]) -> str:
 
 
 def _handle_plan(args: argparse.Namespace) -> int:
+    _warn_if_reference_kb_stale(args.project)
     written = create_learning_plan(args.project)
     print(f"Created {len(written)} learning plan files")
     return 0
