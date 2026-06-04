@@ -64,7 +64,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 1/15 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 1/16 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
@@ -414,6 +414,94 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Benchmark report: fail", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
 
+    def test_lifecycle_audit_rejects_failed_artifact_quality_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "08_evals" / "ingestion_quality_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checked": 1,
+                        "passed": 1,
+                        "failed": 0,
+                        "curated_references": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (project / "08_evals" / "note_quality_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checked": 1,
+                        "passed": 0,
+                        "failed": 1,
+                        "notes": [
+                            {
+                                "id": "normal_subgroup",
+                                "quality_status": "fail",
+                                "issues": ["missing section Review Questions"],
+                            }
+                        ],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (project / "08_evals" / "exercise_quality_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checked": 5,
+                        "passed": 5,
+                        "failed": 0,
+                        "exercises": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (project / "08_evals" / "tutoring_quality_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "checked": 1,
+                        "passed": 1,
+                        "failed": 0,
+                        "sessions": [],
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Artifact quality: fail", report_text)
+
     def test_lifecycle_audit_rejects_stale_reference_kb(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -709,7 +797,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 16/16 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 17/17 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -718,6 +806,7 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Misconception notes: pass", report_text)
             self.assertIn("- Obsidian export: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
+            self.assertIn("- Artifact quality: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: pass", report_text)
             self.assertIn("- Tool verification records: pass", report_text)

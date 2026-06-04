@@ -494,6 +494,7 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
             "Learning state": bool(state.get("concept_mastery")),
             "Review schedule": _has_review_schedule(context.root, state),
             "Learning reports": _has_learning_reports(context.root),
+            "Artifact quality": _has_clean_artifact_quality_manifests(context.root),
             "Benchmark report": _has_benchmark_report(context.root),
             "Benchmark manifest": _has_benchmark_manifest(context.root),
             "Tool verification records": _has_tool_verification_records(context.root),
@@ -2141,6 +2142,36 @@ def _has_benchmark_manifest(project_root: Path) -> bool:
     if not _valid_benchmark_manifest(project_root, manifest):
         return False
     return _latest_benchmark_input_mtime(project_root) <= manifest_path.stat().st_mtime_ns
+
+
+def _has_clean_artifact_quality_manifests(project_root: Path) -> bool:
+    manifest_names = (
+        "ingestion_quality_manifest.json",
+        "note_quality_manifest.json",
+        "exercise_quality_manifest.json",
+        "tutoring_quality_manifest.json",
+    )
+    return all(
+        _valid_clean_quality_manifest(project_root / "08_evals" / manifest_name)
+        for manifest_name in manifest_names
+    )
+
+
+def _valid_clean_quality_manifest(manifest_path: Path) -> bool:
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return False
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return False
+    return checked > 0 and passed == checked and failed == 0
 
 
 def _has_tool_verification_records(project_root: Path) -> bool:
