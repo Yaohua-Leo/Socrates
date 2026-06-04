@@ -7,7 +7,7 @@ from pathlib import Path
 
 from socrates.context import load_project, write_text
 from socrates.contracts import SessionPlan
-from socrates.kb import reference_kb_status
+from socrates.kb import reference_kb_status, read_reference_chapter_index
 
 
 def create_learning_plan(project_path: Path | str) -> list[Path]:
@@ -17,6 +17,7 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
     project = _read_project_metadata(context.project_file)
     source_titles = _read_source_titles(context.source_registry)
     reference_context = _read_reference_context(context.root, project["topic"])
+    chapter_outline = _read_chapter_outline(context.root)
     kb_status = reference_kb_status(context.root)
     session = SessionPlan(
         session_id="session_0001",
@@ -28,7 +29,10 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
 
     plans = {
         context.learning_plan_dir / "long_term_plan.md": _long_term_plan(
-            project["topic"], project["goal"], source_titles
+            project["topic"],
+            project["goal"],
+            source_titles,
+            chapter_outline,
         ),
         context.learning_plan_dir / "short_term_plan.md": _short_term_plan(
             project["topic"], project["goal"], source_titles
@@ -126,6 +130,17 @@ def _read_reference_context(project_root: Path, topic: str, *, limit: int = 5) -
     return matches or objects[:limit]
 
 
+def _read_chapter_outline(project_root: Path) -> list[dict[str, object]]:
+    try:
+        index = read_reference_chapter_index(project_root)
+    except ValueError:
+        return []
+    chapters = index.get("chapters", [])
+    if not isinstance(chapters, list):
+        return []
+    return [chapter for chapter in chapters if isinstance(chapter, dict)]
+
+
 def _yaml_value(value: str) -> str:
     if value == "null":
         return ""
@@ -176,7 +191,36 @@ def _reference_object_label(item: dict[str, object]) -> str:
     return f"{object_type}: {title}"
 
 
-def _long_term_plan(topic: str, goal: str, source_titles: list[str]) -> str:
+def _reference_reading_path_section(chapter_outline: list[dict[str, object]]) -> str:
+    lines = ["## Reference Reading Path", ""]
+    if not chapter_outline:
+        lines.append("- none indexed yet.")
+        return "\n".join(lines) + "\n"
+    for chapter in chapter_outline:
+        chapter_title = str(chapter.get("title") or "Unassigned")
+        lines.append(f"- {chapter_title}")
+        sections = chapter.get("sections", [])
+        if not isinstance(sections, list) or not sections:
+            continue
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            lines.append(f"  - {section.get('title') or 'Unassigned'}")
+            objects = section.get("objects", [])
+            if not isinstance(objects, list):
+                continue
+            for item in objects:
+                if isinstance(item, dict):
+                    lines.append(f"    - {_reference_object_label(item)}")
+    return "\n".join(lines) + "\n"
+
+
+def _long_term_plan(
+    topic: str,
+    goal: str,
+    source_titles: list[str],
+    chapter_outline: list[dict[str, object]],
+) -> str:
     return f"""# Long Term Plan
 
 ## Topic
@@ -190,6 +234,7 @@ def _long_term_plan(topic: str, goal: str, source_titles: list[str]) -> str:
 ## Reference Base
 
 {_source_section(source_titles)}
+{_reference_reading_path_section(chapter_outline)}
 ## Milestones
 
 - Establish the core vocabulary and motivating examples for {topic}.

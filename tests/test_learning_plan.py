@@ -122,6 +122,37 @@ class LearningPlanTests(unittest.TestCase):
             self.assertIn("Page: 82", session_plan)
             self.assertIn("Depends: subgroup, conjugation", session_plan)
 
+    def test_long_term_plan_includes_reference_chapter_outline_from_kb(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=Path(temp_dir) / "normal_subgroup",
+                    goal="Follow the textbook route into quotient groups.",
+                )
+            )
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N of G is normal when it is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+
+            create_learning_plan(project)
+
+            long_term_plan = (
+                project / "02_learning_plan" / "long_term_plan.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Reference Reading Path", long_term_plan)
+            self.assertIn("- Chapter 3: Quotient Groups", long_term_plan)
+            self.assertIn("  - Section 3.1 Normal Subgroups", long_term_plan)
+            self.assertIn("    - Definition 3.1: Normal Subgroup", long_term_plan)
+
     def test_plan_cli_warns_and_records_stale_reference_kb_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(
