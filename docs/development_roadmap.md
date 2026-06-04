@@ -2429,6 +2429,29 @@ same repair side effects as prose mode
 - no-op repair 返回 `repaired_count: 0`，同时仍返回当前 post-write schedule rows。
 - 这不是 dry-run、read-only ledger、scheduler、tutor、planner、exercise generator、report refresh、LLM call 或额外 learning-state truth；它只是现有 repair writer 的 structured result output mode。
 
+v0.45：review-schedule repair dry-run
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以在修复 review schedule 前预览同一 repair computation 的结果。
+
+必须完成：
+
+`review repair-schedule --dry-run`
+
+`review repair-schedule --dry-run --json`
+
+no-write guarantee
+
+post-repair preview rows
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review repair-schedule --project <project> --as-of 2026-06-04 --dry-run` 已输出 no-write prose preview。
+- `--dry-run --json` 已输出 `quality_boundary: deterministic_review_schedule_repair_preview`、`dry_run: true`、`repaired_count` 和 would-be scheduled rows。
+- dry-run mode 不会修改 `00_meta/learning_state.json`，也不会写入 `02_learning_plan/review_schedule.md`。
+- 这不是 scheduler、tutor、planner、exercise generator、report refresh、LLM call 或 learning-state mutation；它只是现有 repair computation 的 no-write preview output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

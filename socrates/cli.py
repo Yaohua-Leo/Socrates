@@ -127,6 +127,7 @@ from .state import (
     ensure_learning_state_readable,
     list_learning_scores,
     list_misconceptions,
+    preview_review_schedule_repair,
     repair_review_schedule,
     resolve_active_misconceptions_for_concept,
     update_eval_report,
@@ -769,6 +770,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--as-of",
         default=None,
         help="ISO date used to repair missing or invalid dates; defaults to today.",
+    )
+    review_repair_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview repaired schedule rows without writing files.",
     )
     review_repair_parser.add_argument(
         "--json",
@@ -2156,6 +2162,32 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     context = load_project(args.project)
+    if args.dry_run:
+        try:
+            repaired_count, schedule = preview_review_schedule_repair(context, as_of=as_of)
+        except json.JSONDecodeError:
+            print(
+                "error: invalid learning_state.json; repair the JSON before repairing review schedule",
+                file=sys.stderr,
+            )
+            return 1
+        rows = _review_schedule_records_from_schedule(schedule)
+        if args.json:
+            print(
+                json.dumps(
+                    _review_schedule_repair_preview_payload(
+                        context,
+                        as_of=as_of,
+                        repaired_count=repaired_count,
+                        rows=rows,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        print(_review_schedule_repair_preview_text(repaired_count, rows), end="")
+        return 0
     try:
         repaired_count, schedule_path = repair_review_schedule(context, as_of=as_of)
     except json.JSONDecodeError:
@@ -3695,9 +3727,47 @@ def _review_schedule_repair_payload(
     }
 
 
+def _review_schedule_repair_preview_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    repaired_count: int,
+    rows: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_schedule_repair_preview",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "dry_run": True,
+        "repaired_count": repaired_count,
+        "scheduled_reviews": rows,
+    }
+
+
+def _review_schedule_repair_preview_text(
+    repaired_count: int,
+    rows: list[dict[str, str]],
+) -> str:
+    noun = "item" if repaired_count == 1 else "items"
+    lines = [
+        f"Repair preview: {repaired_count} review schedule {noun} would be repaired",
+        "",
+    ]
+    if not rows:
+        lines.append("- none")
+    else:
+        lines.extend(_review_schedule_row_text(row) for row in rows)
+    return "\n".join(lines) + "\n"
+
+
 def _review_schedule_records(learning_state: Path) -> list[dict[str, str]]:
     state = _read_learning_state_for_status(learning_state)
     schedule = state.get("review_schedule", [])
+    return _review_schedule_records_from_schedule(schedule)
+
+
+def _review_schedule_records_from_schedule(schedule: object) -> list[dict[str, str]]:
     if not isinstance(schedule, list):
         return []
 
@@ -3718,6 +3788,17 @@ def _review_schedule_records(learning_state: Path) -> list[dict[str, str]]:
             }
         )
     return rows
+
+
+def _review_schedule_row_text(row: dict[str, str]) -> str:
+    line = (
+        f"- {row['concept']} | {row['scheduled_for']} | "
+        f"{row['priority']} | {row['reason']}"
+    )
+    repair = row.get("repair", "")
+    if repair:
+        line = f"{line} | repair: {repair}"
+    return line
 
 
 def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:

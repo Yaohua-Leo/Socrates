@@ -194,6 +194,18 @@ def repair_review_schedule(
     return repaired_count, schedule_path
 
 
+def preview_review_schedule_repair(
+    context: ProjectContext,
+    *,
+    as_of: date | None = None,
+) -> tuple[int, list[dict[str, object]]]:
+    """Preview repaired review schedule rows without writing project files."""
+
+    state = _learning_state_dict(context.learning_state)
+    repaired_count, items = _repaired_review_items(state, as_of=as_of or date.today())
+    return repaired_count, [_review_item_record(item) for item in items]
+
+
 def resolve_active_misconceptions_for_concept(context: ProjectContext, concept: str) -> int:
     """Mark active misconception records for one concept as resolved."""
 

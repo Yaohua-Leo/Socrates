@@ -2656,6 +2656,162 @@ class StateEvalTests(unittest.TestCase):
             self.assertTrue(schedule_path.exists())
             self.assertIn("## normal_subgroup", schedule_path.read_text(encoding="utf-8"))
 
+    def test_review_repair_schedule_dry_run_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "not-a-date",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "quotient_group",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "reason": "mastery 0.62",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            original_state = learning_state.read_text(encoding="utf-8")
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertFalse(schedule_path.exists())
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn(
+                "Repair preview: 2 review schedule items would be repaired",
+                preview.stdout,
+            )
+            self.assertIn("- normal_subgroup | 2026-06-04 | high | mastery 0.4", preview.stdout)
+            self.assertIn("- quotient_group | 2026-06-07 | medium | mastery 0.62", preview.stdout)
+            self.assertNotIn("Repaired 2 review schedule items:", preview.stdout)
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(schedule_path.exists())
+
+    def test_review_repair_schedule_dry_run_json_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "not-a-date",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "quotient_group",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "reason": "mastery 0.62",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            original_state = learning_state.read_text(encoding="utf-8")
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertFalse(schedule_path.exists())
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            payload = json.loads(preview.stdout)
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_repair_preview",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "dry_run": True,
+                    "repaired_count": 2,
+                    "scheduled_reviews": [
+                        {
+                            "concept": "normal_subgroup",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "mastery 0.4",
+                            "repair": "",
+                        },
+                        {
+                            "concept": "quotient_group",
+                            "priority": "medium",
+                            "due": "within_3_days",
+                            "scheduled_for": "2026-06-07",
+                            "reason": "mastery 0.62",
+                            "repair": "",
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(schedule_path.exists())
+
     def test_review_repair_schedule_cli_reports_corrupt_learning_state_json_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
