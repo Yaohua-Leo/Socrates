@@ -73,6 +73,23 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("- Follow-up exercises:", mistake_bank)
             self.assertIn("  - Find a non-central normal subgroup.", mistake_bank)
 
+    def test_update_learning_state_rejects_nonfinite_scores_without_writing_state(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            original_state = context.learning_state.read_text(encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Learning state score must be finite"):
+                update_learning_state(
+                    context,
+                    LearningStatePatch(
+                        concept_mastery={"normal_subgroup": math.nan},
+                        proof_skills={"exercise_solving": 0.8},
+                    ),
+                )
+
+            self.assertEqual(context.learning_state.read_text(encoding="utf-8"), original_state)
+
     def test_repeated_mistake_marks_recurrence_and_increments_count(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

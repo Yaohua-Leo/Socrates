@@ -106,6 +106,8 @@ def ensure_learning_state_readable(learning_state_path: Path, *, action: str) ->
 def update_learning_state(context: ProjectContext, patch: LearningStatePatch) -> None:
     """Merge learning-state scores and append any mistake-bank entries."""
 
+    _validate_learning_scores(patch.concept_mastery)
+    _validate_learning_scores(patch.proof_skills)
     state = _learning_state_dict(context.learning_state)
     state["concept_mastery"].update(patch.concept_mastery)
     state["proof_skills"].update(patch.proof_skills)
@@ -342,6 +344,14 @@ def _validate_eval_score(score: float) -> None:
         raise ValueError("Eval report score must be finite.")
     if score < 0 or score > 1:
         raise ValueError("Eval report score must be between 0 and 1.")
+
+
+def _validate_learning_scores(scores: dict[str, float]) -> None:
+    for score in scores.values():
+        if not math.isfinite(score):
+            raise ValueError("Learning state score must be finite.")
+        if score < 0 or score > 1:
+            raise ValueError("Learning state score must be between 0 and 1.")
 
 
 def _review_items(
