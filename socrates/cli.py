@@ -1180,6 +1180,7 @@ def _handle_status(args: argparse.Namespace) -> int:
         attempted_exercises=attempted_exercise_count,
         graded_exercises=graded_exercise_count,
         obsidian_exports=obsidian_export_count,
+        obsidian_exports_to_run=obsidian_exports_to_run_count,
         scheduled_reviews=scheduled_review_count,
         learning_reports=report_count,
         learning_plans=_count_learning_plans(context.learning_plan_dir),
@@ -2268,6 +2269,7 @@ def _current_project_phase(
     attempted_exercises: int,
     graded_exercises: int,
     obsidian_exports: int,
+    obsidian_exports_to_run: int,
     scheduled_reviews: int,
     learning_reports: int,
     learning_plans: int,
@@ -2285,6 +2287,8 @@ def _current_project_phase(
         return "exercise_attempted"
     if approved_exercises > 0:
         return "exercise_ready"
+    if obsidian_exports_to_run > 0:
+        return "obsidian_export_pending"
     if obsidian_exports > 0:
         return "obsidian_exported"
     if reviewed_notes > 0:
