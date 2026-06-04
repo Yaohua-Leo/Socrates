@@ -6,9 +6,9 @@
 
 ## 当前阶段
 
-Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.7-alpha 的下一节课确定性交接计划层。
+Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学学习 CLI 原型。v0.1/v0.2 的确定性学习闭环、Reference KB 与 Obsidian 笔记沉淀已经落地；当前实现已推进到 v0.13-alpha 的 priority action queue navigation 层。
 
-当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.7 next-session handoff：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁。
+当前分支相对早期主线已有大量功能提交。最近一组工作从 Reference KB reader gate 和 v0.3 LLM draft 边界继续推进到 v0.13 priority queue：生成 artifact 不能只存在，还必须结构有效、来源可追溯，并且直接读取型 CLI 不能绕过 readiness/validation 门禁；长期使用时的下一步操作也必须清楚可见。
 
 ## v0.2 收口基线
 
@@ -61,7 +61,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 ### 质量门禁
 
 - 当前全量门禁：`powershell -ExecutionPolicy Bypass -File scripts\check.ps1`
-- 最近一次结果：356 tests OK，1 skipped。
+- 最近一次结果：379 tests OK，1 skipped。
 - 最近收口提交：
   - `f49a0c2 Fail fast on invalid chapter index reads`
   - `1d61f90 Fail fast on invalid concept graph reads`
@@ -223,6 +223,22 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
   - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 377 tests OK and 1 skipped.
   - `bash scripts/check.sh` passed with 377 tests OK and 1 skipped; WSL emitted localhost and `scripts/check.ps1` line-ending warnings, but the script exit code was 0.
 
+## v0.13 Priority action queue alpha
+
+- Extended `socrates.learning_queue` with a virtual `priority` queue section.
+- `queue --section priority` now renders existing queue items in deterministic operator order: workflow, quality checks, tool verifications, Obsidian exports, notes, misconceptions, reviews, exercise drafts, exercises, and attempts.
+- Priority rows prefix item ids with their source section, for example `workflow:multi_session_regression`, so cross-section actions remain unambiguous.
+- Empty projects render `## Priority Actions` with `- none`.
+- Safety boundary: v0.13 priority actions are a rendering of existing queue evidence only. They do not create new artifacts, readiness gates, scores, or project-state mutations.
+- Verification evidence:
+  - `python -m unittest tests.test_learning_queue` passed with 20 tests OK.
+  - `python -m unittest tests.test_learning_queue tests.test_status_quality_summary tests.test_multi_session_regression` passed with 46 tests OK.
+  - `python -m unittest discover -s tests` passed with 379 tests OK and 1 skipped.
+  - `python -m compileall socrates` passed.
+  - `git diff --check` passed.
+  - `powershell -ExecutionPolicy Bypass -File scripts\check.ps1` passed with 379 tests OK and 1 skipped.
+  - `bash scripts/check.sh` passed with 379 tests OK and 1 skipped; WSL emitted localhost text and a `scripts/check.ps1` line-ending warning, but the script exit code was 0.
+
 ## 当前未完成事项
 
 ### 集成状态
@@ -259,7 +275,7 @@ Socrates 已从最初的 Python CLI skeleton 推进到可运行的本地数学�
 
 相对 `docs/final_development_goal.md` 的最终目标，当前系统已经具备核心 CLI 骨架和学习闭环，但还不是稳定长期使用产品。
 
-需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
+需要明确的是：当前实现仍是确定性 CLI 原型。v0.4 已提高题目验证和题库索引可靠性，v0.5 已增加教学 session score，v0.6 已增加外部 Markdown 转换交接，v0.7 已增加下一节课确定性交接计划，v0.8 已增加 review-only LLM session judge draft，v0.9 已增加 deterministic session closeout workflow，v0.10 已把 closeout 纳入 status 与 lifecycle readiness，v0.11 已增加 deterministic multi-session regression，v0.12 已增加 workflow action queue visibility，v0.13 已增加 priority action queue navigation，但这些能力不等同于数学正确性证明、trusted LLM judge、内置 OCR/PDF backend 或自动教学执行。全自动 LLM tutoring、UI/插件层和真实长期使用体验仍属于后续工作。
 
 粗略估计：
 

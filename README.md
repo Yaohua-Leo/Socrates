@@ -6,16 +6,17 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.12-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.13-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression, workflow
-action queue visibility, and an opt-in LLM provider layer for reviewable draft
-suggestions, including review-only session judge drafts. It is not yet a full
-AI tutor: autonomous LLM tutoring, OCR/PDF extraction backends, trusted LLM
-judges, and product UI layers remain future work.
+action queue visibility, priority action queue navigation, and an opt-in LLM
+provider layer for reviewable draft suggestions, including review-only session
+judge drafts. It is not yet a full AI tutor: autonomous LLM tutoring, OCR/PDF
+extraction backends, trusted LLM judges, and product UI layers remain future
+work.
 
 ## Quick Start
 
@@ -61,6 +62,7 @@ python -m socrates session score --project ".\projects\group_theory" --session-i
 python -m socrates session plan-next --project ".\projects\group_theory" --session-id session_0002
 python -m socrates session closeout --project ".\projects\group_theory" --session-id session_0001 --next-session-id session_0002
 python -m socrates lifecycle regression --project ".\projects\group_theory"
+python -m socrates queue --project ".\projects\group_theory" --section priority
 python -m socrates queue --project ".\projects\group_theory" --section workflow
 python -m socrates session judge-suggest --project ".\projects\group_theory" --session-id session_0001
 python -m socrates status --project ".\projects\group_theory"
@@ -111,6 +113,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.12 workflow action queue visibility for deterministic follow-up commands,
   currently including missing or invalid multi-session regression after a ready
   closeout.
+- v0.13 priority action queue navigation that folds workflow, quality,
+  verification, export, note, review, exercise, and grading actions into one
+  deterministic operator-facing next-action view.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -149,6 +154,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - Workflow action queue entries are operational prompts. They do not create a
   new readiness gate, mutate project state, or replace lifecycle/regression
   checks.
+- Priority queue entries are a virtual rendering of existing queue items. They
+  do not create new artifacts, readiness gates, scores, or project mutations.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

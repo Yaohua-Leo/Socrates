@@ -1653,6 +1653,29 @@ v0.13：长期报告与待办优先级打磨
 
 继续把 workflow、quality、review、exercise 和 report 相关待办转成更明确的优先级/阶段化输出，减少长期项目中 status 信息过多但下一步不清楚的问题。
 
+必须完成：
+
+priority queue section
+
+deterministic cross-section ordering
+
+stable section-prefixed item ids
+
+empty priority view behavior
+
+当前状态（2026-06-04）：
+
+- `queue --section priority` 已显示跨 section 的确定性优先级视图。
+- priority view 按 workflow、quality checks、tool verifications、Obsidian exports、notes、misconceptions、reviews、exercise drafts、exercises、attempts 的顺序汇总既有 queue items。
+- priority item id 使用 `<section>:<item>`，避免不同 section 的同名 artifact 在操作视图中混淆。
+- 这不是新的 readiness gate、score、artifact writer 或 state mutation；它只是已有 queue 信息的 operator-facing 排序视图。
+
+v0.14：阶段性学习报告与复盘体验打磨
+
+建议目标：
+
+在 priority queue 之后，继续打磨 weekly/monthly/project summary 的真实长期使用路径，让用户更容易从多 session artifact 中看到阶段性进展、薄弱点、复习建议和下一步学习重点。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

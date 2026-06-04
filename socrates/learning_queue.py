@@ -18,6 +18,7 @@ from .workflow_manifest import SESSION_CLOSEOUT_MANIFEST_PATH, read_session_clos
 
 QUEUE_SECTIONS = frozenset(
     {
+        "priority",
         "notes",
         "obsidian-exports",
         "misconceptions",
@@ -92,6 +93,7 @@ def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
 
 def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem]]]:
     return [
+        ("priority", "Priority Actions", _priority_actions(queue)),
         ("notes", "Notes To Review", queue.notes_to_review),
         ("obsidian-exports", "Obsidian Exports To Run", queue.obsidian_exports_to_run),
         ("misconceptions", "Misconception Notes To Draft", queue.misconception_notes_to_draft),
@@ -103,6 +105,32 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
     ]
+
+
+def _priority_actions(queue: LearningQueue) -> list[QueueItem]:
+    ordered_sections = (
+        ("workflow", queue.workflow_actions),
+        ("quality-checks", queue.quality_checks_to_fix),
+        ("tool-verifications", queue.tool_verifications_to_fix),
+        ("obsidian-exports", queue.obsidian_exports_to_run),
+        ("notes", queue.notes_to_review),
+        ("misconceptions", queue.misconception_notes_to_draft),
+        ("reviews", queue.scheduled_reviews),
+        ("exercise-drafts", queue.exercise_drafts_to_approve),
+        ("exercises", queue.exercises_to_attempt),
+        ("attempts", queue.attempts_to_grade),
+    )
+    actions: list[QueueItem] = []
+    for section_id, items in ordered_sections:
+        actions.extend(
+            QueueItem(
+                item_id=f"{section_id}:{item.item_id}",
+                path=item.path,
+                detail=item.detail,
+            )
+            for item in items
+        )
+    return actions
 
 
 def _notes_to_review(project_root: Path) -> list[QueueItem]:

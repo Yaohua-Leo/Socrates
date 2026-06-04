@@ -806,6 +806,64 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_prioritizes_workflow_actions_before_note_review(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = _create_ready_closeout_fixture(Path(temp_dir))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "priority",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Priority Actions", result.stdout)
+            workflow = (
+                "- workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>"
+            )
+            note = "- notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+            self.assertIn(workflow, result.stdout)
+            self.assertIn(note, result.stdout)
+            self.assertLess(result.stdout.index(workflow), result.stdout.index(note))
+
+    def test_queue_cli_priority_section_is_empty_when_no_actions_exist(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "priority",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Priority Actions", result.stdout)
+            self.assertIn("- none", result.stdout)
+
 def _create_ready_closeout_fixture(root: Path) -> Path:
     project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
     curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
