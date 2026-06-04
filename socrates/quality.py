@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 import hashlib
 import json
 from pathlib import Path
@@ -543,6 +544,8 @@ def exercise_quality_issues(path: Path) -> list[str]:
             issues.append("missing targeted review due")
         if _missing_frontmatter_value(text, "scheduled_for"):
             issues.append("missing targeted review scheduled_for")
+        elif _invalid_frontmatter_iso_date(text, "scheduled_for"):
+            issues.append("invalid targeted review scheduled_for")
     if "difficulty:" in text and not _has_valid_exercise_difficulty(text):
         issues.append("invalid difficulty")
     if not _has_statement_or_review_prompt(text):
@@ -1499,6 +1502,17 @@ def _invalid_frontmatter_choice(
 ) -> bool:
     value = _frontmatter_value(text, key)
     return value is not None and value.casefold() not in allowed_values
+
+
+def _invalid_frontmatter_iso_date(text: str, key: str) -> bool:
+    value = _frontmatter_value(text, key)
+    if value is None:
+        return False
+    try:
+        date.fromisoformat(value)
+    except ValueError:
+        return True
+    return False
 
 
 def _check_curated_reference(path: Path) -> dict[str, object]:
