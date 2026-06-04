@@ -82,6 +82,7 @@ def generate_project_summary(project_path: Path | str) -> Path:
             attempted_exercises=_count_markdown(context.root / "05_exercises" / "attempted"),
             graded_exercises=_count_markdown(context.root / "05_exercises" / "graded"),
             tool_verification_records=list_tool_verification_records(context.root),
+            artifact_quality=_read_artifact_quality_snapshots(context.root),
             tool_verification_quality=_read_tool_verification_quality_snapshot(context.root),
             benchmark_snapshot=_read_benchmark_snapshot(context.root),
             state=state,
@@ -202,6 +203,10 @@ def _report_input_paths(project_root: Path, report_id: str) -> tuple[Path, ...]:
             project_root / "06_kb" / "chunks" / "reference_index.json",
             project_root / "07_exports" / "obsidian",
             project_root / "08_evals" / "benchmark_manifest.json",
+            project_root / "08_evals" / "ingestion_quality_manifest.json",
+            project_root / "08_evals" / "note_quality_manifest.json",
+            project_root / "08_evals" / "exercise_quality_manifest.json",
+            project_root / "08_evals" / "tutoring_quality_manifest.json",
             project_root / "08_evals" / "tool_verification" / "manifest.json",
             project_root / "08_evals" / "tool_verification_eval.md",
             project_root / "08_evals" / "tool_verification_quality_manifest.json",
@@ -332,6 +337,7 @@ def _project_summary_text(
     attempted_exercises: int,
     graded_exercises: int,
     tool_verification_records: list[ToolVerificationSummary],
+    artifact_quality: list[dict[str, object]],
     tool_verification_quality: dict[str, object],
     benchmark_snapshot: dict[str, object],
     state: dict[str, object],
@@ -364,6 +370,10 @@ def _project_summary_text(
         "## Benchmark Snapshot",
         "",
         *_benchmark_snapshot_lines(benchmark_snapshot),
+        "",
+        "## Artifact Quality Snapshot",
+        "",
+        *_artifact_quality_snapshot_lines(artifact_quality),
         "",
         "## Tool Verification Snapshot",
         "",
@@ -510,6 +520,60 @@ def _read_benchmark_snapshot(project_root: Path) -> dict[str, object]:
     }
 
 
+def _read_artifact_quality_snapshots(project_root: Path) -> list[dict[str, object]]:
+    specs = (
+        ("Ingestion", "ingestion_quality_manifest.json"),
+        ("Note quality", "note_quality_manifest.json"),
+        ("Exercise quality", "exercise_quality_manifest.json"),
+        ("Tutoring quality", "tutoring_quality_manifest.json"),
+    )
+    return [
+        _read_artifact_quality_snapshot(project_root, label=label, manifest_name=manifest_name)
+        for label, manifest_name in specs
+    ]
+
+
+def _read_artifact_quality_snapshot(
+    project_root: Path,
+    *,
+    label: str,
+    manifest_name: str,
+) -> dict[str, object]:
+    relative_path = f"08_evals/{manifest_name}"
+    manifest_path = project_root / relative_path
+    if not manifest_path.exists():
+        return {"label": label, "status": "not_run", "path": relative_path}
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"label": label, "status": "invalid", "path": relative_path}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"label": label, "status": "invalid", "path": relative_path}
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return {"label": label, "status": "invalid", "path": relative_path}
+    if checked < 0 or passed < 0 or failed < 0 or passed + failed != checked:
+        return {"label": label, "status": "invalid", "path": relative_path}
+    if failed > 0:
+        status = "fail"
+    elif checked == 0:
+        status = "empty"
+    elif passed == checked:
+        status = "pass"
+    else:
+        status = "partial"
+    return {
+        "label": label,
+        "status": status,
+        "checked": checked,
+        "passed": passed,
+        "failed": failed,
+        "path": relative_path,
+    }
+
+
 def _read_tool_verification_quality_snapshot(project_root: Path) -> dict[str, object]:
     manifest_path = project_root / "08_evals" / "tool_verification_quality_manifest.json"
     if not manifest_path.exists():
@@ -631,6 +695,28 @@ def _benchmark_snapshot_lines(snapshot: dict[str, object]) -> list[str]:
         f"- Failed gates: {failed_text}",
         "- Manifest: 08_evals/benchmark_manifest.json",
     ]
+
+
+def _artifact_quality_snapshot_lines(snapshots: list[dict[str, object]]) -> list[str]:
+    if not snapshots:
+        return ["- none configured"]
+    return [_artifact_quality_snapshot_line(snapshot) for snapshot in snapshots]
+
+
+def _artifact_quality_snapshot_line(snapshot: dict[str, object]) -> str:
+    label = str(snapshot.get("label", "Artifact quality"))
+    path = str(snapshot.get("path", "")).strip()
+    suffix = f" - {path}" if path else ""
+    status = snapshot.get("status")
+    if status == "not_run":
+        return f"- {label}: not run{suffix}"
+    if status == "invalid":
+        return f"- {label}: invalid manifest{suffix}"
+    return (
+        f"- {label}: {status} "
+        f"({snapshot['passed']}/{snapshot['checked']} passed, "
+        f"{snapshot['failed']} failed){suffix}"
+    )
 
 
 def _tool_verification_snapshot_lines(

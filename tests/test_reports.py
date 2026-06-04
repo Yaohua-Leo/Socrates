@@ -651,6 +651,89 @@ class ReportTests(unittest.TestCase):
             self.assertIn("Learning reports: 1", status.stdout)
             self.assertIn("Tool verification check: not run", status.stdout)
 
+    def test_project_summary_includes_artifact_quality_snapshot_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            quality_manifests = {
+                "ingestion_quality_manifest.json": {
+                    "schema_version": 1,
+                    "checked": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "curated_references": [],
+                },
+                "note_quality_manifest.json": {
+                    "schema_version": 1,
+                    "checked": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "notes": [],
+                },
+                "exercise_quality_manifest.json": {
+                    "schema_version": 1,
+                    "checked": 5,
+                    "passed": 4,
+                    "failed": 1,
+                    "exercises": [],
+                },
+                "tutoring_quality_manifest.json": {
+                    "schema_version": 1,
+                    "checked": 1,
+                    "passed": 1,
+                    "failed": 0,
+                    "sessions": [],
+                },
+            }
+            for name, manifest in quality_manifests.items():
+                (project / "08_evals" / name).write_text(
+                    json.dumps(manifest, indent=2) + "\n",
+                    encoding="utf-8",
+                    newline="\n",
+                )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Artifact Quality Snapshot", report_text)
+            self.assertIn(
+                "- Ingestion: pass (1/1 passed, 0 failed) - "
+                "08_evals/ingestion_quality_manifest.json",
+                report_text,
+            )
+            self.assertIn(
+                "- Note quality: pass (1/1 passed, 0 failed) - "
+                "08_evals/note_quality_manifest.json",
+                report_text,
+            )
+            self.assertIn(
+                "- Exercise quality: fail (4/5 passed, 1 failed) - "
+                "08_evals/exercise_quality_manifest.json",
+                report_text,
+            )
+            self.assertIn(
+                "- Tutoring quality: pass (1/1 passed, 0 failed) - "
+                "08_evals/tutoring_quality_manifest.json",
+                report_text,
+            )
+
     def test_project_summary_marks_stale_reference_kb_snapshot(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
