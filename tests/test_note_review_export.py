@@ -854,6 +854,23 @@ class NoteReviewExportTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            example_notes = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "note",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--type",
+                    "example",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(all_notes.returncode, 0, all_notes.stderr)
             self.assertIn("# Atomic Notes", all_notes.stdout)
@@ -881,6 +898,11 @@ class NoteReviewExportTests(unittest.TestCase):
             self.assertIn(exported, exported_notes.stdout)
             self.assertNotIn("group_action", exported_notes.stdout)
             self.assertNotIn("quotient_group", exported_notes.stdout)
+
+            self.assertEqual(example_notes.returncode, 0, example_notes.stderr)
+            self.assertIn(pending, example_notes.stdout)
+            self.assertNotIn("quotient_group", example_notes.stdout)
+            self.assertNotIn("normal_subgroup", example_notes.stdout)
 
     def test_note_list_cli_falls_back_when_obsidian_manifest_is_corrupt(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -10,9 +10,10 @@ import re
 from .context import append_project_log, load_project, write_text
 from .obsidian import obsidian_exported_note_ids, read_obsidian_export_manifest
 from .project import slugify_topic
-from .quality import atomic_note_quality_issues, check_atomic_note_quality
+from .quality import NOTE_ALLOWED_TYPES, atomic_note_quality_issues, check_atomic_note_quality
 
 
+NOTE_TYPES = frozenset(NOTE_ALLOWED_TYPES)
 NOTE_TYPE_DIRS = {
     "definition": "definitions",
     "theorem": "theorems",
@@ -123,13 +124,19 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     return exported
 
 
-def list_atomic_notes(project_path: Path | str, *, status: str = "all") -> list[AtomicNoteSummary]:
-    """List atomic notes by their current lifecycle state."""
+def list_atomic_notes(
+    project_path: Path | str, *, status: str = "all", note_type: str = "all"
+) -> list[AtomicNoteSummary]:
+    """List atomic notes by their current lifecycle state and note type."""
 
     allowed_statuses = {"all", "pending", "reviewed", "exported"}
     if status not in allowed_statuses:
         allowed = ", ".join(sorted(allowed_statuses))
         raise ValueError(f"Unknown note status {status!r}; expected one of: {allowed}")
+    allowed_types = {"all", *NOTE_TYPES}
+    if note_type not in allowed_types:
+        allowed = ", ".join(sorted(allowed_types))
+        raise ValueError(f"Unknown note type {note_type!r}; expected one of: {allowed}")
 
     context = load_project(project_path)
     exported_ids = _exported_note_ids(context.root)
@@ -139,6 +146,8 @@ def list_atomic_notes(project_path: Path | str, *, status: str = "all") -> list[
     items = [*pending, *reviewed]
     if status != "all":
         items = [item for item in items if item.status == status]
+    if note_type != "all":
+        items = [item for item in items if item.note_type == note_type]
     return sorted(items, key=lambda item: (_note_status_order(item.status), item.note_id))
 
 

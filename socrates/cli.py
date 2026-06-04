@@ -37,6 +37,7 @@ from .kb import (
 from .learning_queue import collect_learning_queue, format_learning_queue
 from .notes import (
     AtomicNoteSummary,
+    NOTE_TYPES,
     export_reviewed_notes_to_obsidian,
     list_atomic_notes,
     review_atomic_note,
@@ -434,6 +435,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "pending", "reviewed", "exported"),
         default="all",
         help="Filter notes by lifecycle status; defaults to all.",
+    )
+    note_list_parser.add_argument(
+        "--type",
+        choices=("all", *sorted(NOTE_TYPES)),
+        default="all",
+        help="Filter notes by atomic note type; defaults to all.",
     )
     note_list_parser.set_defaults(func=_handle_note_list)
     note_review_parser = note_subparsers.add_parser("review", help="Review one draft note.")
@@ -1418,7 +1425,7 @@ def _warn_if_reference_kb_stale(project_path: Path | str) -> None:
 
 
 def _handle_note_list(args: argparse.Namespace) -> int:
-    notes = list_atomic_notes(args.project, status=args.status)
+    notes = list_atomic_notes(args.project, status=args.status, note_type=args.type)
     print(_atomic_notes_text(notes), end="")
     return 0
 
