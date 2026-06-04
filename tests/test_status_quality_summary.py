@@ -360,6 +360,48 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Current phase: references_curated", status.stdout)
             self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
 
+    def test_status_cli_rejects_reference_kb_chapter_index_missing_source_paths(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            curated = project / "01_references" / "curated" / "normality.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition: Normal Subgroup\n"
+                "A normal subgroup is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+            chapter_index_path = project / "06_kb" / "chapter_index.json"
+            chapter_index = json.loads(chapter_index_path.read_text(encoding="utf-8"))
+            section = chapter_index["chapters"][0]["sections"][0]
+            section["source_path"] = "01_references/curated/missing.curated.md"
+            section["objects"][0]["source_path"] = "01_references/curated/missing.curated.md"
+            chapter_index_path.write_text(
+                json.dumps(chapter_index, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertIn("Curated references: 1", status.stdout)
+            self.assertIn("KB objects: 0", status.stdout)
+            self.assertIn("Reference KB status: invalid", status.stdout)
+            self.assertIn("Current phase: references_curated", status.stdout)
+            self.assertNotIn("Current phase: reference_kb_ready", status.stdout)
+
     def test_status_phase_prefers_obsidian_export_pending_over_exported(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

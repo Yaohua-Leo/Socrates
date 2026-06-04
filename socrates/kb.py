@@ -408,6 +408,7 @@ def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
             ):
                 return ("invalid", 0)
         if filename == "chapter_index.json" and not _valid_chapter_index_artifact(
+            project_root,
             artifact,
         ):
             return ("invalid", 0)
@@ -415,7 +416,7 @@ def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
     return ("current", min(mtimes) if mtimes else 0)
 
 
-def _valid_chapter_index_artifact(artifact: dict[str, object]) -> bool:
+def _valid_chapter_index_artifact(project_root: Path, artifact: dict[str, object]) -> bool:
     chapters = artifact.get("chapters")
     if not isinstance(chapters, list):
         return False
@@ -432,6 +433,8 @@ def _valid_chapter_index_artifact(artifact: dict[str, object]) -> bool:
         for section in sections:
             if not _has_nonempty_string_fields(section, ("title", "source_path")):
                 return False
+            if not _valid_project_file(project_root, str(section["source_path"])):
+                return False
             objects = section.get("objects")
             if not isinstance(objects, list) or not all(
                 isinstance(item, dict) for item in objects
@@ -443,11 +446,22 @@ def _valid_chapter_index_artifact(artifact: dict[str, object]) -> bool:
                     ("id", "type", "title", "source_path"),
                 ):
                     return False
+                if not _valid_project_file(project_root, str(item["source_path"])):
+                    return False
     return True
 
 
 def _has_nonempty_string_fields(item: dict[str, object], fields: tuple[str, ...]) -> bool:
     return all(isinstance(item.get(field), str) and item[field].strip() for field in fields)
+
+
+def _valid_project_file(project_root: Path, relative_path: str) -> bool:
+    path = project_root / relative_path
+    try:
+        path.resolve().relative_to(project_root.resolve())
+    except ValueError:
+        return False
+    return path.is_file()
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
