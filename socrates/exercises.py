@@ -43,6 +43,10 @@ def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
     if not exercise_path.exists():
         raise FileNotFoundError(f"Generated exercise does not exist: {exercise_path}")
 
+    exercise_text = exercise_path.read_text(encoding="utf-8")
+    if _is_approved_exercise(exercise_text):
+        raise ValueError(f"Exercise {exercise_id} is already approved: {exercise_path}")
+
     issues = exercise_quality_issues(exercise_path)
     if issues:
         result = check_generated_exercise_quality(context.root)
@@ -52,7 +56,7 @@ def approve_exercise_draft(project_path: Path | str, exercise_id: str) -> Path:
         )
 
     approved_text = _set_frontmatter_values(
-        exercise_path.read_text(encoding="utf-8"),
+        exercise_text,
         {
             "status": '"approved"',
             "review_status": '"approved"',

@@ -65,6 +65,54 @@ class ExerciseQualityTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Approved exercises: 1", status.stdout)
 
+    def test_exercise_approve_cli_rejects_duplicate_approval_without_rewriting_user_edit(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+            from socrates.exercises import approve_exercise_draft
+
+            approve_exercise_draft(project, "normal_subgroup_01")
+            approved = project / "05_exercises" / "generated" / "normal_subgroup_01.md"
+            approved.write_text(
+                approved.read_text(encoding="utf-8").rstrip()
+                + "\n\nReviewer edit: preserve this exercise wording.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "exercise",
+                    "approve",
+                    "--project",
+                    str(project),
+                    "--exercise",
+                    "normal_subgroup_01",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: Exercise normal_subgroup_01 is already approved", result.stderr)
+            approved_text = approved.read_text(encoding="utf-8")
+            self.assertIn("Reviewer edit: preserve this exercise wording.", approved_text)
+            self.assertIn('status: "approved"', approved_text)
+
     def test_exercise_attempt_cli_records_answer_for_approved_exercise(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
