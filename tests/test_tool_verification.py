@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -571,6 +572,118 @@ class ToolVerificationTests(unittest.TestCase):
 
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Tool verification records: 1", status.stdout)
+
+    def test_lean_skeleton_cli_marks_stale_reference_kb_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_kernel_reference(root / "p")
+            curated = project / "01_references" / "curated" / "kernel.curated.md"
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_time_ns = index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: New Kernel Context\n"
+                + "The existing Reference KB index is stale for this curated text.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-skeleton",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("Status: stale_reference_kb", result.stdout)
+            verification_dir = project / "08_evals" / "tool_verification"
+            report = verification_dir / "kernel_normality_statement_report.md"
+            manifest_path = verification_dir / "manifest.json"
+            report_text = report.read_text(encoding="utf-8")
+            self.assertIn("- Status: stale_reference_kb", report_text)
+            self.assertIn("- Reference KB status: stale", report_text)
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            record = manifest["records"][0]
+            self.assertEqual(record["status"], "stale_reference_kb")
+            self.assertEqual(record["reference_kb_status"], "stale")
+
+    def test_tool_check_fails_stale_reference_kb_skeleton_records(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = _project_with_kernel_reference(root / "p")
+            curated = project / "01_references" / "curated" / "kernel.curated.md"
+            index_path = project / "06_kb" / "chunks" / "reference_index.json"
+            index_time_ns = index_path.stat().st_mtime_ns
+            curated.write_text(
+                curated.read_text(encoding="utf-8")
+                + "\n### Remark: New Kernel Context\n"
+                + "The existing Reference KB index is stale for this curated text.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
+            subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "lean-skeleton",
+                    "--project",
+                    str(project),
+                    "--object-id",
+                    "kernel_normality",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=True,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "check",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(
+                "Checked 1 tool-verification record: 0 passed, 1 failed",
+                result.stdout,
+            )
+            report_text = (project / "08_evals" / "tool_verification_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("reference KB status is stale", report_text)
 
     def test_lean_check_cli_persists_frontend_result_or_unavailable_record(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

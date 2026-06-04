@@ -820,6 +820,7 @@ def build_parser() -> argparse.ArgumentParser:
             "mapped",
             "no_counterexample_found",
             "partial",
+            "stale_reference_kb",
             "unchecked_skeleton",
             "unavailable",
             "verified",

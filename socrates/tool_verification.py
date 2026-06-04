@@ -13,6 +13,7 @@ import shutil
 import subprocess
 
 from .context import append_project_log, load_project, write_json, write_text
+from .kb import reference_kb_status
 from .project import slugify_topic
 
 
@@ -145,6 +146,7 @@ def generate_lean_statement_skeleton(
     """Write an unchecked Lean statement skeleton for one reference-KB object."""
 
     context = load_project(project_path)
+    kb_status = reference_kb_status(context.root)
     item = _find_reference_object(context.root, object_id)
     lean_name = _lean_identifier(f"{object_id}_statement")
     lean_namespace = _lean_namespace(namespace)
@@ -152,7 +154,7 @@ def generate_lean_statement_skeleton(
     skeleton_path = verification_dir / f"{lean_name}.lean"
     report_path = verification_dir / f"{lean_name}_report.md"
     manifest_path = verification_dir / "manifest.json"
-    status = "unchecked_skeleton"
+    status = _lean_skeleton_status(kb_status.status)
 
     write_text(
         skeleton_path,
@@ -160,6 +162,7 @@ def generate_lean_statement_skeleton(
             item,
             lean_name=lean_name,
             namespace=lean_namespace,
+            reference_kb_status=kb_status.status,
             status=status,
         ),
     )
@@ -168,6 +171,7 @@ def generate_lean_statement_skeleton(
         _tool_verification_report(
             item,
             skeleton_path=skeleton_path.relative_to(context.root).as_posix(),
+            reference_kb_status=kb_status.status,
             status=status,
         ),
     )
@@ -180,6 +184,7 @@ def generate_lean_statement_skeleton(
                 item,
                 skeleton_path=skeleton_path,
                 report_path=report_path,
+                reference_kb_status=kb_status.status,
                 status=status,
             ),
         ),
@@ -319,6 +324,7 @@ def list_tool_verification_records(
         "mapped",
         "no_counterexample_found",
         "partial",
+        "stale_reference_kb",
         "unchecked_skeleton",
         "unavailable",
         "verified",
@@ -1028,6 +1034,7 @@ def _lean_skeleton_text(
     *,
     lean_name: str,
     namespace: str,
+    reference_kb_status: str,
     status: str,
 ) -> str:
     source = item.get("source", {})
@@ -1044,6 +1051,7 @@ def _lean_skeleton_text(
         f"Title: {title}",
         f"Type: {object_type}",
         f"Status: {status}",
+        f"Reference KB status: {reference_kb_status}",
         f"Source: {source_label or 'unknown'}",
         "",
         "This scaffold is not a proof and has not been checked by Lean.",
@@ -1068,6 +1076,7 @@ def _tool_verification_report(
     item: dict[str, object],
     *,
     skeleton_path: str,
+    reference_kb_status: str,
     status: str,
 ) -> str:
     source = item.get("source", {})
@@ -1082,6 +1091,7 @@ def _tool_verification_report(
         f"- Title: {item.get('title', 'Untitled')}",
         f"- Type: {item.get('type', 'object')}",
         f"- Status: {status}",
+        f"- Reference KB status: {reference_kb_status}",
         f"- Lean skeleton: {skeleton_path}",
         f"- Source: {source_label or 'unknown'}",
         "",
@@ -2015,6 +2025,10 @@ def _checked_tool_record(
     report_issue = _artifact_issue(project_root, record.get("report_path"), label="report")
     if report_issue:
         issues.append(report_issue)
+    reference_status = record.get("reference_kb_status")
+    if isinstance(reference_status, str) and reference_status.strip():
+        if reference_status != "current":
+            issues.append(f"reference KB status is {reference_status}")
     return {
         "object_id": str(record.get("object_id") or f"record_{index}"),
         "kind": str(record.get("kind") or ""),
@@ -2174,6 +2188,7 @@ def _manifest_record(
     *,
     skeleton_path: Path,
     report_path: Path,
+    reference_kb_status: str,
     status: str,
 ) -> dict[str, object]:
     source = item.get("source", {})
@@ -2183,10 +2198,17 @@ def _manifest_record(
         "object_type": str(item.get("type", "")),
         "title": str(item.get("title", "")),
         "status": status,
+        "reference_kb_status": reference_kb_status,
         "skeleton_path": skeleton_path.relative_to(project_root).as_posix(),
         "report_path": report_path.relative_to(project_root).as_posix(),
         "source": source if isinstance(source, dict) else {},
     }
+
+
+def _lean_skeleton_status(reference_kb_status: str) -> str:
+    if reference_kb_status == "stale":
+        return "stale_reference_kb"
+    return "unchecked_skeleton"
 
 
 def _lean_identifier(value: str) -> str:
