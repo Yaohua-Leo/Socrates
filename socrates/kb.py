@@ -404,9 +404,11 @@ def _valid_reference_index_provenance(
         if not isinstance(source, dict):
             return False
         source_path = source.get("path")
-        if not isinstance(source_path, str) or not _valid_curated_source_file(
+        source_line = source.get("line")
+        if not isinstance(source_path, str) or not _valid_curated_source_location(
             project_root,
             source_path,
+            source_line,
         ):
             return False
     for chunk in chunks:
@@ -420,14 +422,18 @@ def _valid_reference_index_provenance(
             return False
         source_path = source.get("path")
         metadata_source_path = metadata.get("source_path")
-        if not isinstance(source_path, str) or not _valid_curated_source_file(
+        source_line = source.get("line")
+        metadata_source_line = metadata.get("source_line")
+        if not isinstance(source_path, str) or not _valid_curated_source_location(
             project_root,
             source_path,
+            source_line,
         ):
             return False
-        if not isinstance(metadata_source_path, str) or not _valid_curated_source_file(
+        if not isinstance(metadata_source_path, str) or not _valid_curated_source_location(
             project_root,
             metadata_source_path,
+            metadata_source_line,
         ):
             return False
     return True
@@ -509,6 +515,23 @@ def _valid_curated_source_file(project_root: Path, relative_path: str) -> bool:
     except ValueError:
         return False
     return path.is_file()
+
+
+def _valid_curated_source_location(
+    project_root: Path,
+    relative_path: str,
+    line: object,
+) -> bool:
+    if not _valid_curated_source_file(project_root, relative_path):
+        return False
+    if not isinstance(line, int) or isinstance(line, bool) or line < 1:
+        return False
+    path = project_root / relative_path
+    try:
+        line_count = len(path.read_text(encoding="utf-8").splitlines())
+    except OSError:
+        return False
+    return line <= line_count
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
