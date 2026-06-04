@@ -749,6 +749,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Update the short-term plan from the review schedule.",
     )
     review_adjust_plan_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_adjust_plan_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
     review_adjust_plan_parser.set_defaults(func=_handle_review_adjust_plan)
     review_due_parser = review_subparsers.add_parser(
         "due",
@@ -2173,7 +2178,17 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
 
 
 def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
-    short_term_plan = adjust_short_term_plan_from_review_schedule(args.project)
+    context = load_project(args.project)
+    short_term_plan = adjust_short_term_plan_from_review_schedule(context.root)
+    if args.json:
+        print(
+            json.dumps(
+                _review_adjust_plan_payload(context, short_term_plan),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(f"Adjusted short-term plan: {short_term_plan}")
     return 0
 
@@ -3823,6 +3838,21 @@ def _review_schedule_payload(
         "scheduled_count": len(rows),
         "schedule_path": str(schedule_path),
         "scheduled_reviews": rows,
+    }
+
+
+def _review_adjust_plan_payload(
+    context: ProjectContext,
+    short_term_plan_path: Path,
+) -> dict[str, object]:
+    rows = _review_schedule_records(context.learning_state)
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_adjust_plan_writer",
+        "project": str(context.root),
+        "short_term_plan_path": str(short_term_plan_path),
+        "adjustment_count": len(rows),
+        "review_adjustments": rows,
     }
 
 

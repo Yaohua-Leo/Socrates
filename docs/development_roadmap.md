@@ -2499,6 +2499,28 @@ preview exercise rows
 - dry-run mode 不会在 `05_exercises/generated/` 下创建 exercise draft files。
 - 这不是 writer、read-only ledger、scheduler、planner、tutor、report refresh、LLM call、exercise validation、approval、grading 或 learning-state mutation；它只是现有 targeted review exercise writer selection 的 no-write preview output mode。
 
+v0.48：review adjust-plan JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 short-term review-adjustment writer 的结果，而不用解析 `review adjust-plan` prose。
+
+必须完成：
+
+`review adjust-plan --json`
+
+short-term plan path
+
+review adjustment rows
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review adjust-plan --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_review_adjust_plan_writer`、`project`、`short_term_plan_path`、`adjustment_count` 和 `review_adjustments`。
+- JSON mode 仍会执行 short-term-plan writer，按现有规则重写 `02_learning_plan/short_term_plan.md`。
+- 腐坏 `learning_state.json` 在 JSON mode 下仍 clean fail，且不会重写 short-term plan。
+- 这不是 dry-run、scheduler、exercise generator、tutor、report refresh、LLM call、plan approval 或 learning-state mutation；它只是现有 short-term-plan adjustment writer 的 structured result output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
