@@ -320,6 +320,100 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
 
+    def test_lifecycle_audit_rejects_failed_benchmark_gates(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            evals = project / "08_evals"
+            artifact_names = (
+                "ingestion_eval.md",
+                "note_quality_eval.md",
+                "exercise_quality_eval.md",
+                "tutoring_eval.md",
+                "ingestion_quality_manifest.json",
+                "note_quality_manifest.json",
+                "exercise_quality_manifest.json",
+                "tutoring_quality_manifest.json",
+            )
+            for name in artifact_names:
+                (evals / name).write_text("{}\n", encoding="utf-8", newline="\n")
+            (evals / "benchmark_report.md").write_text(
+                "# Benchmark Report\n\n## Summary\n\n- Benchmark score: 75/100\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "benchmark_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "score": 75,
+                        "passed_gates": 3,
+                        "total_gates": 4,
+                        "gates": [
+                            {
+                                "name": "Ingestion",
+                                "passed": True,
+                                "checked": 1,
+                                "failed": 0,
+                                "report_path": "08_evals/ingestion_eval.md",
+                                "manifest_path": "08_evals/ingestion_quality_manifest.json",
+                            },
+                            {
+                                "name": "Note quality",
+                                "passed": True,
+                                "checked": 1,
+                                "failed": 0,
+                                "report_path": "08_evals/note_quality_eval.md",
+                                "manifest_path": "08_evals/note_quality_manifest.json",
+                            },
+                            {
+                                "name": "Exercise quality",
+                                "passed": True,
+                                "checked": 5,
+                                "failed": 0,
+                                "report_path": "08_evals/exercise_quality_eval.md",
+                                "manifest_path": "08_evals/exercise_quality_manifest.json",
+                            },
+                            {
+                                "name": "Tutoring quality",
+                                "passed": False,
+                                "checked": 1,
+                                "failed": 1,
+                                "report_path": "08_evals/tutoring_eval.md",
+                                "manifest_path": "08_evals/tutoring_quality_manifest.json",
+                                "session_id": "session_0001",
+                                "status": "fail",
+                            },
+                        ],
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- Benchmark report: fail", report_text)
+            self.assertIn("- Benchmark manifest: fail", report_text)
+
     def test_lifecycle_audit_rejects_stale_reference_kb(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -518,6 +612,12 @@ class LifecycleAuditTests(unittest.TestCase):
             project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
             curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
             curated.write_text(
+                "# Group Theory\n"
+                "## Source Metadata\n"
+                "- source_id: df-1\n"
+                "- title: Normality Notes\n"
+                "- role: lecture_notes\n"
+                "## Normal Subgroups\n"
                 "### Definition: Normal Subgroup\n"
                 "A normal subgroup is stable under conjugation.\n"
                 "Depends: subgroup, conjugation\n",

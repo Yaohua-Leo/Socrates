@@ -2125,7 +2125,7 @@ def _has_benchmark_report(project_root: Path) -> bool:
     report_path = project_root / "08_evals" / "benchmark_report.md"
     if not report_path.exists():
         return False
-    if "Benchmark score:" not in report_path.read_text(encoding="utf-8"):
+    if "- Benchmark score: 100/100" not in report_path.read_text(encoding="utf-8"):
         return False
     return _latest_benchmark_input_mtime(project_root) <= report_path.stat().st_mtime_ns
 
@@ -2190,6 +2190,8 @@ def _valid_benchmark_manifest(project_root: Path, manifest: object) -> bool:
     if not isinstance(passed_gates, int) or passed_gates < 0:
         return False
     if not isinstance(score, int) or score < 0:
+        return False
+    if passed_gates != total_gates or score != 100:
         return False
     if not isinstance(gates, list) or len(gates) != total_gates:
         return False
