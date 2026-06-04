@@ -68,6 +68,7 @@ from .planning import (
 )
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
+from .project_brief_refresh import format_project_brief_refresh
 from .project_index import (
     build_cross_project_reference_graph,
     find_project_references,
@@ -494,6 +495,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects_graph_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
     projects_graph_parser.set_defaults(func=_handle_projects_graph)
+    projects_refresh_briefs_parser = projects_subparsers.add_parser(
+        "refresh-briefs",
+        help="Generate study briefs for projects that need brief refresh.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--root",
+        required=True,
+        help="SocratesProjects root directory.",
+    )
+    projects_refresh_briefs_parser.set_defaults(func=_handle_projects_refresh_briefs)
     projects_resume_parser = projects_subparsers.add_parser(
         "resume",
         help="Show read-only resume state across projects.",
@@ -1701,6 +1712,11 @@ def _handle_projects_graph(args: argparse.Namespace) -> int:
     edge_count = len(edges) if isinstance(edges, list) else 0
     noun = "edge" if edge_count == 1 else "edges"
     print(f"Wrote cross-project graph with {edge_count} {noun}: {graph_path}")
+    return 0
+
+
+def _handle_projects_refresh_briefs(args: argparse.Namespace) -> int:
+    print(format_project_brief_refresh(args.root), end="")
     return 0
 
 

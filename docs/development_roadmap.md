@@ -2180,6 +2180,30 @@ empty output when no commands exist
 - `--commands` 与 `--json` 已互斥，避免 output contracts 混用。
 - 这不是 command execution、batch automation、generator、score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读命令输出模式。
 
+v0.35：multi-project brief refresh
+
+建议目标：
+
+在用户确认需要刷新一批 study briefs 后，提供一个明确的 collection writer，只对当前 `resume_state == refresh_brief` 的子项目生成 brief，避免手工逐条复制命令。
+
+必须完成：
+
+`projects refresh-briefs --root <root>`
+
+select projects by existing resume state
+
+skip ready projects
+
+write only child study brief artifacts
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects refresh-briefs --root <root>` 已写入 refresh-needed child projects 的 `07_exports/briefs/study_brief.md` 与 manifest。
+- Ready child projects 已被 skip，不会重复追加 `Generated study brief.` project-log entry。
+- 输出包含 refreshed/skipped counts，以及每个 bucket 的 deterministic rows。
+- 命令不会写入 root `socrates_projects.json`。
+- 这不是 scanner、report refresh、repair runner、LLM call、score、tutor、approval、readiness gate 或 learning-state truth mutation；它只是 explicit collection writer for study brief artifacts。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
