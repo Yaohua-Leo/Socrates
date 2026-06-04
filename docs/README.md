@@ -7,10 +7,11 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.45-alpha dry-run-previewable structured
-  review-schedule repair writer JSON over v0.44 structured review-schedule
-  repair writer JSON, v0.43 structured review-schedule writer JSON, v0.42
-  structured due-review JSON, v0.41 structured
+- Current implementation baseline: v0.46-alpha structured review-exercise
+  writer JSON over v0.45 dry-run-previewable structured review-schedule repair
+  writer JSON, v0.44 structured review-schedule repair writer JSON, v0.43
+  structured review-schedule writer JSON, v0.42 structured due-review JSON,
+  v0.41 structured
   learning-mastery JSON, v0.40 structured misconception-ledger JSON, v0.39
   targeted limit-controlled dry-run-previewable structured batch-refreshable
   commands-output command-summarized filterable readiness-counted multi-project
@@ -145,3 +146,5 @@ from the source planning conversation.
   output.
 - `superpowers/plans/2026-06-04-v45-review-repair-schedule-dry-run.md`:
   executable v0.45 plan for no-write review-schedule repair previews.
+- `superpowers/plans/2026-06-04-v46-review-exercises-json.md`: executable
+  v0.46 plan for structured targeted review exercise writer output.

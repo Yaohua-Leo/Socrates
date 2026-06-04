@@ -2452,6 +2452,30 @@ post-repair preview rows
 - dry-run mode 不会修改 `00_meta/learning_state.json`，也不会写入 `02_learning_plan/review_schedule.md`。
 - 这不是 scheduler、tutor、planner、exercise generator、report refresh、LLM call 或 learning-state mutation；它只是现有 repair computation 的 no-write preview output mode。
 
+v0.46：targeted review exercises JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 targeted review exercise writer 的结果，而不用解析 `review exercises` prose。
+
+必须完成：
+
+`review exercises --json`
+
+due-by filter metadata
+
+priority filter metadata
+
+generated exercise rows
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review exercises --project <project> --due-by 2026-06-07 --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_review_exercise_writer`、`project`、`due_by`、`priority_filter`、`generated_count` 和 `generated_exercises`。
+- JSON mode 仍会执行 targeted review exercise writer，按现有规则写入缺失的 generated exercise draft files。
+- `--priority high --json` 保留 prose mode 的 priority filtering。
+- 这不是 dry-run、read-only ledger、scheduler、planner、tutor、report refresh、LLM call、exercise validation、approval、grading 或 learning-state mutation；它只是现有 targeted review exercise writer 的 structured result output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

@@ -1883,6 +1883,130 @@ class StateEvalTests(unittest.TestCase):
                 ).exists()
             )
 
+    def test_review_exercises_json_reports_generated_due_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_exercise_writer",
+                    "project": str(project),
+                    "due_by": "2026-06-04",
+                    "priority_filter": "all",
+                    "generated_count": 1,
+                    "generated_exercises": [
+                        {
+                            "id": "review_normal_subgroup_01",
+                            "type": "targeted_review_exercise",
+                            "difficulty": 3,
+                            "path": "05_exercises/generated/review_normal_subgroup_01.md",
+                        }
+                    ],
+                },
+            )
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
+    def test_review_exercises_json_preserves_priority_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_review_exercise_writer")
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["due_by"], "2026-06-07")
+            self.assertEqual(payload["priority_filter"], "high")
+            self.assertEqual(payload["generated_count"], 1)
+            self.assertEqual(
+                payload["generated_exercises"],
+                [
+                    {
+                        "id": "review_normal_subgroup_01",
+                        "type": "targeted_review_exercise",
+                        "difficulty": 3,
+                        "path": "05_exercises/generated/review_normal_subgroup_01.md",
+                    }
+                ],
+            )
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
     def test_review_exercises_cli_rejects_invalid_due_by_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

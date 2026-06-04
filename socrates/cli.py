@@ -17,7 +17,7 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
 )
 from .context import ProjectContext, load_project
-from .contracts import REVIEW_PRIORITY_FILTERS
+from .contracts import ExerciseDraft, REVIEW_PRIORITY_FILTERS
 from .dashboard import format_study_dashboard
 from .exercise_bank import build_exercise_bank, read_exercise_bank
 from .exercises import (
@@ -731,6 +731,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=REVIEW_PRIORITY_FILTERS,
         default="all",
         help="Only generate exercises for review items with this priority; defaults to all.",
+    )
+    review_exercises_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
     )
     review_exercises_parser.set_defaults(func=_handle_review_exercises)
     review_adjust_plan_parser = review_subparsers.add_parser(
@@ -2105,9 +2110,10 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    context = load_project(args.project)
     try:
         exercises = generate_targeted_review_exercise_drafts(
-            args.project,
+            context.root,
             due_by=due_by,
             priority=args.priority,
         )
@@ -2117,6 +2123,20 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    if args.json:
+        print(
+            json.dumps(
+                _review_exercises_payload(
+                    context,
+                    due_by=due_by,
+                    priority_filter=args.priority,
+                    exercises=exercises,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "exercise" if len(exercises) == 1 else "exercises"
     print(f"Generated {len(exercises)} targeted review {noun}")
     return 0
@@ -3686,6 +3706,34 @@ def _next_scheduled_review(learning_state: Path) -> dict[str, str] | None:
     if not rows:
         return None
     return sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"]))[0]
+
+
+def _review_exercises_payload(
+    context: ProjectContext,
+    *,
+    due_by: date | None,
+    priority_filter: str,
+    exercises: list[ExerciseDraft],
+) -> dict[str, object]:
+    rows = [_exercise_draft_record(exercise) for exercise in exercises]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_exercise_writer",
+        "project": str(context.root),
+        "due_by": due_by.isoformat() if due_by is not None else None,
+        "priority_filter": priority_filter,
+        "generated_count": len(rows),
+        "generated_exercises": rows,
+    }
+
+
+def _exercise_draft_record(exercise: ExerciseDraft) -> dict[str, object]:
+    return {
+        "id": exercise.id,
+        "type": exercise.type,
+        "difficulty": exercise.difficulty,
+        "path": exercise.path,
+    }
 
 
 def _review_schedule_payload(
