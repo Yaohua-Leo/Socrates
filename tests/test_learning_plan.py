@@ -354,6 +354,46 @@ class LearningPlanTests(unittest.TestCase):
                 short_term_plan,
             )
 
+    def test_review_adjust_plan_rejects_corrupt_learning_state_without_rewriting_plan(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            create_learning_plan(project)
+            short_term_path = project / "02_learning_plan" / "short_term_plan.md"
+            original_short_term_plan = short_term_path.read_text(encoding="utf-8")
+            (project / "00_meta" / "learning_state.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "adjust-plan",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(result.stdout, "")
+            self.assertIn("error: invalid learning_state.json", result.stderr)
+            self.assertIn("repair the JSON before adjusting review plans", result.stderr)
+            self.assertNotIn("Expecting property name", result.stderr)
+            self.assertEqual(
+                short_term_path.read_text(encoding="utf-8"),
+                original_short_term_plan,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -8,6 +8,7 @@ from pathlib import Path
 from socrates.context import load_project, write_text
 from socrates.contracts import SessionPlan, yaml_scalar
 from socrates.kb import reference_kb_status, read_reference_chapter_index
+from socrates.state import ensure_learning_state_readable
 
 
 def create_learning_plan(project_path: Path | str) -> list[Path]:
@@ -69,6 +70,10 @@ def adjust_short_term_plan_from_review_schedule(project_path: Path | str) -> Pat
     else:
         current = "# Short Term Plan\n"
 
+    ensure_learning_state_readable(
+        context.learning_state,
+        action="adjusting review plans",
+    )
     state = json.loads(context.learning_state.read_text(encoding="utf-8"))
     schedule = state.get("review_schedule", []) if isinstance(state, dict) else []
     if not isinstance(schedule, list):
