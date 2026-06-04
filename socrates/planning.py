@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 
 from socrates.context import load_project, write_text
-from socrates.contracts import SessionPlan
+from socrates.contracts import SessionPlan, yaml_scalar
 from socrates.kb import reference_kb_status, read_reference_chapter_index
 
 
@@ -48,6 +48,14 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
     }
     for path, content in plans.items():
         write_text(path, content)
+    write_text(
+        context.learning_plan_dir / "chapter_sequence.yaml",
+        _chapter_sequence_yaml(chapter_outline),
+    )
+    write_text(
+        context.learning_plan_dir / "checkpoints.yaml",
+        _checkpoints_yaml(chapter_outline),
+    )
     return list(plans)
 
 
@@ -213,6 +221,82 @@ def _reference_reading_path_section(chapter_outline: list[dict[str, object]]) ->
                 if isinstance(item, dict):
                     lines.append(f"    - {_reference_object_label(item)}")
     return "\n".join(lines) + "\n"
+
+
+def _chapter_sequence_yaml(chapter_outline: list[dict[str, object]]) -> str:
+    if not chapter_outline:
+        return "chapters: []\n"
+    lines = ["chapters:"]
+    for chapter in chapter_outline:
+        lines.append(f"  - title: {yaml_scalar(chapter.get('title') or 'Unassigned')}")
+        sections = chapter.get("sections", [])
+        if not isinstance(sections, list) or not sections:
+            lines.append("    sections: []")
+            continue
+        lines.append("    sections:")
+        for section in sections:
+            if not isinstance(section, dict):
+                continue
+            lines.append(f"      - title: {yaml_scalar(section.get('title') or 'Unassigned')}")
+            lines.append(
+                f"        source_path: {yaml_scalar(section.get('source_path') or 'unknown')}"
+            )
+            objects = section.get("objects", [])
+            if not isinstance(objects, list) or not objects:
+                lines.append("        objects: []")
+                continue
+            lines.append("        objects:")
+            for item in objects:
+                if isinstance(item, dict):
+                    lines.extend(_chapter_sequence_object_yaml(item))
+    return "\n".join(lines) + "\n"
+
+
+def _chapter_sequence_object_yaml(item: dict[str, object]) -> list[str]:
+    lines = [
+        f"          - id: {item.get('id') or 'unknown'}",
+        f"            type: {item.get('type') or 'object'}",
+        f"            title: {yaml_scalar(item.get('title') or 'Untitled')}",
+    ]
+    number = str(item.get("number") or "").strip()
+    if number:
+        lines.append(f"            number: {yaml_scalar(number)}")
+    return lines
+
+
+def _checkpoints_yaml(chapter_outline: list[dict[str, object]]) -> str:
+    if not chapter_outline:
+        return "checkpoints: []\n"
+    lines = ["checkpoints:"]
+    checkpoint_number = 1
+    for chapter in chapter_outline:
+        object_count = _chapter_object_count(chapter)
+        title = str(chapter.get("title") or "Unassigned")
+        lines.extend(
+            [
+                f"  - id: checkpoint_{checkpoint_number:03d}",
+                f"    scope: {yaml_scalar(title)}",
+                f"    objective: {yaml_scalar(f'Review indexed objects from {title}.')}",
+                f"    object_count: {object_count}",
+                "    status: pending",
+            ]
+        )
+        checkpoint_number += 1
+    return "\n".join(lines) + "\n"
+
+
+def _chapter_object_count(chapter: dict[str, object]) -> int:
+    sections = chapter.get("sections", [])
+    if not isinstance(sections, list):
+        return 0
+    total = 0
+    for section in sections:
+        if not isinstance(section, dict):
+            continue
+        objects = section.get("objects", [])
+        if isinstance(objects, list):
+            total += sum(1 for item in objects if isinstance(item, dict))
+    return total
 
 
 def _long_term_plan(

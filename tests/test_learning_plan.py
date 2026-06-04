@@ -153,6 +153,48 @@ class LearningPlanTests(unittest.TestCase):
             self.assertIn("  - Section 3.1 Normal Subgroups", long_term_plan)
             self.assertIn("    - Definition 3.1: Normal Subgroup", long_term_plan)
 
+    def test_create_learning_plan_updates_chapter_sequence_and_checkpoints_from_kb(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(
+                    topic="Normal Subgroup",
+                    path=Path(temp_dir) / "normal_subgroup",
+                    goal="Follow the textbook route into quotient groups.",
+                )
+            )
+            curated = project / "01_references" / "curated" / "normal_subgroups.curated.md"
+            curated.write_text(
+                "# Chapter 3: Quotient Groups\n"
+                "## Section 3.1 Normal Subgroups\n"
+                "### Definition 3.1: Normal Subgroup\n"
+                "A subgroup N of G is normal when it is stable under conjugation.\n"
+                "Depends: subgroup, conjugation\n"
+                "### Theorem 3.2: Kernel Normality\n"
+                "The kernel of a group homomorphism is normal.\n"
+                "Depends: kernel, homomorphism\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            build_reference_kb(project)
+
+            create_learning_plan(project)
+
+            chapter_sequence = (
+                project / "02_learning_plan" / "chapter_sequence.yaml"
+            ).read_text(encoding="utf-8")
+            checkpoints = (
+                project / "02_learning_plan" / "checkpoints.yaml"
+            ).read_text(encoding="utf-8")
+            self.assertIn('title: "Chapter 3: Quotient Groups"', chapter_sequence)
+            self.assertIn('title: "Section 3.1 Normal Subgroups"', chapter_sequence)
+            self.assertIn("id: normal_subgroup", chapter_sequence)
+            self.assertIn("type: definition", chapter_sequence)
+            self.assertIn('number: "3.1"', chapter_sequence)
+            self.assertIn("id: checkpoint_001", checkpoints)
+            self.assertIn('scope: "Chapter 3: Quotient Groups"', checkpoints)
+            self.assertIn("object_count: 2", checkpoints)
+            self.assertIn("status: pending", checkpoints)
+
     def test_plan_cli_warns_and_records_stale_reference_kb_context(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(
