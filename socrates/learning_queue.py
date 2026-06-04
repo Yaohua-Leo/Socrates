@@ -231,6 +231,19 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
     report_path = project_root / "08_evals" / "tool_verification_eval.md"
     queue_path = report_path if report_path.exists() else manifest_path
     items: list[QueueItem] = []
+    manifest_issues = _tool_verification_issue_items(manifest.get("issues", []))
+    if manifest_issues:
+        items.append(
+            QueueItem(
+                item_id="tool_verification_manifest",
+                path=queue_path.relative_to(project_root).as_posix(),
+                detail=(
+                    "quality: fail; "
+                    f"issues: {_tool_verification_issue_text(manifest_issues)}; "
+                    "rerun with: socrates tool check --project <project>"
+                ),
+            )
+        )
     for index, record in enumerate(records, start=1):
         if not isinstance(record, dict):
             continue
@@ -238,7 +251,9 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
             continue
         object_id = str(record.get("object_id") or f"record_{index}")
         record_status = str(record.get("record_status") or "unknown")
-        issues = _tool_verification_issues(record.get("issues", []))
+        issues = _tool_verification_issue_text(
+            _tool_verification_issue_items(record.get("issues", []))
+        )
         detail = (
             f"quality: fail; status: {record_status}; "
             f"issues: {issues}; "
@@ -254,10 +269,13 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
     return items
 
 
-def _tool_verification_issues(value: object) -> str:
+def _tool_verification_issue_items(value: object) -> list[str]:
     if not isinstance(value, list):
-        return "none recorded"
-    issues = [str(issue).strip() for issue in value if str(issue).strip()]
+        return []
+    return [str(issue).strip() for issue in value if str(issue).strip()]
+
+
+def _tool_verification_issue_text(issues: list[str]) -> str:
     if not issues:
         return "none recorded"
     return "; ".join(issues)
