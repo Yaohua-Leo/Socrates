@@ -709,6 +709,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="ISO date used when assigning review dates; defaults to today.",
     )
+    review_schedule_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
     review_schedule_parser.set_defaults(func=_handle_review_schedule)
     review_exercises_parser = review_subparsers.add_parser(
         "exercises",
@@ -2064,6 +2069,20 @@ def _handle_review_schedule(args: argparse.Namespace) -> int:
         as_of=as_of,
     )
     count = _count_scheduled_reviews(context.learning_state)
+    if args.json:
+        print(
+            json.dumps(
+                _review_schedule_payload(
+                    context,
+                    as_of=as_of,
+                    threshold=args.threshold,
+                    schedule_path=schedule_path,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "item" if count == 1 else "items"
     print(f"Scheduled {count} review {noun}: {schedule_path}")
     return 0
@@ -3616,6 +3635,51 @@ def _next_scheduled_review(learning_state: Path) -> dict[str, str] | None:
     if not rows:
         return None
     return sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"]))[0]
+
+
+def _review_schedule_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    threshold: float,
+    schedule_path: Path,
+) -> dict[str, object]:
+    rows = _review_schedule_records(context.learning_state)
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_schedule_writer",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "threshold": threshold,
+        "scheduled_count": len(rows),
+        "schedule_path": str(schedule_path),
+        "scheduled_reviews": rows,
+    }
+
+
+def _review_schedule_records(learning_state: Path) -> list[dict[str, str]]:
+    state = _read_learning_state_for_status(learning_state)
+    schedule = state.get("review_schedule", [])
+    if not isinstance(schedule, list):
+        return []
+
+    rows: list[dict[str, str]] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "concept": str(item.get("concept", "review")),
+                "priority": str(item.get("priority", "medium")),
+                "due": str(item.get("due", "")),
+                "scheduled_for": str(item.get("scheduled_for", "")),
+                "reason": str(item.get("reason", "review scheduled")),
+                "repair": "; ".join(
+                    _due_review_repair_suggestions(item.get("repair_context", []))
+                ),
+            }
+        )
+    return rows
 
 
 def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:

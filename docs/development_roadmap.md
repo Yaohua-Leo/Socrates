@@ -2377,6 +2377,32 @@ read-only no-write behavior
 - `--priority high --json` 只过滤 due rows，仍会显式报告 invalid persisted schedule rows。
 - 这不是 scheduler、repair command、exercise generator、planner、tutor、report refresh、LLM call 或 learning-state mutation；它只是 persisted due-review reader 的 structured output mode。
 
+v0.43：review-schedule writer JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 review schedule writer 的结果，而不用解析 `review schedule` prose。
+
+必须完成：
+
+`review schedule --json`
+
+structured writer-result payload
+
+scheduled row fields
+
+as-of / threshold metadata
+
+same writer side effects as Markdown mode
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review schedule --project <project> --threshold 0.8 --as-of 2026-06-04 --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_review_schedule_writer`、`project`、`as_of`、`threshold`、`scheduled_count`、`schedule_path` 和 `scheduled_reviews`。
+- 每个 scheduled row 包含 concept、priority、due、scheduled date、reason 与 repair suggestion text。
+- 空 schedule 返回 `scheduled_count: 0` 和空 rows，同时仍写入 `02_learning_plan/review_schedule.md`。
+- 这不是 dry-run、read-only ledger、tutor、planner、repair command、exercise generator、report refresh、LLM call 或额外 learning-state truth；它只是现有 schedule writer 的 structured result output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

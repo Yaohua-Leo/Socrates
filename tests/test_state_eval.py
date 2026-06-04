@@ -1272,6 +1272,171 @@ class StateEvalTests(unittest.TestCase):
             self.assertNotIn("## subgroup", schedule_text)
             self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
 
+    def test_review_schedule_json_writes_schedule_and_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            mistake = MistakeRecord(
+                session_id="session-001",
+                concept="zeta_urgent_review",
+                misconception_id="zeta_definition_confusion",
+                user_answer="The zeta condition is automatic.",
+                analysis="Treats the review condition as vacuous.",
+                repair_suggestion="Contrast the definitions.",
+                follow_up_exercises=["zeta_review_01"],
+            )
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "subgroup": 0.84,
+                    },
+                    mistakes=[mistake],
+                ),
+            )
+            update_learning_state(context, LearningStatePatch(mistakes=[mistake]))
+
+            schedule_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--threshold",
+                    "0.8",
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(schedule_result.returncode, 0, schedule_result.stderr)
+            self.assertNotIn("Scheduled 2 review items:", schedule_result.stdout)
+            self.assertNotIn("# Review Schedule", schedule_result.stdout)
+            payload = json.loads(schedule_result.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "threshold": 0.8,
+                    "scheduled_count": 2,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [
+                        {
+                            "concept": "zeta_urgent_review",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "active misconception zeta_definition_confusion x2",
+                            "repair": "Contrast the definitions.",
+                        },
+                        {
+                            "concept": "alpha_medium_review",
+                            "priority": "medium",
+                            "due": "within_3_days",
+                            "scheduled_for": "2026-06-07",
+                            "reason": "mastery 0.62",
+                            "repair": "",
+                        },
+                    ],
+                },
+            )
+
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["review_schedule"],
+                [
+                    {
+                        "concept": "zeta_urgent_review",
+                        "priority": "high",
+                        "due": "next_session",
+                        "scheduled_for": "2026-06-04",
+                        "reason": "active misconception zeta_definition_confusion x2",
+                        "repair_context": [
+                            {
+                                "misconception_id": "zeta_definition_confusion",
+                                "count": 2,
+                                "last_session_id": "session-001",
+                                "analysis": "Treats the review condition as vacuous.",
+                                "repair_suggestion": "Contrast the definitions.",
+                                "follow_up_exercises": ["zeta_review_01"],
+                            }
+                        ],
+                    },
+                    {
+                        "concept": "alpha_medium_review",
+                        "priority": "medium",
+                        "due": "within_3_days",
+                        "scheduled_for": "2026-06-07",
+                        "reason": "mastery 0.62",
+                    },
+                ],
+            )
+            schedule_text = schedule_path.read_text(encoding="utf-8")
+            self.assertIn("## zeta_urgent_review", schedule_text)
+            self.assertIn("## alpha_medium_review", schedule_text)
+            self.assertNotIn("## subgroup", schedule_text)
+
+    def test_review_schedule_json_writes_empty_schedule_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            schedule_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(schedule_result.returncode, 0, schedule_result.stderr)
+            payload = json.loads(schedule_result.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "threshold": 0.7,
+                    "scheduled_count": 0,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [],
+                },
+            )
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(learning_state["review_schedule"], [])
+            self.assertIn(
+                "No review items scheduled.",
+                schedule_path.read_text(encoding="utf-8"),
+            )
+
     def test_review_schedule_cli_rejects_nonfinite_threshold_without_writing_schedule(
         self,
     ) -> None:
