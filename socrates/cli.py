@@ -526,6 +526,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="Only generate exercises for review items due on or before this ISO date.",
     )
+    review_exercises_parser.add_argument(
+        "--priority",
+        choices=("all", "high", "medium", "low"),
+        default="all",
+        help="Only generate exercises for review items with this priority; defaults to all.",
+    )
     review_exercises_parser.set_defaults(func=_handle_review_exercises)
     review_adjust_plan_parser = review_subparsers.add_parser(
         "adjust-plan",
@@ -1545,7 +1551,11 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     try:
-        exercises = generate_targeted_review_exercise_drafts(args.project, due_by=due_by)
+        exercises = generate_targeted_review_exercise_drafts(
+            args.project,
+            due_by=due_by,
+            priority=args.priority,
+        )
     except json.JSONDecodeError:
         print(
             "error: invalid learning_state.json; repair the JSON before generating review exercises",

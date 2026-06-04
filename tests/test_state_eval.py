@@ -1180,7 +1180,8 @@ class StateEvalTests(unittest.TestCase):
 
     def test_review_exercises_cli_can_generate_only_due_items(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
-            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            root = Path(temp_dir)
+            project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
             context = load_project(project)
             update_learning_state(
                 context,
@@ -1218,6 +1219,59 @@ class StateEvalTests(unittest.TestCase):
             )
             self.assertFalse(
                 (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
+            priority_project = create_project(
+                ProjectSpec(topic="Representation Theory", path=root / "priority")
+            )
+            priority_context = load_project(priority_project)
+            update_learning_state(
+                priority_context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(priority_context, as_of=date(2026, 6, 4))
+            high_priority = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(priority_project),
+                    "--due-by",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(high_priority.returncode, 0, high_priority.stderr)
+            self.assertIn("Generated 1 targeted review exercise", high_priority.stdout)
+            self.assertTrue(
+                (
+                    priority_project
+                    / "05_exercises"
+                    / "generated"
+                    / "review_normal_subgroup_01.md"
+                ).exists()
+            )
+            self.assertFalse(
+                (
+                    priority_project
+                    / "05_exercises"
+                    / "generated"
+                    / "review_quotient_group_01.md"
+                ).exists()
             )
 
     def test_review_exercises_cli_rejects_invalid_due_by_date(self) -> None:

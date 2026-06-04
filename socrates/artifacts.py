@@ -165,8 +165,14 @@ def generate_targeted_review_exercise_drafts(
     project_path: Path | str,
     *,
     due_by: date | None = None,
+    priority: str = "all",
 ) -> list[ExerciseDraft]:
     """Write exercises targeted at the current review schedule."""
+
+    allowed_priorities = {"all", "high", "medium", "low"}
+    if priority not in allowed_priorities:
+        allowed = ", ".join(sorted(allowed_priorities))
+        raise ValueError(f"Unknown review priority {priority!r}; expected one of: {allowed}")
 
     context = load_project(project_path)
     ensure_learning_state_readable(
@@ -186,6 +192,9 @@ def generate_targeted_review_exercise_drafts(
             continue
         if due_by is not None and not _is_due_review_item(item, due_by):
             continue
+        item_priority = str(item.get("priority", "medium"))
+        if priority != "all" and item_priority != priority:
+            continue
         concept = str(item.get("concept", "review"))
         reference_object = _kb_reference_object(context.root, concept)
         concept_id = slugify_topic(concept)
@@ -194,13 +203,13 @@ def generate_targeted_review_exercise_drafts(
         relative_path = Path("05_exercises") / "generated" / f"{exercise_id}.md"
         exercise_path = context.root / relative_path
         if not exercise_path.exists():
-            difficulty = _review_exercise_difficulty(str(item.get("priority", "medium")))
+            difficulty = _review_exercise_difficulty(item_priority)
             write_text(
                 exercise_path,
                 _targeted_review_exercise_text(
                     concept=concept,
                     reason=str(item.get("reason", "review scheduled")),
-                    priority=str(item.get("priority", "medium")),
+                    priority=item_priority,
                     difficulty=difficulty,
                     due=str(item.get("due", "within_3_days")),
                     scheduled_for=str(item.get("scheduled_for", "")),
@@ -210,7 +219,7 @@ def generate_targeted_review_exercise_drafts(
                 ),
             )
         else:
-            difficulty = _review_exercise_difficulty(str(item.get("priority", "medium")))
+            difficulty = _review_exercise_difficulty(item_priority)
         drafts.append(
             ExerciseDraft(
                 id=exercise_id,
