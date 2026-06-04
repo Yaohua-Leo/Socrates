@@ -28,6 +28,7 @@ from .kb import (
     build_reference_kb,
     find_counterexamples,
     list_reference_kb_objects,
+    reference_kb_status,
     search_reference_kb,
 )
 from .learning_queue import collect_learning_queue, format_learning_queue
@@ -1030,7 +1031,8 @@ def _handle_status(args: argparse.Namespace) -> int:
         1 for patch in correction_patches if patch.status == "pending"
     )
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
-    kb_object_count = _count_kb_objects(context.root)
+    kb_status = reference_kb_status(context.root)
+    kb_object_count = kb_status.object_count
     reviewed_count = _count_reviewed_notes(context.root)
     obsidian_export_count = _count_obsidian_exports(context.root)
     obsidian_backlink_count = _count_obsidian_backlinks(context.root)
@@ -1075,6 +1077,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Pending correction patches: {pending_correction_patch_count}")
     print(f"Curated references: {curated_count}")
     print(f"KB objects: {kb_object_count}")
+    print(f"Reference KB status: {kb_status.status}")
     print(f"Latest session: {latest_session}")
     print(f"Pending draft notes: {draft_count}")
     print(f"Misconception notes to draft: {misconception_note_draft_count}")
@@ -2238,15 +2241,6 @@ def _count_converted_references(references_dir: Path) -> int:
     if not converted_dir.exists():
         return 0
     return len(list(converted_dir.rglob("*.md")))
-
-
-def _count_kb_objects(project_root: Path) -> int:
-    index_path = project_root / "06_kb" / "chunks" / "reference_index.json"
-    if not index_path.exists():
-        return 0
-    index = json.loads(index_path.read_text(encoding="utf-8"))
-    objects = index.get("objects", [])
-    return len(objects) if isinstance(objects, list) else 0
 
 
 def _source_location(source: object) -> str:

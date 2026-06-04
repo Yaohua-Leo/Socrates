@@ -20,6 +20,15 @@ class ReferenceKbBuildResult:
     chunk_count: int
 
 
+@dataclass(frozen=True)
+class ReferenceKbStatus:
+    """Current freshness state of the reference KB index."""
+
+    index_path: Path
+    object_count: int
+    status: str
+
+
 OBJECT_TYPES = {
     "definition",
     "theorem",
@@ -66,6 +75,42 @@ def build_reference_kb(project_path: Path | str) -> ReferenceKbBuildResult:
         index_path=index_path,
         object_count=len(objects),
         chunk_count=len(index["chunks"]),
+    )
+
+
+def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
+    """Return object count plus freshness for the curated-reference KB."""
+
+    context = load_project(project_path)
+    curated_paths = sorted((context.references_dir / "curated").glob("*.md"))
+    index_path = context.root / "06_kb" / "chunks" / "reference_index.json"
+
+    object_count = 0
+    index_status = "missing" if curated_paths else "not_applicable"
+    index_mtime_ns = 0
+
+    if index_path.exists():
+        try:
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return ReferenceKbStatus(
+                index_path=index_path,
+                object_count=0,
+                status="invalid",
+            )
+        objects = index.get("objects", []) if isinstance(index, dict) else []
+        object_count = len(objects) if isinstance(objects, list) else 0
+        index_mtime_ns = index_path.stat().st_mtime_ns
+        index_status = "current" if curated_paths else "not_applicable"
+
+    if curated_paths and index_path.exists():
+        if any(path.stat().st_mtime_ns > index_mtime_ns for path in curated_paths):
+            index_status = "stale"
+
+    return ReferenceKbStatus(
+        index_path=index_path,
+        object_count=object_count,
+        status=index_status,
     )
 
 

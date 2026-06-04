@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import unittest
 
+from socrates.kb import build_reference_kb
 from socrates.project import ProjectSpec, create_project
 from socrates.references import curate_reference, import_reference
 
@@ -685,6 +687,7 @@ class ReferenceImportTests(unittest.TestCase):
                 title="Normality OCR Notes",
             )
             curated = curate_reference(project, record.id)
+            kb_result = build_reference_kb(project)
             raw = project / "01_references" / "raw" / "markdown" / "normal_subgroups.md"
             converted = (
                 project
@@ -758,6 +761,11 @@ class ReferenceImportTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            index_time_ns = kb_result.index_path.stat().st_mtime_ns
+            os.utime(
+                curated,
+                ns=(index_time_ns + 1_000_000_000, index_time_ns + 1_000_000_000),
+            )
             list_result = subprocess.run(
                 [
                     sys.executable,
@@ -768,6 +776,13 @@ class ReferenceImportTests(unittest.TestCase):
                     "--project",
                     str(project),
                 ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            status_result = subprocess.run(
+                [sys.executable, "-m", "socrates", "status", "--project", str(project)],
                 cwd=REPO_ROOT,
                 text=True,
                 capture_output=True,
@@ -801,6 +816,8 @@ class ReferenceImportTests(unittest.TestCase):
                 "- normality_ocr_notes_patch_001 | applied | normality_ocr_notes | low |",
                 list_result.stdout,
             )
+            self.assertEqual(status_result.returncode, 0, status_result.stderr)
+            self.assertIn("Reference KB status: stale", status_result.stdout)
 
     def test_patches_apply_rejects_unaccepted_patch_without_traceback(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
