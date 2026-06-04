@@ -808,6 +808,152 @@ class StateEvalTests(unittest.TestCase):
             self.assertNotIn("subgroup", ready_with_high_cutoff.stdout)
             self.assertNotIn("normal_subgroup", ready_with_high_cutoff.stdout)
 
+    def test_review_mastery_json_lists_learning_scores_with_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.42,
+                        "subgroup": 0.82,
+                    },
+                    proof_skills={
+                        "construct_counterexample": 0.35,
+                        "unfold_definition": 0.86,
+                    },
+                ),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Learning Mastery", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_learning_mastery_review",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["kind_filter"], "all")
+            self.assertEqual(payload["status_filter"], "all")
+            self.assertEqual(payload["threshold"], 0.7)
+            self.assertEqual(payload["score_count"], 4)
+            self.assertEqual(payload["weak_count"], 2)
+            self.assertEqual(payload["ready_count"], 2)
+            self.assertEqual(
+                payload["scores"],
+                [
+                    {
+                        "score_type": "concept",
+                        "item_id": "normal_subgroup",
+                        "status": "weak",
+                        "score": 0.42,
+                    },
+                    {
+                        "score_type": "proof_skill",
+                        "item_id": "construct_counterexample",
+                        "status": "weak",
+                        "score": 0.35,
+                    },
+                    {
+                        "score_type": "concept",
+                        "item_id": "subgroup",
+                        "status": "ready",
+                        "score": 0.82,
+                    },
+                    {
+                        "score_type": "proof_skill",
+                        "item_id": "unfold_definition",
+                        "status": "ready",
+                        "score": 0.86,
+                    },
+                ],
+            )
+
+    def test_review_mastery_json_filters_weak_concepts_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.42,
+                        "subgroup": 0.82,
+                    },
+                    proof_skills={"construct_counterexample": 0.35},
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            project_log_before = context.project_log.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--kind",
+                    "concept",
+                    "--status",
+                    "weak",
+                    "--threshold",
+                    "0.8",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["kind_filter"], "concept")
+            self.assertEqual(payload["status_filter"], "weak")
+            self.assertEqual(payload["threshold"], 0.8)
+            self.assertEqual(payload["score_count"], 1)
+            self.assertEqual(payload["weak_count"], 1)
+            self.assertEqual(payload["ready_count"], 0)
+            self.assertEqual(
+                payload["scores"],
+                [
+                    {
+                        "score_type": "concept",
+                        "item_id": "normal_subgroup",
+                        "status": "weak",
+                        "score": 0.42,
+                    }
+                ],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(context.project_log.read_text(encoding="utf-8"), project_log_before)
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").iterdir()), [])
+
     def test_review_mastery_cli_rejects_nonfinite_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

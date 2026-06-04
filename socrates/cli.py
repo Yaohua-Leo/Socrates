@@ -824,6 +824,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=0.7,
         help="Weak/ready cutoff; defaults to 0.7.",
     )
+    review_mastery_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of Markdown.",
+    )
     review_mastery_parser.set_defaults(func=_handle_review_mastery)
 
     exercise_parser = subparsers.add_parser(
@@ -2151,6 +2156,21 @@ def _handle_review_mastery(args: argparse.Namespace) -> int:
         status=args.status,
         threshold=args.threshold,
     )
+    if args.json:
+        print(
+            json.dumps(
+                _learning_scores_payload(
+                    context,
+                    kind_filter=args.kind,
+                    status_filter=args.status,
+                    threshold=args.threshold,
+                    scores=scores,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(_learning_scores_text(scores), end="")
     return 0
 
@@ -2219,6 +2239,38 @@ def _learning_scores_text(scores: list[LearningScoreSummary]) -> str:
         for item in scores
     )
     return "\n".join(lines) + "\n"
+
+
+def _learning_scores_payload(
+    context: ProjectContext,
+    *,
+    kind_filter: str,
+    status_filter: str,
+    threshold: float,
+    scores: list[LearningScoreSummary],
+) -> dict[str, object]:
+    rows = [_learning_score_record(item) for item in scores]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_learning_mastery_review",
+        "project": str(context.root),
+        "kind_filter": kind_filter,
+        "status_filter": status_filter,
+        "threshold": threshold,
+        "score_count": len(rows),
+        "weak_count": sum(1 for item in scores if item.status == "weak"),
+        "ready_count": sum(1 for item in scores if item.status == "ready"),
+        "scores": rows,
+    }
+
+
+def _learning_score_record(item: LearningScoreSummary) -> dict[str, object]:
+    return {
+        "score_type": item.score_type,
+        "item_id": item.item_id,
+        "status": item.status,
+        "score": item.score,
+    }
 
 
 def _handle_exercise_list(args: argparse.Namespace) -> int:

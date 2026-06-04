@@ -2327,6 +2327,30 @@ read-only no-write behavior
 - `--status active --json` 只返回 active rows，并且不修改 `learning_state.json`、`mistake_bank.md`、note drafts、reports 或 project log。
 - 这不是 resolver、note generator、tutor、score、report refresh、LLM call 或 learning-state mutation；它只是 persisted misconception reader 的 structured output mode。
 
+v0.41：learning mastery JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 concept mastery 和 proof-skill score ledger，而不用解析 `review mastery` Markdown。
+
+必须完成：
+
+`review mastery --json`
+
+structured score rows
+
+kind/status/threshold filter metadata
+
+read-only no-write behavior
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review mastery --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_learning_mastery_review`、`project`、`kind_filter`、`status_filter`、`threshold`、`score_count`、`weak_count`、`ready_count` 和 `scores` rows。
+- 每个 row 包含 score type、item id、status 与 score。
+- `--kind concept --status weak --threshold 0.8 --json` 只返回该阈值下的 weak concept rows，并且不修改 `learning_state.json`、review schedules、reports、note drafts 或 project log。
+- 这不是 scheduler、planner、tutor、score writer、report refresh、LLM call 或 learning-state mutation；它只是 persisted learning-score reader 的 structured output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
