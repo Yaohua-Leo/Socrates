@@ -63,6 +63,7 @@ class ToolVerificationSummary:
     title: str
     artifact_path: str
     report_path: str
+    reference_kb_status: str = ""
 
 
 @dataclass(frozen=True)
@@ -1162,6 +1163,7 @@ def _summary_from_record(record: dict[str, object]) -> ToolVerificationSummary:
             or ""
         ),
         report_path=str(record.get("report_path", "")),
+        reference_kb_status=str(record.get("reference_kb_status", "")),
     )
 
 

@@ -962,6 +962,30 @@ class ToolVerificationTests(unittest.TestCase):
             self.assertEqual(record["status"], "stale_reference_kb")
             self.assertEqual(record["reference_kb_status"], "stale")
 
+            list_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "tool",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale_reference_kb",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(list_result.returncode, 0, list_result.stderr)
+            self.assertIn(
+                "kernel_normality | stale_reference_kb | lean_dependency_map",
+                list_result.stdout,
+            )
+            self.assertIn("reference_kb_status: stale", list_result.stdout)
+
             check_result = subprocess.run(
                 [
                     sys.executable,

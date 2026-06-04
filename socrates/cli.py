@@ -1832,6 +1832,8 @@ def _tool_verification_records_text(records: list[ToolVerificationSummary]) -> s
         )
         if record.report_path:
             lines.append(f"  - report: {record.report_path}")
+        if record.reference_kb_status:
+            lines.append(f"  - reference_kb_status: {record.reference_kb_status}")
     return "\n".join(lines) + "\n"
 
 
