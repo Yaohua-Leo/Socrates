@@ -1299,6 +1299,25 @@ class StateEvalTests(unittest.TestCase):
                 capture_output=True,
                 check=False,
             )
+            high_priority = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
 
             self.assertEqual(today.returncode, 0, today.stderr)
             self.assertIn("# Due Reviews", today.stdout)
@@ -1307,6 +1326,12 @@ class StateEvalTests(unittest.TestCase):
             self.assertEqual(later.returncode, 0, later.stderr)
             self.assertIn("- zeta_urgent_review | 2026-06-04 | high | mastery 0.4", later.stdout)
             self.assertIn("- alpha_medium_review | 2026-06-07 | medium | mastery 0.62", later.stdout)
+            self.assertEqual(high_priority.returncode, 0, high_priority.stderr)
+            self.assertIn(
+                "- zeta_urgent_review | 2026-06-04 | high | mastery 0.4",
+                high_priority.stdout,
+            )
+            self.assertNotIn("alpha_medium_review", high_priority.stdout)
 
     def test_review_due_cli_shows_misconception_repair_suggestion(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

@@ -543,6 +543,12 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="ISO date used as the due-review cutoff; defaults to today.",
     )
+    review_due_parser.add_argument(
+        "--priority",
+        choices=("all", "high", "medium", "low"),
+        default="all",
+        help="Filter due reviews by priority; defaults to all.",
+    )
     review_due_parser.set_defaults(func=_handle_review_due)
     review_repair_parser = review_subparsers.add_parser(
         "repair-schedule",
@@ -1564,7 +1570,7 @@ def _handle_review_due(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     context = load_project(args.project)
-    print(_due_reviews_text(context.learning_state, as_of), end="")
+    print(_due_reviews_text(context.learning_state, as_of, priority=args.priority), end="")
     return 0
 
 
@@ -2603,9 +2609,9 @@ def _parse_iso_date(value: str) -> date:
         raise ValueError(f"invalid ISO date {value!r}; expected YYYY-MM-DD") from exc
 
 
-def _due_reviews_text(learning_state: Path, as_of: date) -> str:
+def _due_reviews_text(learning_state: Path, as_of: date, *, priority: str = "all") -> str:
     lines = ["# Due Reviews", ""]
-    rows, invalid_rows = _due_review_rows(learning_state, as_of)
+    rows, invalid_rows = _due_review_rows(learning_state, as_of, priority=priority)
     if not rows:
         lines.append("- none")
     else:
@@ -2625,6 +2631,8 @@ def _due_reviews_text(learning_state: Path, as_of: date) -> str:
 def _due_review_rows(
     learning_state: Path,
     as_of: date,
+    *,
+    priority: str = "all",
 ) -> tuple[list[dict[str, str]], list[dict[str, str]]]:
     if not learning_state.exists():
         return ([], [])
@@ -2658,11 +2666,14 @@ def _due_review_rows(
             continue
         if scheduled_date > as_of:
             continue
+        item_priority = str(item.get("priority", "medium"))
+        if priority != "all" and item_priority != priority:
+            continue
         rows.append(
             {
                 "concept": str(item.get("concept", "review")),
                 "scheduled_for": scheduled_for,
-                "priority": str(item.get("priority", "medium")),
+                "priority": item_priority,
                 "reason": str(item.get("reason", "review scheduled")),
                 "repair": "; ".join(
                     _due_review_repair_suggestions(item.get("repair_context", []))
