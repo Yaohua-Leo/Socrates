@@ -100,7 +100,11 @@ def update_learning_state(context: ProjectContext, patch: LearningStatePatch) ->
     for mistake in patch.mistakes:
         misconceptions = state["misconceptions"]
         existing = misconceptions.get(mistake.misconception_id, {})
-        previous_count = int(existing.get("count", 0)) if isinstance(existing, dict) else 0
+        previous_count = (
+            coerce_occurrence_count(existing.get("count", 0))
+            if mistake.misconception_id in misconceptions and isinstance(existing, dict)
+            else 0
+        )
         misconceptions[mistake.misconception_id] = {
             "concept": mistake.concept,
             "count": previous_count + 1,

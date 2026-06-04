@@ -120,6 +120,64 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("## session-002 - normal_subgroup", mistake_bank)
             self.assertIn("- Recurrence: yes", mistake_bank)
 
+    def test_update_learning_state_recovers_malformed_existing_misconception_count(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            context.learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {
+                            "normal_equals_central": {
+                                "concept": "normal_subgroup",
+                                "count": "many",
+                                "status": "active",
+                                "last_session_id": "session-001",
+                                "analysis": "Prior malformed count.",
+                                "repair_suggestion": "Compare normality with centrality.",
+                                "follow_up_exercises": [],
+                            }
+                        },
+                        "review_schedule": [],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal still means central.",
+                            analysis="The same confusion recurred.",
+                            repair_suggestion="Use conjugation instead of commutativity.",
+                        )
+                    ]
+                ),
+            )
+
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["count"],
+                2,
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["last_session_id"],
+                "session-002",
+            )
+            mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            self.assertIn("## session-002 - normal_subgroup", mistake_bank)
+            self.assertIn("- Recurrence: yes", mistake_bank)
+
     def test_resolving_misconception_appends_repair_entry_to_mistake_bank(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
