@@ -6,13 +6,13 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.32-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.33-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, filterable readiness-counted
+long-term report-surface refresh, command-summarized filterable readiness-counted
 machine-readable and Markdown read-only multi-project resume indexes,
 machine-readable read-only project resume state, read-only project resume
 cards, read-only study dashboards, generated
@@ -197,6 +197,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.32 `projects resume --state all|ready|refresh_brief` filters collection
   resume output after building the same structured rows, for both Markdown and
   JSON.
+- v0.33 collection resume outputs include a derived recommended-command summary
+  so filtered project-root views show which child-project commands should be run
+  next without executing them.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -291,6 +294,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - `projects resume --state` filters existing collection rows. It is not a
   scanner, score, readiness gate, report generator, writer, or child-project
   state mutation.
+- Collection resume recommended-command summaries are derived from returned
+  rows. They are not command execution, batch automation, scanners, scores,
+  readiness gates, report generation, LLM calls, or child-project mutations.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

@@ -40,6 +40,7 @@ def build_project_resume_index_payload(
     refresh_brief_count = sum(
         1 for project in projects if project["resume_state"] == "refresh_brief"
     )
+    recommended_commands = _recommended_commands(projects)
     return {
         "schema_version": 1,
         "quality_boundary": PROJECT_RESUME_INDEX_QUALITY_BOUNDARY,
@@ -48,6 +49,8 @@ def build_project_resume_index_payload(
         "project_count": len(projects),
         "ready_count": ready_count,
         "refresh_brief_count": refresh_brief_count,
+        "recommended_command_count": len(recommended_commands),
+        "recommended_commands": recommended_commands,
         "projects": projects,
     }
 
@@ -71,6 +74,7 @@ def format_project_resume_index(
         f"- Projects: {payload['project_count']}",
         f"- Ready: {payload['ready_count']}",
         f"- Refresh brief: {payload['refresh_brief_count']}",
+        f"- Recommended commands: {payload['recommended_command_count']}",
         "",
         "## Projects",
         "",
@@ -83,6 +87,16 @@ def format_project_resume_index(
                 f"- {project['id']} | {project['title']} | "
                 f"{project['resume_state']} | {project['study_brief']} | "
                 f"{project['current_next_action']} | {project['recommended_command']}"
+            )
+    recommended_commands = payload["recommended_commands"]
+    lines.extend(["", "## Recommended Commands", ""])
+    if not recommended_commands:
+        lines.append("- none")
+    else:
+        for command in recommended_commands:
+            lines.append(
+                f"- {command['project_id']} | {command['project_title']} | "
+                f"{command['resume_state']} | {command['command']}"
             )
     lines.extend(
         [
@@ -110,3 +124,20 @@ def _filtered_projects(
     if state_filter == "all":
         return projects
     return [project for project in projects if project["resume_state"] == state_filter]
+
+
+def _recommended_commands(projects: list[dict[str, object]]) -> list[dict[str, str]]:
+    commands: list[dict[str, str]] = []
+    for project in projects:
+        command = str(project.get("recommended_command", "")).strip()
+        if not command or command == "none":
+            continue
+        commands.append(
+            {
+                "project_id": str(project["id"]),
+                "project_title": str(project["title"]),
+                "resume_state": str(project["resume_state"]),
+                "command": command,
+            }
+        )
+    return commands

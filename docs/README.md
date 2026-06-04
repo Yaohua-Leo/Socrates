@@ -7,8 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.32-alpha filterable readiness-counted
-  machine-readable read-only multi-project resume indexes, over v0.31
+- Current implementation baseline: v0.33-alpha command-summarized filterable
+  readiness-counted machine-readable read-only multi-project resume indexes, over v0.32
+  filterable readiness-counted
+  machine-readable read-only multi-project resume indexes, v0.31
   readiness-counted machine-readable read-only multi-project resume indexes, v0.30
   machine-readable read-only multi-project resume indexes, v0.29 read-only
   multi-project resume indexes, v0.28 machine-readable read-only resume JSON, v0.27 read-only
@@ -90,3 +92,6 @@ from the source planning conversation.
   v0.31 plan for collection resume readiness counts.
 - `superpowers/plans/2026-06-04-v32-projects-resume-filter.md`: executable
   v0.32 plan for filtering collection resume output by resume state.
+- `superpowers/plans/2026-06-04-v33-projects-resume-command-summary.md`:
+  executable v0.33 plan for recommended-command summaries in filtered
+  collection resume output.

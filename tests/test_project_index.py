@@ -446,6 +446,172 @@ class ProjectIndexTests(unittest.TestCase):
                 (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
             )
 
+    def test_projects_resume_state_filter_summarizes_recommended_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "resume",
+                    "--root",
+                    str(root),
+                    "--state",
+                    "refresh_brief",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("- Recommended commands: 1", result.stdout)
+            self.assertIn("## Recommended Commands", result.stdout)
+            self.assertIn(
+                (
+                    "ring_theory | Ring Theory | refresh_brief | "
+                    f'python -m socrates brief generate --project "{fresh_project}"'
+                ),
+                result.stdout,
+            )
+            self.assertNotIn("group_theory | Group Theory | ready | none", result.stdout)
+            self.assertFalse((root / "socrates_projects.json").exists())
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+
+    def test_projects_resume_json_summarizes_filtered_recommended_commands(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir) / "SocratesProjects"
+            ready_project = create_project(
+                ProjectSpec(topic="Group Theory", path=root / "group_theory")
+            )
+            fresh_project = create_project(
+                ProjectSpec(topic="Ring Theory", path=root / "ring_theory")
+            )
+            draft = ready_project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            generated = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "brief",
+                    "generate",
+                    "--project",
+                    str(ready_project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            ready_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "resume",
+                    "--root",
+                    str(root),
+                    "--state",
+                    "ready",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            refresh_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "projects",
+                    "resume",
+                    "--root",
+                    str(root),
+                    "--state",
+                    "refresh_brief",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(ready_result.returncode, 0, ready_result.stderr)
+            self.assertEqual(refresh_result.returncode, 0, refresh_result.stderr)
+            ready_payload = json.loads(ready_result.stdout)
+            self.assertEqual(ready_payload["recommended_command_count"], 0)
+            self.assertEqual(ready_payload["recommended_commands"], [])
+            refresh_payload = json.loads(refresh_result.stdout)
+            self.assertEqual(refresh_payload["recommended_command_count"], 1)
+            self.assertEqual(
+                refresh_payload["recommended_commands"],
+                [
+                    {
+                        "project_id": "ring_theory",
+                        "project_title": "Ring Theory",
+                        "resume_state": "refresh_brief",
+                        "command": (
+                            f'python -m socrates brief generate --project "{fresh_project}"'
+                        ),
+                    }
+                ],
+            )
+            self.assertFalse((root / "socrates_projects.json").exists())
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief.md").exists()
+            )
+            self.assertFalse(
+                (fresh_project / "07_exports" / "briefs" / "study_brief_manifest.json").exists()
+            )
+            self.assertNotIn(
+                "Generated study brief.",
+                (fresh_project / "00_meta" / "project_log.md").read_text(encoding="utf-8"),
+            )
+
     def test_projects_refs_finds_reviewed_notes_across_projects(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir) / "SocratesProjects"

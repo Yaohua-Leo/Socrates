@@ -2131,6 +2131,31 @@ counts computed after filtering
 - 默认行为仍等价于 `--state all`。
 - 这不是 score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读导航筛选。
 
+v0.33：multi-project resume command summary
+
+建议目标：
+
+让 filtered collection resume view 不只显示项目状态，还能直接列出当前应由用户手动执行的 child-project recommended commands，减少在大量 rows 中复制命令的成本。
+
+必须完成：
+
+`recommended_command_count`
+
+JSON `recommended_commands`
+
+Markdown `## Recommended Commands`
+
+commands derived after filtering
+
+当前状态（2026-06-04）：
+
+- `python -m socrates projects resume --root <root>` 已在 snapshot 中输出 `Recommended commands` count。
+- Markdown output 已包含 `## Recommended Commands`，列出每个 returned project 的非 `none` recommended command。
+- JSON output 已包含 `recommended_command_count` 和 `recommended_commands`。
+- `recommended_commands` 中每行包含 `project_id`、`project_title`、`resume_state` 和 `command`。
+- Commands 基于 filtered rows 派生：`--state ready` 时为空，`--state refresh_brief` 只列出需要 refresh brief 的项目命令。
+- 这不是 command execution、batch automation、score、prediction、readiness gate、scanner、report generator、LLM call 或 child-project mutation；它只是 project collection 的只读命令摘要。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
