@@ -881,7 +881,9 @@ def _handle_status(args: argparse.Namespace) -> int:
     context = load_project(args.project)
     latest_session = _latest_session(context.sessions_dir)
     source_count = _count_sources(context.source_registry)
-    draft_count = len(collect_learning_queue(context.root).notes_to_review)
+    queue = collect_learning_queue(context.root)
+    draft_count = len(queue.notes_to_review)
+    misconception_note_draft_count = len(queue.misconception_notes_to_draft)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     converted_count = _count_converted_references(context.references_dir)
     conversion_pending_count = _count_sources_with_status(
@@ -934,6 +936,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"KB objects: {kb_object_count}")
     print(f"Latest session: {latest_session}")
     print(f"Pending draft notes: {draft_count}")
+    print(f"Misconception notes to draft: {misconception_note_draft_count}")
     print(f"Reviewed notes: {reviewed_count}")
     print(f"Generated exercises: {exercise_count}")
     print(f"Approved exercises: {approved_exercise_count}")
