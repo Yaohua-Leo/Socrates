@@ -115,7 +115,11 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
                 object_count=0,
                 status="invalid",
             )
-        if not _valid_reference_index_schema(index, context.root):
+        if not _valid_reference_index_schema(
+            index,
+            context.root,
+            validate_source_text=False,
+        ):
             return ReferenceKbStatus(
                 index_path=index_path,
                 object_count=0,
@@ -133,9 +137,16 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
         index_mtime_ns = min(index_path.stat().st_mtime_ns, artifact_mtime_ns)
         index_status = "current" if curated_paths else "not_applicable"
 
-    if curated_paths and index_path.exists():
-        if any(path.stat().st_mtime_ns > index_mtime_ns for path in curated_paths):
+        if curated_paths and any(
+            path.stat().st_mtime_ns > index_mtime_ns for path in curated_paths
+        ):
             index_status = "stale"
+        elif not _valid_reference_index_schema(index, context.root):
+            return ReferenceKbStatus(
+                index_path=index_path,
+                object_count=0,
+                status="invalid",
+            )
 
     return ReferenceKbStatus(
         index_path=index_path,
@@ -371,12 +382,26 @@ def read_reference_index(
         raise ValueError(_reference_index_rebuild_message(project_root, "is missing")) from exc
     except json.JSONDecodeError as exc:
         raise ValueError(_reference_index_rebuild_message(project_root, "is invalid")) from exc
-    if not _valid_reference_index_schema(index, project_root):
+    if not _valid_reference_index_schema(
+        index,
+        project_root,
+        validate_source_text=False,
+    ):
+        raise ValueError(_reference_index_rebuild_message(project_root, "has invalid schema"))
+    if not _reference_index_is_stale(project_root, index_path) and not _valid_reference_index_schema(
+        index,
+        project_root,
+    ):
         raise ValueError(_reference_index_rebuild_message(project_root, "has invalid schema"))
     return index
 
 
-def _valid_reference_index_schema(index: object, project_root: Path | None = None) -> bool:
+def _valid_reference_index_schema(
+    index: object,
+    project_root: Path | None = None,
+    *,
+    validate_source_text: bool = True,
+) -> bool:
     if not isinstance(index, dict) or index.get("schema_version") != 1:
         return False
     objects = index.get("objects")
@@ -389,40 +414,63 @@ def _valid_reference_index_schema(index: object, project_root: Path | None = Non
         return False
     if project_root is None:
         return True
-    return _valid_reference_index_provenance(project_root, objects, chunks)
+    return _valid_reference_index_provenance(
+        project_root,
+        objects,
+        chunks,
+        validate_source_text=validate_source_text,
+    )
 
 
 def _valid_reference_index_provenance(
     project_root: Path,
     objects: list[object],
     chunks: list[object],
+    *,
+    validate_source_text: bool = True,
 ) -> bool:
-    object_locations: dict[str, tuple[str, int]] = {}
+    object_records: dict[str, tuple[str, int, str]] = {}
     for item in objects:
         if not isinstance(item, dict):
             return False
         object_id = item.get("id")
         if not isinstance(object_id, str) or not object_id.strip():
             return False
-        if object_id in object_locations:
+        if object_id in object_records:
             return False
         source = item.get("source")
         if not isinstance(source, dict):
             return False
         source_path = source.get("path")
         source_line = source.get("line")
+        statement = item.get("statement")
         if not isinstance(source_path, str) or not _valid_curated_source_location(
             project_root,
             source_path,
             source_line,
         ):
             return False
-        object_locations[object_id] = (source_path, source_line)
+        if not isinstance(source_line, int) or isinstance(source_line, bool):
+            return False
+        if not isinstance(statement, str):
+            return False
+        if validate_source_text:
+            if not _valid_curated_source_statement(
+                project_root,
+                source_path,
+                source_line,
+                statement,
+            ):
+                return False
+        object_records[object_id] = (source_path, source_line, statement)
     for chunk in chunks:
         if not isinstance(chunk, dict):
             return False
         object_id = chunk.get("object_id")
-        if not isinstance(object_id, str) or object_id not in object_locations:
+        if not isinstance(object_id, str) or object_id not in object_records:
+            return False
+        chunk_text = chunk.get("text")
+        if not isinstance(chunk_text, str):
             return False
         metadata = chunk.get("metadata")
         if not isinstance(metadata, dict):
@@ -437,14 +485,14 @@ def _valid_reference_index_provenance(
         metadata_source_path = metadata.get("source_path")
         source_line = source.get("line")
         metadata_source_line = metadata.get("source_line")
-        object_location = object_locations[object_id]
+        object_source_path, object_source_line, object_statement = object_records[object_id]
         if not isinstance(source_path, str) or not _valid_curated_source_location(
             project_root,
             source_path,
             source_line,
         ):
             return False
-        if (source_path, source_line) != object_location:
+        if (source_path, source_line) != (object_source_path, object_source_line):
             return False
         if not isinstance(metadata_source_path, str) or not _valid_curated_source_location(
             project_root,
@@ -452,9 +500,27 @@ def _valid_reference_index_provenance(
             metadata_source_line,
         ):
             return False
-        if (metadata_source_path, metadata_source_line) != object_location:
+        if (metadata_source_path, metadata_source_line) != (
+            object_source_path,
+            object_source_line,
+        ):
+            return False
+        if _normalize_reference_text(chunk_text) != _normalize_reference_text(
+            object_statement,
+        ):
             return False
     return True
+
+
+def _reference_index_is_stale(project_root: Path, index_path: Path) -> bool:
+    curated_paths = sorted((project_root / "01_references" / "curated").glob("*.md"))
+    if not curated_paths or not index_path.exists():
+        return False
+    index_mtime_ns = index_path.stat().st_mtime_ns
+    artifact_status, artifact_mtime_ns = _reference_kb_artifacts_status(project_root)
+    if artifact_status == "current":
+        index_mtime_ns = min(index_mtime_ns, artifact_mtime_ns)
+    return any(path.stat().st_mtime_ns > index_mtime_ns for path in curated_paths)
 
 
 def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
@@ -550,6 +616,30 @@ def _valid_curated_source_location(
     except OSError:
         return False
     return line <= line_count
+
+
+def _valid_curated_source_statement(
+    project_root: Path,
+    relative_path: str,
+    line: int,
+    statement: str,
+) -> bool:
+    normalized_statement = _normalize_reference_text(statement)
+    if not normalized_statement:
+        return False
+    path = project_root / relative_path
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+    if line > len(lines):
+        return False
+    source_suffix = "\n".join(lines[line - 1 :])
+    return normalized_statement in _normalize_reference_text(source_suffix)
+
+
+def _normalize_reference_text(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
