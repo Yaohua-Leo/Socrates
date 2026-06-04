@@ -367,7 +367,7 @@ class NoteReviewExportTests(unittest.TestCase):
                 concept="Quotient Group",
                 note_type="definition",
                 body=(
-                    "A quotient group packages cosets of a normal subgroup.\n\n"
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
                     "## Review Questions\n\n"
                     "- Why is normality required for multiplication of cosets?\n"
                 ),
@@ -403,6 +403,89 @@ class NoteReviewExportTests(unittest.TestCase):
                 ],
             )
             self.assertEqual(notes_by_id["quotient_group"]["backlinks"], [])
+
+    def test_export_reviewed_notes_to_obsidian_prunes_stale_manifest_files(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a [[Normal Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for multiplication of cosets?\n"
+                ),
+                source_id="df",
+            )
+            normal_reviewed = review_atomic_note(project, "normal_subgroup")
+            quotient_reviewed = review_atomic_note(project, "quotient_group")
+            export_reviewed_notes_to_obsidian(project)
+            obsidian_dir = project / "07_exports" / "obsidian"
+            manual_note = obsidian_dir / "manual_note.md"
+            manual_note.write_text(
+                "# Manual Note\n\nThis file was not written by Socrates.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            quotient_reviewed.unlink()
+            exported = export_reviewed_notes_to_obsidian(project)
+
+            self.assertEqual(exported, [obsidian_dir / "normal_subgroup.md"])
+            self.assertTrue(normal_reviewed.exists())
+            self.assertTrue(manual_note.exists())
+            self.assertTrue((obsidian_dir / "normal_subgroup.md").exists())
+            self.assertFalse((obsidian_dir / "quotient_group.md").exists())
+            manifest = json.loads((obsidian_dir / "export_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(
+                [note["note_id"] for note in manifest["exported_notes"]],
+                ["normal_subgroup"],
+            )
+            export_index_text = (obsidian_dir / "_socrates_index.md").read_text(encoding="utf-8")
+            self.assertIn("- [[normal_subgroup|Normal Subgroup]]", export_index_text)
+            self.assertNotIn("quotient_group", export_index_text)
+
+    def test_export_reviewed_notes_to_obsidian_refreshes_empty_export_metadata(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            generate_atomic_note_draft(
+                project,
+                concept="Normal Subgroup",
+                note_type="definition",
+                body=(
+                    "A normal subgroup is stable under conjugation; compare [[Subgroup]].\n\n"
+                    "## Review Questions\n\n"
+                    "- What conjugation condition must be checked?\n"
+                ),
+                source_id="df",
+            )
+            reviewed = review_atomic_note(project, "normal_subgroup")
+            export_reviewed_notes_to_obsidian(project)
+            obsidian_dir = project / "07_exports" / "obsidian"
+
+            reviewed.unlink()
+            exported = export_reviewed_notes_to_obsidian(project)
+
+            self.assertEqual(exported, [])
+            self.assertFalse((obsidian_dir / "normal_subgroup.md").exists())
+            manifest = json.loads((obsidian_dir / "export_manifest.json").read_text(encoding="utf-8"))
+            self.assertEqual(manifest["version"], 3)
+            self.assertEqual(manifest["exported_notes"], [])
+            export_index_text = (obsidian_dir / "_socrates_index.md").read_text(encoding="utf-8")
+            self.assertIn("# Socrates Obsidian Export", export_index_text)
+            self.assertIn("No reviewed notes exported.", export_index_text)
 
     def test_status_cli_counts_obsidian_manifest_backlinks(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

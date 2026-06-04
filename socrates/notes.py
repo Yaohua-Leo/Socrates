@@ -7,7 +7,7 @@ import json
 from pathlib import Path
 
 from .context import append_project_log, load_project, write_text
-from .obsidian import obsidian_exported_note_ids
+from .obsidian import obsidian_exported_note_ids, read_obsidian_export_manifest
 from .project import slugify_topic
 from .quality import atomic_note_quality_issues, check_atomic_note_quality
 
@@ -64,6 +64,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
     """Copy reviewed notes into the Obsidian export directory."""
 
     context = load_project(project_path)
+    obsidian_dir = context.root / "07_exports" / "obsidian"
     exported: list[Path] = []
     manifest_notes: list[dict[str, object]] = []
     reviewed_notes: list[dict[str, object]] = []
@@ -75,7 +76,7 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
             if _frontmatter_value(text, "reviewed_by_user") != "true":
                 continue
             _require_note_quality(context.root, note_path, f"Reviewed note {note_path.stem}")
-            destination = context.root / "07_exports" / "obsidian" / note_path.name
+            destination = obsidian_dir / note_path.name
             destination.parent.mkdir(parents=True, exist_ok=True)
             exported.append(destination)
             note_entry = {
@@ -94,28 +95,27 @@ def export_reviewed_notes_to_obsidian(project_path: Path | str) -> list[Path]:
             }
             manifest_notes.append(note_entry)
             reviewed_notes.append({"text": text, "destination": destination, "entry": note_entry})
-    if exported:
-        obsidian_dir = context.root / "07_exports" / "obsidian"
-        backlinks = _obsidian_backlinks(manifest_notes)
-        _attach_obsidian_backlinks(manifest_notes, backlinks)
-        for note in reviewed_notes:
-            entry = note["entry"]
-            if not isinstance(entry, dict):
-                continue
-            destination = note["destination"]
-            if not isinstance(destination, Path):
-                continue
-            write_text(
-                destination,
-                _with_obsidian_backlinks(
-                    str(note["text"]),
-                    str(entry["note_id"]),
-                    backlinks,
-                ),
-            )
-        _write_export_manifest(obsidian_dir, manifest_notes)
-        _write_export_index(obsidian_dir, manifest_notes)
-        append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
+    backlinks = _obsidian_backlinks(manifest_notes)
+    _attach_obsidian_backlinks(manifest_notes, backlinks)
+    _prune_stale_obsidian_exports(context.root, obsidian_dir, {path.name for path in exported})
+    for note in reviewed_notes:
+        entry = note["entry"]
+        if not isinstance(entry, dict):
+            continue
+        destination = note["destination"]
+        if not isinstance(destination, Path):
+            continue
+        write_text(
+            destination,
+            _with_obsidian_backlinks(
+                str(note["text"]),
+                str(entry["note_id"]),
+                backlinks,
+            ),
+        )
+    _write_export_manifest(obsidian_dir, manifest_notes)
+    _write_export_index(obsidian_dir, manifest_notes)
+    append_project_log(context, f"Exported {len(exported)} reviewed note(s) to Obsidian.")
     return exported
 
 
@@ -152,6 +152,8 @@ def _write_export_manifest(obsidian_dir: Path, exported_notes: list[dict[str, ob
 def _write_export_index(obsidian_dir: Path, exported_notes: list[dict[str, object]]) -> None:
     notes = sorted(exported_notes, key=lambda item: (str(item["type"]), str(item["concept"])))
     lines = ["# Socrates Obsidian Export", ""]
+    if not notes:
+        lines.append("No reviewed notes exported.")
     current_type = ""
     for note in notes:
         note_type = str(note["type"])
@@ -171,6 +173,35 @@ def _write_export_index(obsidian_dir: Path, exported_notes: list[dict[str, objec
         if related:
             lines.append(f"  - Related: {', '.join(related)}")
     write_text(obsidian_dir / "_socrates_index.md", "\n".join(lines).rstrip() + "\n")
+
+
+def _prune_stale_obsidian_exports(
+    project_root: Path,
+    obsidian_dir: Path,
+    active_filenames: set[str],
+) -> None:
+    manifest = read_obsidian_export_manifest(project_root)
+    if not isinstance(manifest, dict):
+        return
+    exported_notes = manifest.get("exported_notes", [])
+    if not isinstance(exported_notes, list):
+        return
+    for note in exported_notes:
+        if not isinstance(note, dict):
+            continue
+        path_value = note.get("path")
+        if not isinstance(path_value, str) or not path_value:
+            continue
+        stale_path = obsidian_dir / path_value
+        if stale_path.name in active_filenames:
+            continue
+        try:
+            stale_path.resolve().relative_to(obsidian_dir.resolve())
+        except ValueError:
+            continue
+        if stale_path.suffix != ".md" or not stale_path.is_file():
+            continue
+        stale_path.unlink()
 
 
 def _obsidian_backlinks(exported_notes: list[dict[str, object]]) -> dict[str, list[dict[str, str]]]:
