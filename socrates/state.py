@@ -321,7 +321,7 @@ def _review_items(
     concept_mastery = state.get("concept_mastery", {})
     if isinstance(concept_mastery, dict):
         for concept, score_value in concept_mastery.items():
-            score = float(score_value)
+            score = _safe_score(score_value)
             if score >= mastery_threshold:
                 continue
             concept_id = str(concept)
