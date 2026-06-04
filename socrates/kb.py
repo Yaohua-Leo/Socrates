@@ -407,8 +407,33 @@ def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
                 isinstance(item, dict) for item in rows
             ):
                 return ("invalid", 0)
+        if filename == "chapter_index.json" and not _valid_chapter_index_artifact(
+            artifact,
+        ):
+            return ("invalid", 0)
         mtimes.append(path.stat().st_mtime_ns)
     return ("current", min(mtimes) if mtimes else 0)
+
+
+def _valid_chapter_index_artifact(artifact: dict[str, object]) -> bool:
+    chapters = artifact.get("chapters")
+    if not isinstance(chapters, list):
+        return False
+    for chapter in chapters:
+        if not isinstance(chapter, dict):
+            return False
+        sections = chapter.get("sections")
+        if not isinstance(sections, list) or not all(
+            isinstance(section, dict) for section in sections
+        ):
+            return False
+        for section in sections:
+            objects = section.get("objects")
+            if not isinstance(objects, list) or not all(
+                isinstance(item, dict) for item in objects
+            ):
+                return False
+    return True
 
 
 def _reference_index_rebuild_message(project_root: Path, reason: str) -> str:
