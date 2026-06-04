@@ -268,6 +268,17 @@ def _tool_verifications_to_fix(project_root: Path) -> list[QueueItem]:
         )
     for index, record in enumerate(records, start=1):
         if not isinstance(record, dict):
+            items.append(
+                QueueItem(
+                    item_id=f"record_{index}",
+                    path=manifest_path.relative_to(project_root).as_posix(),
+                    detail=(
+                        "quality: fail; status: invalid_record; "
+                        "issues: invalid tool-verification quality manifest record; "
+                        "rerun with: socrates tool check --project <project>"
+                    ),
+                )
+            )
             continue
         if str(record.get("quality_status", "")).strip() != "fail":
             continue

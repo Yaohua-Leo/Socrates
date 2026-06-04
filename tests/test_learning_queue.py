@@ -461,6 +461,36 @@ class LearningQueueTests(unittest.TestCase):
                 result.stdout,
             )
 
+    def test_queue_cli_lists_invalid_tool_quality_manifest_record_rows_to_fix(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            manifest_path = project / "08_evals" / "tool_verification_quality_manifest.json"
+            manifest_path.write_text(
+                json.dumps({"schema_version": 1, "records": ["not-a-record"]}) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "queue", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("## Tool Verifications To Fix", result.stdout)
+            self.assertIn(
+                (
+                    "- record_1 | 08_evals/tool_verification_quality_manifest.json | "
+                    "quality: fail; status: invalid_record; "
+                    "issues: invalid tool-verification quality manifest record; "
+                    "rerun with: socrates tool check --project <project>"
+                ),
+                result.stdout,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
