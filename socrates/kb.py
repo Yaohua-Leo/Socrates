@@ -127,7 +127,10 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
             )
         objects = index["objects"]
         object_count = len(objects)
-        artifact_status, artifact_mtime_ns = _reference_kb_artifacts_status(context.root)
+        artifact_status, artifact_mtime_ns = _reference_kb_artifacts_status(
+            context.root,
+            validate_source_text=False,
+        )
         if artifact_status != "current":
             return ReferenceKbStatus(
                 index_path=index_path,
@@ -147,6 +150,14 @@ def reference_kb_status(project_path: Path | str) -> ReferenceKbStatus:
                 object_count=0,
                 status="invalid",
             )
+        else:
+            artifact_status, _ = _reference_kb_artifacts_status(context.root)
+            if artifact_status != "current":
+                return ReferenceKbStatus(
+                    index_path=index_path,
+                    object_count=0,
+                    status=artifact_status,
+                )
 
     return ReferenceKbStatus(
         index_path=index_path,
@@ -431,37 +442,16 @@ def _valid_reference_index_provenance(
 ) -> bool:
     object_records: dict[str, tuple[str, int, str]] = {}
     for item in objects:
-        if not isinstance(item, dict):
+        record = _validated_reference_object_record(
+            project_root,
+            item,
+            validate_source_text=validate_source_text,
+        )
+        if record is None:
             return False
-        object_id = item.get("id")
-        if not isinstance(object_id, str) or not object_id.strip():
-            return False
+        object_id, _object_type, _title, source_path, source_line, statement = record
         if object_id in object_records:
             return False
-        source = item.get("source")
-        if not isinstance(source, dict):
-            return False
-        source_path = source.get("path")
-        source_line = source.get("line")
-        statement = item.get("statement")
-        if not isinstance(source_path, str) or not _valid_curated_source_location(
-            project_root,
-            source_path,
-            source_line,
-        ):
-            return False
-        if not isinstance(source_line, int) or isinstance(source_line, bool):
-            return False
-        if not isinstance(statement, str):
-            return False
-        if validate_source_text:
-            if not _valid_curated_source_statement(
-                project_root,
-                source_path,
-                source_line,
-                statement,
-            ):
-                return False
         object_records[object_id] = (source_path, source_line, statement)
     for chunk in chunks:
         if not isinstance(chunk, dict):
@@ -517,13 +507,20 @@ def _reference_index_is_stale(project_root: Path, index_path: Path) -> bool:
     if not curated_paths or not index_path.exists():
         return False
     index_mtime_ns = index_path.stat().st_mtime_ns
-    artifact_status, artifact_mtime_ns = _reference_kb_artifacts_status(project_root)
+    artifact_status, artifact_mtime_ns = _reference_kb_artifacts_status(
+        project_root,
+        validate_source_text=False,
+    )
     if artifact_status == "current":
         index_mtime_ns = min(index_mtime_ns, artifact_mtime_ns)
     return any(path.stat().st_mtime_ns > index_mtime_ns for path in curated_paths)
 
 
-def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
+def _reference_kb_artifacts_status(
+    project_root: Path,
+    *,
+    validate_source_text: bool = True,
+) -> tuple[str, int]:
     mtimes: list[int] = []
     kb_dir = project_root / "06_kb"
     for filename, keys in REFERENCE_KB_ARTIFACTS:
@@ -547,8 +544,90 @@ def _reference_kb_artifacts_status(project_root: Path) -> tuple[str, int]:
             artifact,
         ):
             return ("invalid", 0)
+        if filename == "theorem_index.json" and not _valid_reference_object_index_artifact(
+            project_root,
+            artifact,
+            key="theorems",
+            allowed_types={"theorem", "proposition", "lemma", "corollary"},
+            validate_source_text=validate_source_text,
+        ):
+            return ("invalid", 0)
+        if filename == "exercise_index.json" and not _valid_reference_object_index_artifact(
+            project_root,
+            artifact,
+            key="exercises",
+            allowed_types={"exercise"},
+            validate_source_text=validate_source_text,
+        ):
+            return ("invalid", 0)
         mtimes.append(path.stat().st_mtime_ns)
     return ("current", min(mtimes) if mtimes else 0)
+
+
+def _valid_reference_object_index_artifact(
+    project_root: Path,
+    artifact: dict[str, object],
+    *,
+    key: str,
+    allowed_types: set[str],
+    validate_source_text: bool = True,
+) -> bool:
+    rows = artifact.get(key)
+    if not isinstance(rows, list):
+        return False
+    seen_object_ids: set[str] = set()
+    for item in rows:
+        record = _validated_reference_object_record(
+            project_root,
+            item,
+            validate_source_text=validate_source_text,
+        )
+        if record is None:
+            return False
+        object_id, object_type, _title, _source_path, _source_line, _statement = record
+        if object_type not in allowed_types or object_id in seen_object_ids:
+            return False
+        seen_object_ids.add(object_id)
+    return True
+
+
+def _validated_reference_object_record(
+    project_root: Path,
+    item: object,
+    *,
+    validate_source_text: bool = True,
+) -> tuple[str, str, str, str, int, str] | None:
+    if not isinstance(item, dict):
+        return None
+    if not _has_nonempty_string_fields(item, ("id", "type", "title", "statement")):
+        return None
+    source = item.get("source")
+    if not isinstance(source, dict):
+        return None
+    source_path = source.get("path")
+    source_line = source.get("line")
+    if not isinstance(source_path, str):
+        return None
+    if not _valid_curated_source_location(project_root, source_path, source_line):
+        return None
+    if not isinstance(source_line, int) or isinstance(source_line, bool):
+        return None
+    statement = str(item["statement"])
+    if validate_source_text and not _valid_curated_source_statement(
+        project_root,
+        source_path,
+        source_line,
+        statement,
+    ):
+        return None
+    return (
+        str(item["id"]),
+        str(item["type"]),
+        str(item["title"]),
+        source_path,
+        source_line,
+        statement,
+    )
 
 
 def _valid_chapter_index_artifact(project_root: Path, artifact: dict[str, object]) -> bool:
