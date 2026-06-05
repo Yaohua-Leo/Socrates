@@ -6,11 +6,36 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.2 prototype. Its strongest surfaces are the
+The current codebase is a v0.54-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
-and Obsidian note workflow. It is not yet a full AI tutor: LLM generation,
-OCR/PDF extraction backends, LLM judges, and product UI layers remain future
-work.
+external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
+exercise validation and bank manifests, deterministic session score reports,
+next-session handoff planning, deterministic session closeout workflow with
+status/lifecycle visibility, deterministic multi-session regression with
+long-term report-surface refresh, structured learning-queue JSON, structured
+study-dashboard JSON, structured study-brief-status JSON,
+dry-run-previewable structured misconception
+resolver writer,
+dry-run-previewable structured
+review-adjust-plan writer,
+dry-run-previewable structured
+review-exercise writer, dry-run-previewable structured repair-writer,
+schedule-writer, due-review, learning-mastery, and misconception-ledger JSON,
+targeted limit-controlled dry-run-previewable structured batch-refreshable
+commands-output command-summarized filterable readiness-counted
+machine-readable and Markdown read-only multi-project resume indexes,
+machine-readable read-only project resume state, read-only project resume
+cards, read-only study dashboards, generated
+study-start briefs with a read-only manifest-backed freshness command,
+workflow action queue visibility, priority action queue navigation, priority
+action snapshots in reports, recommended focus report summaries, action summary
+queue/report summaries, repair path queue/report summaries, risk summary report
+snapshots, risk trend report summaries, report-history audit visibility, and an
+opt-in LLM provider layer for
+reviewable draft suggestions, including
+review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
+tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
+remain future work.
 
 ## Quick Start
 
@@ -27,6 +52,13 @@ python -m socrates import --project ".\projects\group_theory" ".\normal_subgroup
 python -m socrates curate --project ".\projects\group_theory" --source-id normal_subgroup_notes
 ```
 
+For a PDF or OCR workflow, attach an externally converted Markdown file before
+curation:
+
+```powershell
+python -m socrates sources attach-conversion --project ".\projects\group_theory" --source-id abstract_algebra --markdown ".\abstract_algebra.converted.md"
+```
+
 Build and query the Reference KB:
 
 ```powershell
@@ -41,10 +73,63 @@ Run the deterministic learning loop and inspect status:
 ```powershell
 python -m socrates plan --project ".\projects\group_theory"
 python -m socrates teach --project ".\projects\group_theory" --session-id session_0001 --script ".\session.script"
+python -m socrates review schedule --project ".\projects\group_theory" --as-of 2026-06-04 --json
+python -m socrates review due --project ".\projects\group_theory" --as-of 2026-06-07 --json
+python -m socrates review repair-schedule --project ".\projects\group_theory" --as-of 2026-06-04 --json
+python -m socrates review repair-schedule --project ".\projects\group_theory" --as-of 2026-06-04 --dry-run --json
+python -m socrates review adjust-plan --project ".\projects\group_theory" --json
+python -m socrates review adjust-plan --project ".\projects\group_theory" --dry-run --json
+python -m socrates review exercises --project ".\projects\group_theory" --due-by 2026-06-07 --json
+python -m socrates review exercises --project ".\projects\group_theory" --due-by 2026-06-07 --dry-run --json
+python -m socrates review mastery --project ".\projects\group_theory" --json
+python -m socrates review misconceptions --project ".\projects\group_theory" --json
+python -m socrates review resolve --project ".\projects\group_theory" --concept normal_subgroup --json
+python -m socrates review resolve --project ".\projects\group_theory" --concept normal_subgroup --dry-run --json
 python -m socrates note review --project ".\projects\group_theory" --note normal_subgroup
 python -m socrates note export-obsidian --project ".\projects\group_theory"
+python -m socrates exercise validate --project ".\projects\group_theory" --all
+python -m socrates exercise bank build --project ".\projects\group_theory"
+python -m socrates session score --project ".\projects\group_theory" --session-id session_0001
+python -m socrates session plan-next --project ".\projects\group_theory" --session-id session_0002
+python -m socrates session closeout --project ".\projects\group_theory" --session-id session_0001 --next-session-id session_0002
+python -m socrates lifecycle regression --project ".\projects\group_theory"
+python -m socrates queue --project ".\projects\group_theory" --section summary
+python -m socrates queue --project ".\projects\group_theory" --section repairs
+python -m socrates queue --project ".\projects\group_theory" --section priority
+python -m socrates queue --project ".\projects\group_theory" --section workflow
+python -m socrates queue --project ".\projects\group_theory" --json
+python -m socrates report weekly --project ".\projects\group_theory"
+python -m socrates report monthly --project ".\projects\group_theory"
+python -m socrates report project-summary --project ".\projects\group_theory"
+python -m socrates session judge-suggest --project ".\projects\group_theory" --session-id session_0001
+python -m socrates dashboard --project ".\projects\group_theory"
+python -m socrates dashboard --project ".\projects\group_theory" --json
+python -m socrates resume --project ".\projects\group_theory"
+python -m socrates resume --project ".\projects\group_theory" --json
+python -m socrates projects resume --root ".\projects"
+python -m socrates projects resume --root ".\projects" --json
+python -m socrates projects resume --root ".\projects" --state refresh_brief
+python -m socrates projects resume --root ".\projects" --state refresh_brief --commands
+python -m socrates projects refresh-briefs --root ".\projects"
+python -m socrates projects refresh-briefs --root ".\projects" --dry-run
+python -m socrates projects refresh-briefs --root ".\projects" --limit 1
+python -m socrates projects refresh-briefs --root ".\projects" --project-id group_theory
+python -m socrates projects refresh-briefs --root ".\projects" --json
+python -m socrates projects refresh-briefs --root ".\projects" --dry-run --json
+python -m socrates projects refresh-briefs --root ".\projects" --project-id group_theory --json
+python -m socrates projects refresh-briefs --root ".\projects" --dry-run --limit 1 --json
+python -m socrates brief generate --project ".\projects\group_theory"
+python -m socrates brief status --project ".\projects\group_theory"
+python -m socrates brief status --project ".\projects\group_theory" --json
 python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
+```
+
+Inspect local LLM configuration or run an explicit DeepSeek smoke test:
+
+```powershell
+python -m socrates llm config --root .
+python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 ```
 
 ## Current Capabilities
@@ -53,6 +138,8 @@ python -m socrates lifecycle audit --project ".\projects\group_theory"
   exercise, KB, export, and eval directories.
 - Local reference import, conversion-pending handling for unsupported PDFs, and
   patch-only curation correction proposals.
+- External Markdown conversion handoff for PDF/OCR workflows, preserving raw
+  reference bytes while creating a review-gated curated draft.
 - Reference KB extraction from curated Markdown into object, chunk, chapter,
   theorem, exercise, concept graph, and dependency graph artifacts.
 - Reader fail-fast behavior for malformed generated KB artifacts, with rebuild
@@ -63,14 +150,326 @@ python -m socrates lifecycle audit --project ".\projects\group_theory"
   stale export cleanup, and lifecycle audit integration.
 - Exercise drafting, attempts, grading, review scheduling, learning-state
   updates, reports, tool-verification records, and checklist quality gates.
+- v0.4 exercise schema parsing, per-exercise validation reports, project
+  validation manifests, and an approved exercise-bank manifest.
+- v0.5 deterministic session score reports that compose ingestion, note,
+  exercise, exercise validation, and tutoring quality gates into a persisted
+  teaching-quality score.
+- v0.7 deterministic next-session handoff plans that combine due reviews,
+  previous session artifacts, queue counts, and Reference KB context into a
+  reviewable plan/manifest for the next session.
+- v0.9 deterministic session closeout workflow that runs session scoring,
+  next-session handoff planning, and project-summary refresh in one repeatable
+  post-session command.
+- v0.10 status and lifecycle visibility for session closeout manifests, with
+  missing, corrupt, or `needs_attention` closeouts treated conservatively.
+- v0.11 deterministic multi-session regression reports that verify a ready
+  closeout carries into visible next-session artifacts, status, and lifecycle
+  readiness.
+- v0.12 workflow action queue visibility for deterministic follow-up commands,
+  currently including missing or invalid multi-session regression after a ready
+  closeout.
+- v0.13 priority action queue navigation that folds workflow, quality,
+  verification, export, note, review, exercise, and grading actions into one
+  deterministic operator-facing next-action view.
+- v0.14 priority action snapshots in weekly, monthly, and project-summary
+  reports, with report staleness tracking workflow/regression manifests that
+  can change the next-action view.
+- v0.15 recommended focus summaries in weekly, monthly, and project-summary
+  reports, combining the first priority action, weakest concept, next review,
+  and active misconception from existing deterministic evidence.
+- v0.16 action summary rows in queue and learning reports, classifying open
+  work into blocker, continue-learning, and human-review counts with the same
+  deterministic next action used by the priority queue.
+- v0.17 repair path rows in queue and learning reports, showing blocker-only
+  workflow, quality-check, and tool-verification actions without mixing in
+  ordinary study or review work.
+- v0.18 risk summary rows in weekly, monthly, and project-summary reports,
+  showing deterministic current-state pressure from blockers, reviews,
+  human-review backlog, weak concepts, and active misconceptions.
+- v0.19 trend summary rows in weekly, monthly, and project-summary reports,
+  comparing current risk metrics against the previous same-type snapshot stored
+  in `07_exports/reports/risk_history.json`.
+- v0.20 report-history audit rows in `status` and project-summary reports,
+  exposing risk-history health, snapshot count, and latest snapshot without
+  requiring users to inspect raw JSON.
+- v0.21 long-term multi-session regression refreshes project-summary output
+  after the regression manifest is written, verifies long-term report sections
+  and report-history artifacts, and leaves status/report views aligned after a
+  realistic closeout -> regression cycle.
+- v0.22 read-only study dashboards summarize existing status, queue, report,
+  report-history, closeout, and regression evidence into one operator-facing
+  Markdown view.
+- v0.23 generated study-start briefs write `07_exports/briefs/study_brief.md`
+  from existing dashboard and queue evidence so the next action can be saved
+  before starting a learning session.
+- v0.24 study brief status rows in `dashboard` and `status` show whether the
+  brief's recorded next action is current, stale, missing, or invalid compared
+  with the current priority queue first action.
+- v0.25 generated study-start briefs also write
+  `07_exports/briefs/study_brief_manifest.json`; status readers prefer this
+  structured manifest and use Markdown parsing only as a legacy fallback.
+- v0.26 `brief status` reports the manifest-backed brief freshness fields
+  without writing artifacts; `brief generate` is the explicit write command,
+  while legacy `brief --project <project>` remains supported.
+- v0.27 `resume` renders a compact read-only returning-learner card that says
+  whether the saved study brief is ready or should be regenerated before
+  continuing.
+- v0.28 `resume --json` emits the same read-only resume state as structured
+  JSON with `quality_boundary: deterministic_project_resume` for future UI or
+  plugin wrappers.
+- v0.29 `projects resume --root <root>` renders a read-only resume index
+  across a SocratesProjects root, reusing each project's deterministic resume
+  payload so collection navigation does not duplicate status logic or write
+  child-project artifacts.
+- v0.30 `projects resume --root <root> --json` emits the same collection
+  readiness state as structured JSON with
+  `quality_boundary: deterministic_project_resume_index` for future UI or
+  plugin wrappers.
+- v0.31 collection resume outputs include ready and refresh-brief counts so a
+  project root can be scanned without reading every row.
+- v0.32 `projects resume --state all|ready|refresh_brief` filters collection
+  resume output after building the same structured rows, for both Markdown and
+  JSON.
+- v0.33 collection resume outputs include a derived recommended-command summary
+  so filtered project-root views show which child-project commands should be run
+  next without executing them.
+- v0.34 `projects resume --commands` prints only the derived child-project
+  command lines for the active state filter, with `--json` and `--commands`
+  kept mutually exclusive.
+- v0.35 `projects refresh-briefs --root <root>` explicitly generates study
+  briefs only for child projects whose current resume state is `refresh_brief`;
+  ready projects are skipped.
+- v0.36 `projects refresh-briefs --json` emits the same explicit collection
+  writer result as structured JSON for wrappers without changing side effects or
+  selection policy.
+- v0.37 `projects refresh-briefs --dry-run` previews that writer's selected
+  `refresh_brief` projects in Markdown or JSON without writing child brief
+  artifacts, manifests, project logs, or root indexes.
+- v0.38 `projects refresh-briefs --limit N` bounds selected refresh-needed
+  child projects and reports over-limit refresh-needed rows as deferred instead
+  of hiding them under skipped or silently ignoring them.
+- v0.39 `projects refresh-briefs --project-id <id>` targets specific child
+  projects, reports nonmatching rows as excluded, and rejects unknown ids before
+  any write.
+- v0.40 `review misconceptions --json` emits the same read-only misconception
+  ledger rows as structured JSON for wrappers without parsing Markdown or
+  mutating learning state.
+- v0.41 `review mastery --json` emits the same read-only concept/proof-skill
+  score rows as structured JSON with filter metadata and threshold-sensitive
+  counts.
+- v0.42 `review due --json` emits the same read-only due-review rows as
+  structured JSON, including invalid persisted schedule rows that need repair.
+- v0.43 `review schedule --json` emits the explicit schedule writer result as
+  structured JSON without changing scheduler side effects or selection policy.
+- v0.44 `review repair-schedule --json` emits the explicit repair writer result
+  as structured JSON, including repaired counts and post-write rows.
+- v0.45 `review repair-schedule --dry-run` previews the same repair computation
+  in prose or JSON without writing `learning_state.json` or `review_schedule.md`.
+- v0.46 `review exercises --json` emits the explicit targeted review exercise
+  writer result as structured JSON, including generated draft rows and filters.
+- v0.47 `review exercises --dry-run` previews targeted review exercise rows in
+  prose or JSON without creating generated exercise files.
+- v0.48 `review adjust-plan --json` emits the explicit short-term-plan writer
+  result as structured JSON, including the plan path and persisted adjustment
+  rows.
+- v0.49 `review adjust-plan --dry-run` previews short-term-plan adjustment rows
+  in prose or JSON without rewriting the plan file.
+- v0.50 `review resolve --json` emits the explicit misconception resolver
+  writer result as structured JSON, including rows captured before mutation and
+  serialized with post-action resolved status.
+- v0.51 `review resolve --dry-run` previews the same misconception resolver
+  rows in prose or JSON without rewriting learning state or appending the
+  mistake bank.
+- v0.52 `dashboard --json` emits the read-only operator dashboard as structured
+  JSON, including snapshot, action summary, top priority action, and report
+  health rows.
+- v0.53 `queue --json` emits the read-only learning queue as structured JSON,
+  including action summary and section-filtered item rows.
+- v0.54 `brief status --json` emits manifest-backed study-brief freshness as
+  structured JSON without generating or refreshing the saved brief.
+- Opt-in DeepSeek-backed draft suggestions for reference correction patches,
+  tutoring next questions, exercise feedback proposals, and review-only session
+  judge observations, tracked through an LLM suggestion manifest.
 
 ## Boundaries
 
 - No runtime third-party dependencies are required.
-- PDF/OCR conversion is intentionally not implemented yet; unsupported PDFs
-  produce conversion-pending artifacts.
-- Tutoring, note, and exercise content generation is deterministic/template
-  driven in v0.2. The LLM/provider layer is a v0.3+ architecture decision.
+- Bundled PDF/OCR conversion is intentionally not implemented yet; unsupported
+  PDFs produce conversion-pending artifacts until the user attaches an external
+  Markdown conversion.
+- External conversions are review-gated drafts. They do not bypass curation,
+  Reference KB provenance checks, or user review.
+- v0.3 adds an opt-in LLM provider layer for draft suggestions only. The default
+  CLI workflow remains deterministic and offline; live DeepSeek calls require
+  local `.env` configuration and are not part of the default check gate.
+- LLM output never directly overwrites curated references, reviewed notes,
+  graded attempts, or learning-state truth.
+- LLM session judge drafts are review-only observations. They are not trusted
+  grades, deterministic session scores, readiness gates, formal teaching
+  evaluations, proofs, or learning-state updates.
+- Exercise validation and counterexample search are advisory review evidence.
+  Passing validation does not prove mathematical correctness or approve a draft.
+- Session scores and benchmark gates are deterministic checklist summaries, not
+  an LLM judge or a formal teaching-quality proof.
+- Next-session handoff plans are deterministic planning artifacts. They do not
+  run autonomous tutoring, grade the learner, call an LLM judge, or mutate
+  learning-state truth.
+- Session closeout is a deterministic workflow composition. It does not override
+  failed session score gates; failed scores produce a `needs_attention`
+  closeout manifest for human follow-up, and lifecycle audit treats that as not
+  ready.
+- Multi-session regression is deterministic artifact evidence. It checks the
+  persisted closeout, completed/next session artifacts, handoff manifest,
+  project summary visibility, long-term report sections, and report-history
+  artifact health; it is not an LLM judge, mathematical proof, prediction,
+  grade, autonomous tutor, or learning-state truth source.
+- Workflow action queue entries are operational prompts. They do not create a
+  new readiness gate, mutate project state, or replace lifecycle/regression
+  checks.
+- Priority queue entries are a virtual rendering of existing queue items. They
+  do not create new artifacts, readiness gates, scores, or project mutations.
+- Report priority snapshots reuse the same queue evidence. They do not create a
+  new report score, readiness gate, artifact writer, or learning-state truth.
+- Recommended focus rows are deterministic report summaries. They do not run
+  tutoring, plan a session, score learning quality, or mutate learning state.
+- Action summary rows are deterministic queue/report summaries. They do not
+  create a new readiness gate, score, planner, tutor, or learning-state truth.
+- Repair path rows are deterministic blocker summaries. They do not run repair
+  commands, fix artifacts, create a readiness gate, or mutate project state.
+- Risk summary rows are deterministic current-state report snapshots over
+  existing queue and learning-state evidence. They are not historical analytics,
+  prediction, scoring, grading, tutoring, planning, readiness gates, or
+  learning-state mutation.
+- Trend summary rows are deterministic comparisons over bounded report risk
+  snapshots. They are not predictions, learning-quality scores, grades,
+  tutoring decisions, plans, readiness gates, or learning-state mutation.
+- Report-history audit rows are deterministic visibility over existing trend
+  artifacts. They are not new readiness gates, scores, predictions, planners,
+  tutors, or learning-state truth.
+- `dashboard --json` is a read-only structured operator view over existing
+  deterministic evidence. It is not a writer, readiness gate, report refresh,
+  repair runner, LLM call, score, tutor, prediction, approval, or project-state
+  mutation.
+- `queue --json` is a read-only structured action-queue view over existing
+  deterministic evidence. It is not a writer, command runner, repair runner,
+  readiness gate, report refresh, LLM call, score, tutor, prediction, approval,
+  or project-state mutation.
+- `review misconceptions --json` is a read-only structured view over persisted
+  misconception rows. It is not a resolver, note generator, tutor, score,
+  report refresh, LLM call, or learning-state mutation.
+- `review resolve --json` is a structured misconception resolver writer-result
+  payload. It still mutates matching active misconception rows in
+  `learning_state.json` and appends the mistake bank; it is not a dry-run,
+  read-only ledger, note generator, tutor, score, report refresh, LLM call, or
+  extra learning-state truth beyond the existing resolver write.
+- `review resolve --dry-run` is a no-write misconception resolver preview. It
+  must not rewrite `learning_state.json` or append the mistake bank; it is not
+  a writer, read-only ledger, note generator, tutor, score, report refresh, LLM
+  call, or learning-state mutation.
+- `review mastery --json` is a read-only structured view over persisted
+  concept mastery and proof-skill rows. It is not a scheduler, planner, tutor,
+  score writer, report refresh, LLM call, or learning-state mutation.
+- `review due --json` is a read-only structured view over due review rows and
+  invalid persisted schedule rows. It is not a scheduler, repair command,
+  exercise generator, planner, tutor, report refresh, LLM call, or
+  learning-state mutation.
+- `review schedule --json` is a structured writer-result payload. It still
+  writes `learning_state.json` and `review_schedule.md`; it is not a dry-run,
+  read-only ledger, tutor, planner, repair command, exercise generator, report
+  refresh, LLM call, or extra learning-state truth beyond the existing
+  scheduler write.
+- `review adjust-plan --json` is a structured short-term-plan writer-result
+  payload. It still rewrites `02_learning_plan/short_term_plan.md`; it is not a
+  dry-run, scheduler, exercise generator, tutor, report refresh, LLM call, plan
+  approval, or learning-state mutation.
+- `review adjust-plan --dry-run` is a no-write short-term-plan adjustment
+  preview. It must not rewrite `02_learning_plan/short_term_plan.md`; it is not
+  a writer, scheduler, exercise generator, tutor, report refresh, LLM call,
+  plan approval, or learning-state mutation.
+- `review repair-schedule --json` is a structured repair-writer result
+  payload. It still repairs `learning_state.json` and rewrites
+  `review_schedule.md`; it is not a dry-run, read-only ledger, scheduler,
+  tutor, planner, exercise generator, report refresh, LLM call, or extra
+  learning-state truth beyond the existing repair write.
+- `review repair-schedule --dry-run` is a no-write repair preview. It reuses the
+  repair computation but must not mutate `learning_state.json` or write
+  `review_schedule.md`; it is not a scheduler, tutor, planner, exercise
+  generator, report refresh, LLM call, or learning-state mutation.
+- `review exercises --json` is a structured targeted-review exercise writer
+  result payload. It still writes generated exercise drafts when needed; it is
+  not a dry-run, read-only ledger, scheduler, planner, tutor, report refresh,
+  LLM call, exercise validation, approval, grading, or learning-state mutation.
+- `review exercises --dry-run` is a no-write targeted-review exercise preview.
+  It must not create generated exercise files; it is not a writer, read-only
+  ledger, scheduler, planner, tutor, report refresh, LLM call, exercise
+  validation, approval, grading, or learning-state mutation.
+- Study dashboards are read-only compositions over existing deterministic
+  evidence. They do not create new truth, run repairs, generate reports, call an
+  LLM, approve artifacts, score learning, tutor, predict, or mutate project
+  state.
+- Study-start briefs are deterministic export artifacts. Aside from writing the
+  brief and a project-log entry, they do not run repairs, refresh reports, call
+  an LLM, approve artifacts, score learning, tutor, predict, or mutate
+  learning-state truth.
+- Study brief status is a next-action freshness check. It compares the brief's
+  recorded next action with the current priority queue first action; it is not
+  a full report freshness system, readiness gate, score, tutor, or project
+  mutation.
+- Study brief manifests are deterministic metadata for the brief artifact only.
+  A malformed manifest is reported conservatively as invalid; manifest status is
+  not mathematical validation, report freshness, tutoring, scoring, or approval.
+- `brief status` is a read-only inspection command over that status reader. It
+  does not generate briefs, append project-log entries, refresh reports, call an
+  LLM, repair artifacts, score learning, tutor, or mutate learning-state truth.
+- `brief status --json` is the same read-only freshness check as structured
+  output for wrappers, UI prototypes, and plugins. It does not generate briefs,
+  append project-log entries, refresh reports, call an LLM, repair artifacts,
+  score learning, tutor, or mutate project state.
+- `resume` is a read-only returning-learner view. It can recommend
+  `brief generate` when the saved brief is missing, stale, or invalid, but it
+  does not run that command or mutate project state.
+- `resume --json` is the same read-only state as machine-readable output. It is
+  not a new writer, score, project-readiness gate, or learning-state truth.
+- `projects resume` is a read-only collection view over per-project resume
+  payloads. It does not generate briefs, refresh reports, run repairs, call an
+  LLM, score learning, or mutate any child project.
+- `projects resume --json` is the same read-only collection state as
+  machine-readable output. It is not a scanner, generator, writer, score,
+  project-readiness gate, or child-project state mutation.
+- Collection resume readiness counts are read-only scan aids derived from
+  `resume_state` rows. They are not scores, readiness gates, predictions, or
+  project-state mutations.
+- `projects resume --state` filters existing collection rows. It is not a
+  scanner, score, readiness gate, report generator, writer, or child-project
+  state mutation.
+- Collection resume recommended-command summaries are derived from returned
+  rows. They are not command execution, batch automation, scanners, scores,
+  readiness gates, report generation, LLM calls, or child-project mutations.
+- `projects resume --commands` is an output/copy mode over those derived command
+  rows. It is not command execution, batch automation, a generator, scanner,
+  score, readiness gate, report generator, LLM call, or child-project mutation.
+- `projects refresh-briefs` is an explicit collection writer. It may create
+  study brief artifacts and child project-log entries for `refresh_brief`
+  projects only; it must skip ready projects and must not write the root index,
+  refresh reports, run repairs, call an LLM, score learning, tutor, or mutate
+  learning-state truth.
+- `projects refresh-briefs --json` changes only the output format of that writer.
+  It is not a dry-run by itself, read-only command, new selection policy,
+  scanner, report refresh, repair runner, LLM call, score, tutor, approval, or
+  readiness gate.
+- `projects refresh-briefs --dry-run` uses the same selection policy as the
+  writer and suppresses writes. It is a preview mode, not a resume command, new
+  selector, report refresh, repair runner, LLM call, score, tutor, approval, or
+  readiness gate.
+- `projects refresh-briefs --limit N` changes only batch size for the same
+  writer selection. Over-limit `refresh_brief` projects are reported as deferred
+  and left unwritten; the option is not a new selector, queue, scanner, report
+  refresh, repair runner, LLM call, score, tutor, approval, or readiness gate.
+- `projects refresh-briefs --project-id <id>` changes only target selection for
+  the same writer. Nonmatching projects are reported as excluded and unknown ids
+  fail before writes; it is not a readiness rule, scanner, queue, report refresh,
+  repair runner, LLM call, score, tutor, approval, or hidden discovery mode.
 - Checklist quality gates are conservative heuristics, not formal mathematical
   verification.
 - Lean/Sage/GAP/SymPy integrations depend on the corresponding external tools

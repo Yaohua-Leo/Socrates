@@ -86,18 +86,19 @@ class BenchmarkTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Benchmark passed 4/4 gates", result.stdout)
+            self.assertIn("Benchmark passed 5/5 gates", result.stdout)
             self.assertIn("Benchmark score: 100/100", result.stdout)
             self.assertIn("Benchmark manifest:", result.stdout)
             report = project / "08_evals" / "benchmark_report.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Benchmark Report", report_text)
             self.assertIn("## Summary", report_text)
-            self.assertIn("- Gates passed: 4/4", report_text)
+            self.assertIn("- Gates passed: 5/5", report_text)
             self.assertIn("- Benchmark score: 100/100", report_text)
             self.assertIn("- Ingestion: pass", report_text)
             self.assertIn("- Note quality: pass", report_text)
             self.assertIn("- Exercise quality: pass", report_text)
+            self.assertIn("- Exercise validation: pass", report_text)
             self.assertIn("- Tutoring quality: pass", report_text)
             manifest = json.loads(
                 (project / "08_evals" / "benchmark_manifest.json").read_text(
@@ -106,8 +107,8 @@ class BenchmarkTests(unittest.TestCase):
             )
             self.assertEqual(manifest["schema_version"], 1)
             self.assertEqual(manifest["score"], 100)
-            self.assertEqual(manifest["passed_gates"], 4)
-            self.assertEqual(manifest["total_gates"], 4)
+            self.assertEqual(manifest["passed_gates"], 5)
+            self.assertEqual(manifest["total_gates"], 5)
             gates = manifest["gates"]
             self.assertEqual(
                 [gate["name"] for gate in gates],
@@ -115,6 +116,7 @@ class BenchmarkTests(unittest.TestCase):
                     "Ingestion",
                     "Note quality",
                     "Exercise quality",
+                    "Exercise validation",
                     "Tutoring quality",
                 ],
             )
@@ -136,10 +138,14 @@ class BenchmarkTests(unittest.TestCase):
             )
             self.assertEqual(
                 gates[3]["manifest_path"],
+                "08_evals/exercise_validation_manifest.json",
+            )
+            self.assertEqual(
+                gates[4]["manifest_path"],
                 "08_evals/tutoring_quality_manifest.json",
             )
-            self.assertEqual(gates[3]["session_id"], "session_0001")
-            self.assertEqual(gates[3]["status"], "pass")
+            self.assertEqual(gates[4]["session_id"], "session_0001")
+            self.assertEqual(gates[4]["status"], "pass")
 
             status = subprocess.run(
                 [
@@ -158,7 +164,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Current phase: benchmark_ready", status.stdout)
             self.assertIn("Benchmark score: 100/100", status.stdout)
-            self.assertIn("Benchmark gates: 4/4", status.stdout)
+            self.assertIn("Benchmark gates: 5/5", status.stdout)
             self.assertIn("Benchmark failed gates: none", status.stdout)
 
             benchmark_status = subprocess.run(
@@ -179,7 +185,7 @@ class BenchmarkTests(unittest.TestCase):
             self.assertEqual(benchmark_status.returncode, 0, benchmark_status.stderr)
             self.assertIn("# Benchmark Status", benchmark_status.stdout)
             self.assertIn("- Score: 100/100", benchmark_status.stdout)
-            self.assertIn("- Gates passed: 4/4", benchmark_status.stdout)
+            self.assertIn("- Gates passed: 5/5", benchmark_status.stdout)
             self.assertIn("- Failed gates: none", benchmark_status.stdout)
             self.assertIn(
                 "- Ingestion: pass | checked 1 | failed 0",
@@ -270,13 +276,14 @@ class BenchmarkTests(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "score": 75,
-                        "passed_gates": 3,
-                        "total_gates": 4,
+                        "score": 80,
+                        "passed_gates": 4,
+                        "total_gates": 5,
                         "gates": [
                             {"name": "Ingestion", "passed": True},
                             {"name": "Note quality", "passed": True},
                             {"name": "Exercise quality", "passed": True},
+                            {"name": "Exercise validation", "passed": True},
                             {"name": "Tutoring quality", "passed": False},
                         ],
                     },
@@ -303,8 +310,8 @@ class BenchmarkTests(unittest.TestCase):
 
             self.assertEqual(status.returncode, 0, status.stderr)
             self.assertIn("Current phase: benchmark_ready", status.stdout)
-            self.assertIn("Benchmark score: 75/100", status.stdout)
-            self.assertIn("Benchmark gates: 3/4", status.stdout)
+            self.assertIn("Benchmark score: 80/100", status.stdout)
+            self.assertIn("Benchmark gates: 4/5", status.stdout)
             self.assertIn("Benchmark failed gates: Tutoring quality", status.stdout)
 
             benchmark_status = subprocess.run(
@@ -324,8 +331,8 @@ class BenchmarkTests(unittest.TestCase):
             )
 
             self.assertEqual(benchmark_status.returncode, 0, benchmark_status.stderr)
-            self.assertIn("- Score: 75/100", benchmark_status.stdout)
-            self.assertIn("- Gates passed: 3/4", benchmark_status.stdout)
+            self.assertIn("- Score: 80/100", benchmark_status.stdout)
+            self.assertIn("- Gates passed: 4/5", benchmark_status.stdout)
             self.assertIn("- Failed gates: Tutoring quality", benchmark_status.stdout)
             self.assertIn(
                 "- Tutoring quality: fail | checked unknown | failed unknown",

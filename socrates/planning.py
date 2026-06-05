@@ -2,13 +2,27 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from datetime import date
 import json
 from pathlib import Path
 
-from socrates.context import load_project, write_text
+from socrates.context import append_project_log, load_project, write_json, write_text
 from socrates.contracts import SessionPlan, yaml_scalar
 from socrates.kb import reference_kb_status, read_reference_chapter_index
+from socrates.learning_queue import LearningQueue, collect_learning_queue
 from socrates.state import ensure_learning_state_readable
+
+
+@dataclass(frozen=True)
+class NextSessionPlanResult:
+    """Filesystem result for one deterministic next-session handoff plan."""
+
+    session_id: str
+    plan_path: Path
+    manifest_path: Path
+    due_reviews: int
+    previous_session_id: str | None
 
 
 def create_learning_plan(project_path: Path | str) -> list[Path]:
@@ -60,6 +74,83 @@ def create_learning_plan(project_path: Path | str) -> list[Path]:
     return list(plans)
 
 
+def create_next_session_plan(
+    project_path: Path | str,
+    *,
+    session_id: str,
+    as_of: date | None = None,
+) -> NextSessionPlanResult:
+    """Create a deterministic handoff plan for the next tutoring session."""
+
+    context = load_project(project_path)
+    as_of_date = as_of or date.today()
+    project = _read_project_metadata(context.project_file)
+    ensure_learning_state_readable(
+        context.learning_state,
+        action="creating next-session plans",
+    )
+    state = _read_learning_state_for_next_plan(context.learning_state)
+    due_reviews, future_reviews, invalid_reviews = _review_schedule_rows(
+        state,
+        as_of=as_of_date,
+    )
+    previous_session_id = _latest_previous_session_id(
+        context.sessions_dir,
+        exclude=session_id,
+    )
+    previous_session = _previous_session_handoff(
+        context.sessions_dir,
+        previous_session_id,
+    )
+    query_concept = due_reviews[0]["concept"] if due_reviews else project["topic"]
+    kb_status = reference_kb_status(context.root)
+    reference_context = _read_reference_context(context.root, query_concept)
+    queue = collect_learning_queue(context.root)
+
+    plan_path = context.learning_plan_dir / f"{session_id}_plan.md"
+    manifest_path = context.learning_plan_dir / "next_session_plan_manifest.json"
+    write_text(
+        plan_path,
+        _next_session_plan_text(
+            session_id=session_id,
+            topic=project["topic"],
+            goal=project["goal"],
+            as_of=as_of_date.isoformat(),
+            previous_session_id=previous_session_id,
+            previous_session=previous_session,
+            due_reviews=due_reviews,
+            future_reviews=future_reviews,
+            invalid_reviews=invalid_reviews,
+            queue=queue,
+            reference_context=reference_context,
+            kb_status=kb_status.status,
+        ),
+    )
+    write_json(
+        manifest_path,
+        _next_session_manifest(
+            context.root,
+            session_id=session_id,
+            as_of=as_of_date.isoformat(),
+            plan_path=plan_path,
+            previous_session_id=previous_session_id,
+            due_reviews=due_reviews,
+            future_reviews=future_reviews,
+            invalid_reviews=invalid_reviews,
+            queue=queue,
+            reference_kb_status=kb_status.status,
+        ),
+    )
+    append_project_log(context, f"Created next-session handoff plan {session_id}.")
+    return NextSessionPlanResult(
+        session_id=session_id,
+        plan_path=plan_path,
+        manifest_path=manifest_path,
+        due_reviews=len(due_reviews),
+        previous_session_id=previous_session_id,
+    )
+
+
 def adjust_short_term_plan_from_review_schedule(project_path: Path | str) -> Path:
     """Update the short-term plan with review tasks from learning state."""
 
@@ -99,6 +190,89 @@ def _read_project_metadata(project_file: Path) -> dict[str, str]:
         if in_user_goal and stripped.startswith("description:"):
             goal = _yaml_value(stripped.removeprefix("description:").strip())
     return {"topic": topic or "Untitled Project", "goal": goal or "No goal recorded yet."}
+
+
+def _read_learning_state_for_next_plan(path: Path) -> dict[str, object]:
+    if not path.exists():
+        return {}
+    loaded = json.loads(path.read_text(encoding="utf-8"))
+    return loaded if isinstance(loaded, dict) else {}
+
+
+def _review_schedule_rows(
+    state: dict[str, object],
+    *,
+    as_of: date,
+) -> tuple[list[dict[str, str]], list[dict[str, str]], list[dict[str, str]]]:
+    schedule = state.get("review_schedule", [])
+    if not isinstance(schedule, list):
+        return ([], [], [])
+
+    due: list[dict[str, str]] = []
+    future: list[dict[str, str]] = []
+    invalid: list[dict[str, str]] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        row = _review_schedule_row(item)
+        try:
+            scheduled_date = date.fromisoformat(row["scheduled_for"])
+        except ValueError:
+            invalid.append(row)
+            continue
+        if scheduled_date <= as_of:
+            due.append(row)
+        else:
+            future.append(row)
+    return (
+        sorted(due, key=lambda row: (row["scheduled_for"], row["concept"])),
+        sorted(future, key=lambda row: (row["scheduled_for"], row["concept"])),
+        sorted(invalid, key=lambda row: (row["concept"], row["scheduled_for"])),
+    )
+
+
+def _review_schedule_row(item: dict[object, object]) -> dict[str, str]:
+    return {
+        "concept": str(item.get("concept", "review")),
+        "scheduled_for": str(item.get("scheduled_for", "")).strip(),
+        "priority": str(item.get("priority", "medium")),
+        "due": str(item.get("due", "within_3_days")),
+        "reason": str(item.get("reason", "review scheduled")),
+        "repair": "; ".join(_review_repair_suggestions(item.get("repair_context", []))),
+    }
+
+
+def _latest_previous_session_id(sessions_dir: Path, *, exclude: str) -> str | None:
+    if not sessions_dir.exists():
+        return None
+    session_ids = [
+        path.name
+        for path in sessions_dir.iterdir()
+        if path.is_dir() and path.name != exclude
+    ]
+    return sorted(session_ids)[-1] if session_ids else None
+
+
+def _previous_session_handoff(
+    sessions_dir: Path,
+    previous_session_id: str | None,
+) -> dict[str, str]:
+    if previous_session_id is None:
+        return {}
+    session_dir = sessions_dir / previous_session_id
+    return {
+        "summary": _read_optional_session_doc(session_dir / "summary.md"),
+        "next_actions": _read_optional_session_doc(session_dir / "next_actions.md"),
+        "misconceptions": _read_optional_session_doc(
+            session_dir / "detected_misconceptions.md"
+        ),
+    }
+
+
+def _read_optional_session_doc(path: Path) -> str:
+    if not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8").strip()
 
 
 def _read_source_titles(source_registry: Path) -> list[str]:
@@ -288,6 +462,204 @@ def _checkpoints_yaml(chapter_outline: list[dict[str, object]]) -> str:
         )
         checkpoint_number += 1
     return "\n".join(lines) + "\n"
+
+
+def _next_session_plan_text(
+    *,
+    session_id: str,
+    topic: str,
+    goal: str,
+    as_of: str,
+    previous_session_id: str | None,
+    previous_session: dict[str, str],
+    due_reviews: list[dict[str, str]],
+    future_reviews: list[dict[str, str]],
+    invalid_reviews: list[dict[str, str]],
+    queue: LearningQueue,
+    reference_context: list[dict[str, object]],
+    kb_status: str,
+) -> str:
+    return "\n".join(
+        [
+            f"# Session {session_id} Plan",
+            "",
+            "## Objective",
+            "",
+            (
+                f"Prepare the next {topic} tutoring session from persisted review, "
+                "queue, and reference context before introducing new material."
+            ),
+            "",
+            "## Topic",
+            "",
+            topic,
+            "",
+            "## Goal",
+            "",
+            goal,
+            "",
+            "## Previous Session Handoff",
+            "",
+            *_previous_session_lines(previous_session_id, previous_session),
+            "",
+            "## Due Reviews",
+            "",
+            *_review_rows_lines(due_reviews, empty=f"- none due as of {as_of}"),
+            "",
+            "## Future Reviews",
+            "",
+            *_review_rows_lines(future_reviews, empty="- none scheduled after this date"),
+            "",
+            "## Review Schedule Warnings",
+            "",
+            *_invalid_review_lines(invalid_reviews),
+            "",
+            "## Action Queue Snapshot",
+            "",
+            *_queue_snapshot_lines(queue),
+            "",
+            "## Reference Context",
+            "",
+            _reference_context_section(reference_context, kb_status=kb_status).rstrip(),
+            "",
+            "## Suggested Teaching Moves",
+            "",
+            *_teaching_move_lines(due_reviews, previous_session),
+            "",
+            "## Boundary",
+            "",
+            (
+                "- This is a deterministic handoff plan. It does not run autonomous "
+                "tutoring, grade the learner, call an LLM judge, or mutate learning-state truth."
+            ),
+        ]
+    ).rstrip() + "\n"
+
+
+def _previous_session_lines(
+    previous_session_id: str | None,
+    previous_session: dict[str, str],
+) -> list[str]:
+    if previous_session_id is None:
+        return ["- none recorded"]
+    lines = [f"- Previous session: {previous_session_id}"]
+    for label, key in (
+        ("Summary", "summary"),
+        ("Next actions", "next_actions"),
+        ("Detected misconceptions", "misconceptions"),
+    ):
+        value = previous_session.get(key, "").strip()
+        if value:
+            lines.append(f"- {label}:")
+            lines.extend(f"  {line}" if line else "" for line in value.splitlines())
+    return lines
+
+
+def _review_rows_lines(rows: list[dict[str, str]], *, empty: str) -> list[str]:
+    if not rows:
+        return [empty]
+    lines: list[str] = []
+    for row in rows:
+        lines.append(
+            (
+                f"- {row['concept']} | {row['scheduled_for']} | "
+                f"{row['priority']} | {row['reason']}"
+            )
+        )
+        if row["repair"]:
+            lines.append(f"  - repair: {row['repair']}")
+    return lines
+
+
+def _invalid_review_lines(rows: list[dict[str, str]]) -> list[str]:
+    if not rows:
+        return ["- none"]
+    return [
+        f"- {row['concept']} | {row['scheduled_for']} | repair schedule before relying on this item"
+        for row in rows
+    ]
+
+
+def _queue_snapshot_lines(queue: LearningQueue) -> list[str]:
+    counts = _queue_counts(queue)
+    labels = {
+        "notes_to_review": "Notes to review",
+        "obsidian_exports_to_run": "Obsidian exports to run",
+        "misconception_notes_to_draft": "Misconception notes to draft",
+        "scheduled_reviews": "Scheduled reviews",
+        "exercise_drafts_to_approve": "Exercise drafts to approve",
+        "exercises_to_attempt": "Exercises to attempt",
+        "attempts_to_grade": "Attempts to grade",
+        "quality_checks_to_fix": "Quality checks to fix",
+        "tool_verifications_to_fix": "Tool verifications to fix",
+    }
+    return [f"- {labels[key]}: {value}" for key, value in counts.items()]
+
+
+def _teaching_move_lines(
+    due_reviews: list[dict[str, str]],
+    previous_session: dict[str, str],
+) -> list[str]:
+    lines: list[str] = []
+    if due_reviews:
+        first = due_reviews[0]
+        lines.append(f"- Start with a diagnostic question on {first['concept']}.")
+        if first["repair"]:
+            lines.append(f"- Use repair focus: {first['repair']}")
+    else:
+        lines.append("- Start with the current short-term plan focus.")
+    if previous_session.get("next_actions", "").strip():
+        lines.append("- Reconcile the previous session next actions before new content.")
+    lines.extend(
+        [
+            "- Keep hints minimal until the learner records an attempt.",
+            "- End by updating notes, exercises, and learning state from observed evidence.",
+        ]
+    )
+    return lines
+
+
+def _queue_counts(queue: LearningQueue) -> dict[str, int]:
+    return {
+        "notes_to_review": len(queue.notes_to_review),
+        "obsidian_exports_to_run": len(queue.obsidian_exports_to_run),
+        "misconception_notes_to_draft": len(queue.misconception_notes_to_draft),
+        "scheduled_reviews": len(queue.scheduled_reviews),
+        "exercise_drafts_to_approve": len(queue.exercise_drafts_to_approve),
+        "exercises_to_attempt": len(queue.exercises_to_attempt),
+        "attempts_to_grade": len(queue.attempts_to_grade),
+        "quality_checks_to_fix": len(queue.quality_checks_to_fix),
+        "tool_verifications_to_fix": len(queue.tool_verifications_to_fix),
+    }
+
+
+def _next_session_manifest(
+    project_root: Path,
+    *,
+    session_id: str,
+    as_of: str,
+    plan_path: Path,
+    previous_session_id: str | None,
+    due_reviews: list[dict[str, str]],
+    future_reviews: list[dict[str, str]],
+    invalid_reviews: list[dict[str, str]],
+    queue: LearningQueue,
+    reference_kb_status: str,
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "session_id": session_id,
+        "status": "ready" if not invalid_reviews else "needs_schedule_repair",
+        "quality_boundary": "deterministic_handoff_plan",
+        "as_of": as_of,
+        "plan_path": plan_path.relative_to(project_root).as_posix(),
+        "previous_session_id": previous_session_id,
+        "due_reviews": len(due_reviews),
+        "future_reviews": len(future_reviews),
+        "invalid_review_items": len(invalid_reviews),
+        "reference_kb_status": reference_kb_status,
+        "action_queue": _queue_counts(queue),
+    }
 
 
 def _chapter_object_count(chapter: dict[str, object]) -> int:

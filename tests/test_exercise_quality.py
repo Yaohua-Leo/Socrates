@@ -18,6 +18,39 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class ExerciseQualityTests(unittest.TestCase):
+    def test_exercise_check_manifest_includes_v04_validation_status(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(
+                ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p")
+            )
+            generate_exercise_drafts(
+                project,
+                concept="Normal Subgroup",
+                source_id="df-1",
+                prerequisites=["subgroup", "conjugation"],
+                count=5,
+            )
+
+            result = subprocess.run(
+                [sys.executable, "-m", "socrates", "exercise", "check", "--project", str(project)],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            manifest = json.loads(
+                (project / "08_evals" / "exercise_quality_manifest.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(manifest["schema_version"], 1)
+            first = manifest["exercises"][0]
+            self.assertEqual(first["validation"]["status"], "pass")
+            self.assertEqual(first["validation"]["schema_status"], "pass")
+            self.assertIn("artifact_path", first["validation"])
+
     def test_exercise_approve_cli_marks_draft_as_approved(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))

@@ -347,6 +347,448 @@ class StateEvalTests(unittest.TestCase):
                 "resolved",
             )
 
+    def test_review_resolve_json_marks_concept_misconceptions_resolved(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                            follow_up_exercises=["normal_subgroup_review_01"],
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether a coset contains the identity.",
+                        ),
+                    ],
+                ),
+            )
+
+            resolve = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(resolve.returncode, 0, resolve.stderr)
+            self.assertNotIn("Resolved 1 active misconception", resolve.stdout)
+            payload = json.loads(resolve.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_misconception_resolver",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["concept"], "normal_subgroup")
+            self.assertEqual(payload["resolved_count"], 1)
+            self.assertEqual(
+                payload["resolved_misconceptions"],
+                [
+                    {
+                        "misconception_id": "normal_equals_central",
+                        "concept": "normal_subgroup",
+                        "previous_status": "active",
+                        "status": "resolved",
+                        "count": 1,
+                        "last_session_id": "session-001",
+                        "analysis": "Confuses normality with centrality.",
+                        "repair_suggestion": "Compare normality with commutativity.",
+                        "follow_up_exercises": ["normal_subgroup_review_01"],
+                    }
+                ],
+            )
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["misconceptions"]["normal_equals_central"]["status"],
+                "resolved",
+            )
+            self.assertEqual(
+                learning_state["misconceptions"]["cosets_are_subgroups"]["status"],
+                "active",
+            )
+            mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            self.assertIn("## resolved - normal_subgroup", mistake_bank)
+            self.assertIn("- Misconception: normal_equals_central", mistake_bank)
+
+    def test_review_resolve_json_reports_noop_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                        )
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            resolve = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "rings",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(resolve.returncode, 0, resolve.stderr)
+            payload = json.loads(resolve.stdout)
+            self.assertEqual(payload["concept"], "rings")
+            self.assertEqual(payload["resolved_count"], 0)
+            self.assertEqual(payload["resolved_misconceptions"], [])
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_json_rejects_corrupt_learning_state_without_mistake_bank_append(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            original_mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            context.learning_state.write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            resolve = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(resolve.returncode, 1)
+            self.assertEqual(resolve.stdout, "")
+            self.assertIn("error: invalid learning_state.json", resolve.stderr)
+            self.assertIn(
+                "repair the JSON before resolving misconceptions",
+                resolve.stderr,
+            )
+            self.assertNotIn("Expecting property name", resolve.stderr)
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                original_mistake_bank,
+            )
+
+    def test_review_resolve_dry_run_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                            follow_up_exercises=["normal_subgroup_review_01"],
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether a coset contains the identity.",
+                        ),
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn(
+                "Misconception resolution preview: 1 active misconception would be resolved for normal_subgroup",
+                preview.stdout,
+            )
+            self.assertIn(
+                "- normal_equals_central | normal_subgroup | count 1 | last session session-001",
+                preview.stdout,
+            )
+            self.assertIn("repair: Compare normality with commutativity.", preview.stdout)
+            self.assertIn("follow-up: normal_subgroup_review_01", preview.stdout)
+            self.assertNotIn("Resolved 1 active misconception", preview.stdout)
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_dry_run_json_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                            follow_up_exercises=["normal_subgroup_review_01"],
+                        )
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertNotIn("Misconception resolution preview", preview.stdout)
+            payload = json.loads(preview.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_misconception_resolver_preview",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["concept"], "normal_subgroup")
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["resolved_count"], 1)
+            self.assertEqual(
+                payload["resolved_misconceptions"],
+                [
+                    {
+                        "misconception_id": "normal_equals_central",
+                        "concept": "normal_subgroup",
+                        "previous_status": "active",
+                        "status": "resolved",
+                        "count": 1,
+                        "last_session_id": "session-001",
+                        "analysis": "Confuses normality with centrality.",
+                        "repair_suggestion": "Compare normality with commutativity.",
+                        "follow_up_exercises": ["normal_subgroup_review_01"],
+                    }
+                ],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_dry_run_json_reports_noop_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                        )
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "rings",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            payload = json.loads(preview.stdout)
+            self.assertEqual(payload["concept"], "rings")
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["resolved_count"], 0)
+            self.assertEqual(payload["resolved_misconceptions"], [])
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_dry_run_json_rejects_corrupt_learning_state_without_mistake_bank_append(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            original_mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            context.learning_state.write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 1)
+            self.assertEqual(preview.stdout, "")
+            self.assertIn("error: invalid learning_state.json", preview.stderr)
+            self.assertIn(
+                "repair the JSON before resolving misconceptions",
+                preview.stderr,
+            )
+            self.assertNotIn("Expecting property name", preview.stderr)
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                original_mistake_bank,
+            )
+
     def test_status_cli_recovers_corrupt_learning_state_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -497,6 +939,168 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn(resolved_line, resolved_items.stdout)
             self.assertNotIn("cosets_are_subgroups", resolved_items.stdout)
 
+    def test_review_misconceptions_json_lists_statuses_and_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            repeated = MistakeRecord(
+                session_id="session-001",
+                concept="normal_subgroup",
+                misconception_id="normal_equals_central",
+                user_answer="Normal means central.",
+                analysis="Confuses normality with centrality.",
+                repair_suggestion="Compare normality with conjugation.",
+                follow_up_exercises=["normal_subgroup_review_01"],
+            )
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        repeated,
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether the identity is present.",
+                            follow_up_exercises=["quotient_group_review_01"],
+                        ),
+                    ],
+                ),
+            )
+            update_learning_state(context, LearningStatePatch(mistakes=[repeated]))
+            resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "misconceptions",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Misconceptions", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_misconception_review",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["status_filter"], "all")
+            self.assertEqual(payload["misconception_count"], 2)
+            self.assertEqual(payload["active_count"], 1)
+            self.assertEqual(payload["resolved_count"], 1)
+            self.assertEqual(
+                payload["misconceptions"],
+                [
+                    {
+                        "misconception_id": "cosets_are_subgroups",
+                        "status": "active",
+                        "concept": "quotient_group",
+                        "count": 1,
+                        "last_session_id": "session-002",
+                        "analysis": "Confuses cosets with subgroups.",
+                        "repair_suggestion": "Check whether the identity is present.",
+                        "follow_up_exercises": ["quotient_group_review_01"],
+                    },
+                    {
+                        "misconception_id": "normal_equals_central",
+                        "status": "resolved",
+                        "concept": "normal_subgroup",
+                        "count": 2,
+                        "last_session_id": "session-001",
+                        "analysis": "Confuses normality with centrality.",
+                        "repair_suggestion": "Compare normality with conjugation.",
+                        "follow_up_exercises": ["normal_subgroup_review_01"],
+                    },
+                ],
+            )
+
+    def test_review_misconceptions_json_filters_active_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with conjugation.",
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether the identity is present.",
+                        ),
+                    ],
+                ),
+            )
+            resolve_active_misconceptions_for_concept(context, "normal_subgroup")
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "misconceptions",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "active",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["status_filter"], "active")
+            self.assertEqual(payload["misconception_count"], 1)
+            self.assertEqual(payload["active_count"], 1)
+            self.assertEqual(payload["resolved_count"], 0)
+            self.assertEqual(
+                [
+                    item["misconception_id"]
+                    for item in payload["misconceptions"]
+                ],
+                ["cosets_are_subgroups"],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").iterdir()), [])
+
     def test_review_misconceptions_cli_recovers_malformed_count(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -645,6 +1249,152 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn(ready_skill, ready_with_high_cutoff.stdout)
             self.assertNotIn("subgroup", ready_with_high_cutoff.stdout)
             self.assertNotIn("normal_subgroup", ready_with_high_cutoff.stdout)
+
+    def test_review_mastery_json_lists_learning_scores_with_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.42,
+                        "subgroup": 0.82,
+                    },
+                    proof_skills={
+                        "construct_counterexample": 0.35,
+                        "unfold_definition": 0.86,
+                    },
+                ),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Learning Mastery", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_learning_mastery_review",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["kind_filter"], "all")
+            self.assertEqual(payload["status_filter"], "all")
+            self.assertEqual(payload["threshold"], 0.7)
+            self.assertEqual(payload["score_count"], 4)
+            self.assertEqual(payload["weak_count"], 2)
+            self.assertEqual(payload["ready_count"], 2)
+            self.assertEqual(
+                payload["scores"],
+                [
+                    {
+                        "score_type": "concept",
+                        "item_id": "normal_subgroup",
+                        "status": "weak",
+                        "score": 0.42,
+                    },
+                    {
+                        "score_type": "proof_skill",
+                        "item_id": "construct_counterexample",
+                        "status": "weak",
+                        "score": 0.35,
+                    },
+                    {
+                        "score_type": "concept",
+                        "item_id": "subgroup",
+                        "status": "ready",
+                        "score": 0.82,
+                    },
+                    {
+                        "score_type": "proof_skill",
+                        "item_id": "unfold_definition",
+                        "status": "ready",
+                        "score": 0.86,
+                    },
+                ],
+            )
+
+    def test_review_mastery_json_filters_weak_concepts_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.42,
+                        "subgroup": 0.82,
+                    },
+                    proof_skills={"construct_counterexample": 0.35},
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            project_log_before = context.project_log.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "mastery",
+                    "--project",
+                    str(project),
+                    "--kind",
+                    "concept",
+                    "--status",
+                    "weak",
+                    "--threshold",
+                    "0.8",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["kind_filter"], "concept")
+            self.assertEqual(payload["status_filter"], "weak")
+            self.assertEqual(payload["threshold"], 0.8)
+            self.assertEqual(payload["score_count"], 1)
+            self.assertEqual(payload["weak_count"], 1)
+            self.assertEqual(payload["ready_count"], 0)
+            self.assertEqual(
+                payload["scores"],
+                [
+                    {
+                        "score_type": "concept",
+                        "item_id": "normal_subgroup",
+                        "status": "weak",
+                        "score": 0.42,
+                    }
+                ],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(context.project_log.read_text(encoding="utf-8"), project_log_before)
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").iterdir()), [])
 
     def test_review_mastery_cli_rejects_nonfinite_threshold(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -963,6 +1713,171 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("## quotient_group", schedule_text)
             self.assertNotIn("## subgroup", schedule_text)
             self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
+
+    def test_review_schedule_json_writes_schedule_and_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            mistake = MistakeRecord(
+                session_id="session-001",
+                concept="zeta_urgent_review",
+                misconception_id="zeta_definition_confusion",
+                user_answer="The zeta condition is automatic.",
+                analysis="Treats the review condition as vacuous.",
+                repair_suggestion="Contrast the definitions.",
+                follow_up_exercises=["zeta_review_01"],
+            )
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "subgroup": 0.84,
+                    },
+                    mistakes=[mistake],
+                ),
+            )
+            update_learning_state(context, LearningStatePatch(mistakes=[mistake]))
+
+            schedule_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--threshold",
+                    "0.8",
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(schedule_result.returncode, 0, schedule_result.stderr)
+            self.assertNotIn("Scheduled 2 review items:", schedule_result.stdout)
+            self.assertNotIn("# Review Schedule", schedule_result.stdout)
+            payload = json.loads(schedule_result.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "threshold": 0.8,
+                    "scheduled_count": 2,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [
+                        {
+                            "concept": "zeta_urgent_review",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "active misconception zeta_definition_confusion x2",
+                            "repair": "Contrast the definitions.",
+                        },
+                        {
+                            "concept": "alpha_medium_review",
+                            "priority": "medium",
+                            "due": "within_3_days",
+                            "scheduled_for": "2026-06-07",
+                            "reason": "mastery 0.62",
+                            "repair": "",
+                        },
+                    ],
+                },
+            )
+
+            learning_state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                learning_state["review_schedule"],
+                [
+                    {
+                        "concept": "zeta_urgent_review",
+                        "priority": "high",
+                        "due": "next_session",
+                        "scheduled_for": "2026-06-04",
+                        "reason": "active misconception zeta_definition_confusion x2",
+                        "repair_context": [
+                            {
+                                "misconception_id": "zeta_definition_confusion",
+                                "count": 2,
+                                "last_session_id": "session-001",
+                                "analysis": "Treats the review condition as vacuous.",
+                                "repair_suggestion": "Contrast the definitions.",
+                                "follow_up_exercises": ["zeta_review_01"],
+                            }
+                        ],
+                    },
+                    {
+                        "concept": "alpha_medium_review",
+                        "priority": "medium",
+                        "due": "within_3_days",
+                        "scheduled_for": "2026-06-07",
+                        "reason": "mastery 0.62",
+                    },
+                ],
+            )
+            schedule_text = schedule_path.read_text(encoding="utf-8")
+            self.assertIn("## zeta_urgent_review", schedule_text)
+            self.assertIn("## alpha_medium_review", schedule_text)
+            self.assertNotIn("## subgroup", schedule_text)
+
+    def test_review_schedule_json_writes_empty_schedule_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            schedule_result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(schedule_result.returncode, 0, schedule_result.stderr)
+            payload = json.loads(schedule_result.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "threshold": 0.7,
+                    "scheduled_count": 0,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [],
+                },
+            )
+            learning_state = json.loads(
+                (project / "00_meta" / "learning_state.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(learning_state["review_schedule"], [])
+            self.assertIn(
+                "No review items scheduled.",
+                schedule_path.read_text(encoding="utf-8"),
+            )
 
     def test_review_schedule_cli_rejects_nonfinite_threshold_without_writing_schedule(
         self,
@@ -1410,6 +2325,254 @@ class StateEvalTests(unittest.TestCase):
                 ).exists()
             )
 
+    def test_review_exercises_json_reports_generated_due_items(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_exercise_writer",
+                    "project": str(project),
+                    "due_by": "2026-06-04",
+                    "priority_filter": "all",
+                    "generated_count": 1,
+                    "generated_exercises": [
+                        {
+                            "id": "review_normal_subgroup_01",
+                            "type": "targeted_review_exercise",
+                            "difficulty": 3,
+                            "path": "05_exercises/generated/review_normal_subgroup_01.md",
+                        }
+                    ],
+                },
+            )
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
+    def test_review_exercises_json_preserves_priority_filter(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_review_exercise_writer")
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["due_by"], "2026-06-07")
+            self.assertEqual(payload["priority_filter"], "high")
+            self.assertEqual(payload["generated_count"], 1)
+            self.assertEqual(
+                payload["generated_exercises"],
+                [
+                    {
+                        "id": "review_normal_subgroup_01",
+                        "type": "targeted_review_exercise",
+                        "difficulty": 3,
+                        "path": "05_exercises/generated/review_normal_subgroup_01.md",
+                    }
+                ],
+            )
+            self.assertTrue(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
+    def test_review_exercises_dry_run_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            learning_state = project / "00_meta" / "learning_state.json"
+            original_state = learning_state.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-04",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(
+                "Exercise preview: 1 targeted review exercise would be generated",
+                result.stdout,
+            )
+            self.assertIn(
+                "- review_normal_subgroup_01 | targeted_review_exercise | "
+                "difficulty 3 | 05_exercises/generated/review_normal_subgroup_01.md",
+                result.stdout,
+            )
+            self.assertNotIn("Generated 1 targeted review exercise", result.stdout)
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
+    def test_review_exercises_dry_run_json_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "normal_subgroup": 0.4,
+                        "quotient_group": 0.62,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            learning_state = project / "00_meta" / "learning_state.json"
+            original_state = learning_state.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "exercises",
+                    "--project",
+                    str(project),
+                    "--due-by",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_exercise_preview",
+                    "project": str(project),
+                    "due_by": "2026-06-07",
+                    "priority_filter": "high",
+                    "dry_run": True,
+                    "generated_count": 1,
+                    "generated_exercises": [
+                        {
+                            "id": "review_normal_subgroup_01",
+                            "type": "targeted_review_exercise",
+                            "difficulty": 3,
+                            "path": "05_exercises/generated/review_normal_subgroup_01.md",
+                        }
+                    ],
+                },
+            )
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_normal_subgroup_01.md").exists()
+            )
+            self.assertFalse(
+                (project / "05_exercises" / "generated" / "review_quotient_group_01.md").exists()
+            )
+
     def test_review_exercises_cli_rejects_invalid_due_by_date(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -1522,6 +2685,168 @@ class StateEvalTests(unittest.TestCase):
                 high_priority.stdout,
             )
             self.assertNotIn("alpha_medium_review", high_priority.stdout)
+
+    def test_review_due_json_lists_due_and_invalid_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            state["review_schedule"].append(
+                {
+                    "concept": "broken_review",
+                    "priority": "medium",
+                    "due": "within_3_days",
+                    "scheduled_for": "not-a-date",
+                    "reason": "corrupt schedule fixture",
+                }
+            )
+            context.learning_state.write_text(
+                json.dumps(state, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Due Reviews", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_due_review")
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["as_of"], "2026-06-07")
+            self.assertEqual(payload["priority_filter"], "all")
+            self.assertEqual(payload["due_count"], 2)
+            self.assertEqual(payload["invalid_count"], 1)
+            self.assertEqual(
+                payload["due_reviews"],
+                [
+                    {
+                        "concept": "zeta_urgent_review",
+                        "scheduled_for": "2026-06-04",
+                        "priority": "high",
+                        "reason": "mastery 0.4",
+                        "repair": "",
+                    },
+                    {
+                        "concept": "alpha_medium_review",
+                        "scheduled_for": "2026-06-07",
+                        "priority": "medium",
+                        "reason": "mastery 0.62",
+                        "repair": "",
+                    },
+                ],
+            )
+            self.assertEqual(
+                payload["invalid_reviews"],
+                [
+                    {
+                        "concept": "broken_review",
+                        "scheduled_for": "not-a-date",
+                        "status": "invalid_scheduled_for",
+                    }
+                ],
+            )
+
+    def test_review_due_json_filters_priority_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    concept_mastery={
+                        "alpha_medium_review": 0.62,
+                        "zeta_urgent_review": 0.4,
+                    }
+                ),
+            )
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            state = json.loads(context.learning_state.read_text(encoding="utf-8"))
+            state["review_schedule"].append(
+                {
+                    "concept": "broken_review",
+                    "priority": "medium",
+                    "due": "within_3_days",
+                    "scheduled_for": "not-a-date",
+                    "reason": "corrupt schedule fixture",
+                }
+            )
+            context.learning_state.write_text(
+                json.dumps(state, indent=2) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            project_log_before = context.project_log.read_text(encoding="utf-8")
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "due",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-07",
+                    "--priority",
+                    "high",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["priority_filter"], "high")
+            self.assertEqual(payload["due_count"], 1)
+            self.assertEqual(payload["invalid_count"], 1)
+            self.assertEqual(
+                [row["concept"] for row in payload["due_reviews"]],
+                ["zeta_urgent_review"],
+            )
+            self.assertEqual(
+                [row["concept"] for row in payload["invalid_reviews"]],
+                ["broken_review"],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(context.project_log.read_text(encoding="utf-8"), project_log_before)
+            self.assertEqual(list((project / "04_atomic_notes" / "drafts").iterdir()), [])
 
     def test_review_due_cli_shows_misconception_repair_suggestion(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -1830,6 +3155,352 @@ class StateEvalTests(unittest.TestCase):
             self.assertIn("- normal_subgroup | 2026-06-04 | high | mastery 0.4", due.stdout)
             self.assertNotIn("Invalid Review Schedule Items", due.stdout)
             self.assertNotIn("quotient_group", due.stdout)
+
+    def test_review_repair_schedule_json_repairs_and_reports_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "not-a-date",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "quotient_group",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "reason": "mastery 0.62",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            repair = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(repair.returncode, 0, repair.stderr)
+            self.assertNotIn("Repaired 2 review schedule items:", repair.stdout)
+            payload = json.loads(repair.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_repair_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "repaired_count": 2,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [
+                        {
+                            "concept": "normal_subgroup",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "mastery 0.4",
+                            "repair": "",
+                        },
+                        {
+                            "concept": "quotient_group",
+                            "priority": "medium",
+                            "due": "within_3_days",
+                            "scheduled_for": "2026-06-07",
+                            "reason": "mastery 0.62",
+                            "repair": "",
+                        },
+                    ],
+                },
+            )
+            repaired_state = json.loads(learning_state.read_text(encoding="utf-8"))
+            self.assertEqual(
+                repaired_state["review_schedule"],
+                [
+                    {
+                        "concept": "normal_subgroup",
+                        "priority": "high",
+                        "due": "next_session",
+                        "scheduled_for": "2026-06-04",
+                        "reason": "mastery 0.4",
+                    },
+                    {
+                        "concept": "quotient_group",
+                        "priority": "medium",
+                        "due": "within_3_days",
+                        "scheduled_for": "2026-06-07",
+                        "reason": "mastery 0.62",
+                    },
+                ],
+            )
+            schedule_text = schedule_path.read_text(encoding="utf-8")
+            self.assertIn("- Scheduled for: 2026-06-04", schedule_text)
+            self.assertIn("- Scheduled for: 2026-06-07", schedule_text)
+            self.assertNotIn("not-a-date", schedule_text)
+
+    def test_review_repair_schedule_json_reports_noop_payload(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "2026-06-04",
+                                "reason": "mastery 0.4",
+                                "repair_context": [
+                                    {
+                                        "misconception_id": "normal_equals_central",
+                                        "count": 1,
+                                        "repair_suggestion": "Compare normality with centrality.",
+                                    }
+                                ],
+                            }
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            repair = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(repair.returncode, 0, repair.stderr)
+            payload = json.loads(repair.stdout)
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_repair_writer",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "repaired_count": 0,
+                    "schedule_path": str(schedule_path),
+                    "scheduled_reviews": [
+                        {
+                            "concept": "normal_subgroup",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "mastery 0.4",
+                            "repair": "Compare normality with centrality.",
+                        }
+                    ],
+                },
+            )
+            self.assertTrue(schedule_path.exists())
+            self.assertIn("## normal_subgroup", schedule_path.read_text(encoding="utf-8"))
+
+    def test_review_repair_schedule_dry_run_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "not-a-date",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "quotient_group",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "reason": "mastery 0.62",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            original_state = learning_state.read_text(encoding="utf-8")
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertFalse(schedule_path.exists())
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn(
+                "Repair preview: 2 review schedule items would be repaired",
+                preview.stdout,
+            )
+            self.assertIn("- normal_subgroup | 2026-06-04 | high | mastery 0.4", preview.stdout)
+            self.assertIn("- quotient_group | 2026-06-07 | medium | mastery 0.62", preview.stdout)
+            self.assertNotIn("Repaired 2 review schedule items:", preview.stdout)
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(schedule_path.exists())
+
+    def test_review_repair_schedule_dry_run_json_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            learning_state = project / "00_meta" / "learning_state.json"
+            learning_state.write_text(
+                json.dumps(
+                    {
+                        "concept_mastery": {},
+                        "proof_skills": {},
+                        "misconceptions": {},
+                        "review_schedule": [
+                            {
+                                "concept": "normal_subgroup",
+                                "priority": "high",
+                                "due": "next_session",
+                                "scheduled_for": "not-a-date",
+                                "reason": "mastery 0.4",
+                            },
+                            {
+                                "concept": "quotient_group",
+                                "priority": "medium",
+                                "due": "within_3_days",
+                                "reason": "mastery 0.62",
+                            },
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            original_state = learning_state.read_text(encoding="utf-8")
+            schedule_path = project / "02_learning_plan" / "review_schedule.md"
+            self.assertFalse(schedule_path.exists())
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "repair-schedule",
+                    "--project",
+                    str(project),
+                    "--as-of",
+                    "2026-06-04",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            payload = json.loads(preview.stdout)
+            self.assertEqual(
+                payload,
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_review_schedule_repair_preview",
+                    "project": str(project),
+                    "as_of": "2026-06-04",
+                    "dry_run": True,
+                    "repaired_count": 2,
+                    "scheduled_reviews": [
+                        {
+                            "concept": "normal_subgroup",
+                            "priority": "high",
+                            "due": "next_session",
+                            "scheduled_for": "2026-06-04",
+                            "reason": "mastery 0.4",
+                            "repair": "",
+                        },
+                        {
+                            "concept": "quotient_group",
+                            "priority": "medium",
+                            "due": "within_3_days",
+                            "scheduled_for": "2026-06-07",
+                            "reason": "mastery 0.62",
+                            "repair": "",
+                        },
+                    ],
+                },
+            )
+            self.assertEqual(learning_state.read_text(encoding="utf-8"), original_state)
+            self.assertFalse(schedule_path.exists())
 
     def test_review_repair_schedule_cli_reports_corrupt_learning_state_json_cleanly(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

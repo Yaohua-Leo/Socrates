@@ -16,11 +16,20 @@ from .contracts import (
     EXERCISE_ALLOWED_TYPES,
     REVIEW_ALLOWED_PRIORITIES,
 )
+from .exercise_validation import (
+    ExerciseValidationResult,
+    ProjectExerciseValidationResult,
+    validate_exercise,
+    validate_project_exercises,
+)
 from .kb import find_counterexamples, parse_object_heading, reference_kb_status
 from .learning_queue import collect_learning_queue
+from .llm_artifacts import validate_llm_suggestion_manifest
+from .multi_session import has_passing_multi_session_regression
 from .obsidian import obsidian_export_count
 from .project import slugify_topic
 from .state import ensure_learning_state_readable
+from .workflow_manifest import has_ready_session_closeout
 
 
 @dataclass(frozen=True)
@@ -146,6 +155,10 @@ def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualit
         _exercise_counterexample_search(context.root, path)
         for path in exercise_paths
     ]
+    validation_rows = [
+        validate_exercise(context.root, path.stem)
+        for path in exercise_paths
+    ]
     tool_verification_rows = [
         _exercise_tool_verification_evidence(context.root, path)
         for path in exercise_paths
@@ -171,6 +184,7 @@ def check_generated_exercise_quality(project_path: Path | str) -> ExerciseQualit
             exercise_paths,
             rows,
             counterexample_rows,
+            validation_rows,
             tool_verification_rows,
             passed=passed,
             failed=failed,
@@ -431,11 +445,13 @@ def run_project_benchmark(
     ingestion = check_reference_ingestion_quality(context.root)
     note = check_atomic_note_quality(context.root)
     exercise = check_generated_exercise_quality(context.root)
+    validation = validate_project_exercises(context.root)
     tutoring = check_tutoring_session_quality(context.root, session_id=session_id)
     gates = {
         "Ingestion": ingestion.failed == 0 and ingestion.checked > 0,
         "Note quality": note.failed == 0 and note.checked > 0,
         "Exercise quality": exercise.failed == 0 and exercise.checked > 0,
+        "Exercise validation": validation.failed == 0 and validation.checked > 0,
         "Tutoring quality": tutoring.status == "pass",
     }
     passed_gates = sum(1 for passed in gates.values() if passed)
@@ -452,6 +468,7 @@ def run_project_benchmark(
             ingestion=ingestion,
             note=note,
             exercise=exercise,
+            validation=validation,
             tutoring=tutoring,
         ),
     )
@@ -498,12 +515,19 @@ def audit_project_lifecycle(project_path: Path | str) -> LifecycleAuditResult:
         {
             **obsidian_checks,
             "Generated exercises": _markdown_count(context.generated_exercises_dir) >= 5,
+            "Exercise validation": _has_clean_exercise_validation_manifest(context.root),
+            "Exercise bank": _has_exercise_bank_entries(context.root),
             "Exercise attempts": _markdown_count(context.root / "05_exercises" / "attempted") > 0,
             "Graded exercises": _markdown_count(context.root / "05_exercises" / "graded") > 0,
             "Learning state": bool(state.get("concept_mastery")),
             "Review schedule": _has_review_schedule(context.root, state),
             "Learning reports": _has_learning_reports(context.root),
             "Artifact quality": _has_clean_artifact_quality_manifests(context.root),
+            "LLM suggestion drafts": _has_valid_llm_suggestion_manifest(context.root),
+            "Session score report": _has_session_score_report(context.root),
+            "Session score manifest": _has_session_score_manifest(context.root),
+            "Session closeout manifest": has_ready_session_closeout(context.root),
+            "Multi-session regression": has_passing_multi_session_regression(context.root),
             "Benchmark report": _has_benchmark_report(context.root),
             "Benchmark manifest": _has_benchmark_manifest(context.root),
             "Tool verification records": _has_tool_verification_records(context.root),
@@ -842,6 +866,7 @@ def _exercise_quality_manifest(
     exercise_paths: list[Path],
     rows: list[dict[str, object]],
     counterexample_rows: list[dict[str, object]],
+    validation_rows: list[ExerciseValidationResult],
     tool_verification_rows: list[dict[str, object]],
     *,
     passed: int,
@@ -850,6 +875,9 @@ def _exercise_quality_manifest(
     row_by_file = {str(row["file"]): row for row in rows}
     counterexample_by_file = {
         str(row["file"]): row for row in counterexample_rows
+    }
+    validation_by_id = {
+        row.exercise_id: row for row in validation_rows
     }
     tool_verification_by_file = {
         str(row["file"]): row for row in tool_verification_rows
@@ -865,6 +893,7 @@ def _exercise_quality_manifest(
                 exercise_path,
                 row_by_file.get(exercise_path.name, {}),
                 counterexample_by_file.get(exercise_path.name, {}),
+                validation_by_id.get(exercise_path.stem),
                 tool_verification_by_file.get(exercise_path.name, {}),
             )
             for exercise_path in exercise_paths
@@ -877,6 +906,7 @@ def _exercise_manifest_entry(
     exercise_path: Path,
     quality_row: dict[str, object],
     counterexample_row: dict[str, object],
+    validation_row: ExerciseValidationResult | None,
     tool_verification_row: dict[str, object],
 ) -> dict[str, object]:
     text = exercise_path.read_text(encoding="utf-8")
@@ -891,7 +921,29 @@ def _exercise_manifest_entry(
         "frontmatter": _exercise_frontmatter(text),
         "sections": _exercise_section_manifest(text),
         "counterexample_search": _counterexample_search_manifest(counterexample_row),
+        "validation": _exercise_validation_manifest_entry(project_root, validation_row),
         "tool_verification": _tool_verification_evidence_manifest(tool_verification_row),
+    }
+
+
+def _exercise_validation_manifest_entry(
+    project_root: Path,
+    validation_row: ExerciseValidationResult | None,
+) -> dict[str, object]:
+    if validation_row is None:
+        return {
+            "status": "not_run",
+            "schema_status": "not_run",
+            "issues": [],
+            "artifact_path": "",
+            "report_path": "",
+        }
+    return {
+        "status": validation_row.status,
+        "schema_status": "pass" if not validation_row.issues else "fail",
+        "issues": list(validation_row.issues),
+        "artifact_path": validation_row.artifact_path.relative_to(project_root).as_posix(),
+        "report_path": validation_row.report_path.relative_to(project_root).as_posix(),
     }
 
 
@@ -1952,6 +2004,7 @@ def _benchmark_manifest(
     ingestion: IngestionQualityResult,
     note: NoteQualityResult,
     exercise: ExerciseQualityResult,
+    validation: ProjectExerciseValidationResult,
     tutoring: TutoringQualityResult,
 ) -> dict[str, object]:
     gate_entries = [
@@ -1981,6 +2034,15 @@ def _benchmark_manifest(
             failed=exercise.failed,
             report_path=exercise.report_path,
             manifest_path=exercise.manifest_path,
+        ),
+        _benchmark_gate_entry(
+            project_root,
+            "Exercise validation",
+            gates["Exercise validation"],
+            checked=validation.checked,
+            failed=validation.failed,
+            report_path=validation.report_path,
+            manifest_path=validation.manifest_path,
         ),
         _benchmark_gate_entry(
             project_root,
@@ -2131,6 +2193,28 @@ def _has_learning_reports(project_root: Path) -> bool:
     return all((reports_dir / name).exists() for name in required)
 
 
+def _has_session_score_report(project_root: Path) -> bool:
+    report_path = project_root / "08_evals" / "session_score_report.md"
+    if not report_path.exists():
+        return False
+    if "- Session score: 100/100" not in report_path.read_text(encoding="utf-8"):
+        return False
+    return _latest_benchmark_input_mtime(project_root) <= report_path.stat().st_mtime_ns
+
+
+def _has_session_score_manifest(project_root: Path) -> bool:
+    manifest_path = project_root / "08_evals" / "session_score_manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not _valid_session_score_manifest(project_root, manifest):
+        return False
+    return _latest_benchmark_input_mtime(project_root) <= manifest_path.stat().st_mtime_ns
+
+
 def _has_benchmark_report(project_root: Path) -> bool:
     report_path = project_root / "08_evals" / "benchmark_report.md"
     if not report_path.exists():
@@ -2164,6 +2248,74 @@ def _has_clean_artifact_quality_manifests(project_root: Path) -> bool:
         _valid_clean_quality_manifest(project_root / "08_evals" / manifest_name)
         for manifest_name in manifest_names
     )
+
+
+def _has_clean_exercise_validation_manifest(project_root: Path) -> bool:
+    manifest_path = project_root / "08_evals" / "exercise_validation_manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return False
+    checked = manifest.get("checked")
+    passed = manifest.get("passed")
+    failed = manifest.get("failed")
+    if not all(isinstance(value, int) for value in (checked, passed, failed)):
+        return False
+    records = manifest.get("records")
+    if not isinstance(records, list) or len(records) != checked:
+        return False
+    if checked <= 0 or passed != checked or failed != 0:
+        return False
+    return all(_valid_exercise_validation_record(project_root, record) for record in records)
+
+
+def _valid_exercise_validation_record(project_root: Path, record: object) -> bool:
+    if not isinstance(record, dict):
+        return False
+    if record.get("status") != "pass":
+        return False
+    return (
+        _manifest_artifact_exists(project_root, record.get("artifact_path"))
+        and _manifest_artifact_exists(project_root, record.get("report_path"))
+    )
+
+
+def _has_exercise_bank_entries(project_root: Path) -> bool:
+    manifest_path = project_root / "05_exercises" / "exercise_bank_manifest.json"
+    if not manifest_path.exists():
+        return False
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return False
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return False
+    records = manifest.get("records")
+    if not isinstance(records, list) or not records:
+        return False
+    return all(_valid_exercise_bank_record(project_root, record) for record in records)
+
+
+def _valid_exercise_bank_record(project_root: Path, record: object) -> bool:
+    if not isinstance(record, dict):
+        return False
+    if record.get("validation_status") != "pass":
+        return False
+    return (
+        _manifest_artifact_exists(project_root, record.get("path"))
+        and _manifest_artifact_exists(project_root, record.get("validation_artifact"))
+    )
+
+
+def _has_valid_llm_suggestion_manifest(project_root: Path) -> bool:
+    try:
+        return validate_llm_suggestion_manifest(project_root)
+    except (OSError, ValueError, json.JSONDecodeError):
+        return False
 
 
 def _valid_clean_quality_manifest(manifest_path: Path) -> bool:
@@ -2239,6 +2391,7 @@ def _valid_benchmark_manifest(project_root: Path, manifest: object) -> bool:
         "Ingestion",
         "Note quality",
         "Exercise quality",
+        "Exercise validation",
         "Tutoring quality",
     }
     gate_names = {str(gate.get("name", "")) for gate in gates if isinstance(gate, dict)}
@@ -2260,6 +2413,61 @@ def _valid_benchmark_manifest(project_root: Path, manifest: object) -> bool:
             return False
         if gate["passed"]:
             passed_count += 1
+    return passed_count == passed_gates
+
+
+def _valid_session_score_manifest(project_root: Path, manifest: object) -> bool:
+    if not isinstance(manifest, dict):
+        return False
+    if manifest.get("schema_version") != 1:
+        return False
+    if not isinstance(manifest.get("session_id"), str) or not manifest["session_id"]:
+        return False
+    if manifest.get("status") != "pass":
+        return False
+    if manifest.get("quality_boundary") != "advisory_checklist":
+        return False
+    total_gates = manifest.get("total_gates")
+    passed_gates = manifest.get("passed_gates")
+    score = manifest.get("score")
+    gates = manifest.get("gates")
+    if not isinstance(total_gates, int) or total_gates <= 0:
+        return False
+    if not isinstance(passed_gates, int) or passed_gates < 0:
+        return False
+    if not isinstance(score, int) or score < 0:
+        return False
+    if passed_gates != total_gates or score != 100:
+        return False
+    if not isinstance(gates, list) or len(gates) != total_gates:
+        return False
+    expected_gates = {
+        "Ingestion",
+        "Note quality",
+        "Exercise quality",
+        "Exercise validation",
+        "Tutoring quality",
+    }
+    gate_names = {str(gate.get("name", "")) for gate in gates if isinstance(gate, dict)}
+    if gate_names != expected_gates:
+        return False
+    passed_count = 0
+    for gate in gates:
+        if not isinstance(gate, dict):
+            return False
+        if gate.get("passed") is not True:
+            return False
+        if not isinstance(gate.get("score"), int):
+            return False
+        if not isinstance(gate.get("checked"), int):
+            return False
+        if not isinstance(gate.get("failed"), int):
+            return False
+        if not _manifest_artifact_exists(project_root, gate.get("report_path")):
+            return False
+        if not _manifest_artifact_exists(project_root, gate.get("manifest_path")):
+            return False
+        passed_count += 1
     return passed_count == passed_gates
 
 

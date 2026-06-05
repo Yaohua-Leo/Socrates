@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 import json
 import os
 from pathlib import Path
@@ -13,6 +14,7 @@ from socrates.context import load_project
 from socrates.exercises import approve_exercise_draft, grade_exercise_attempt, record_exercise_attempt
 from socrates.kb import build_reference_kb
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
+from socrates.planning import create_next_session_plan
 from socrates.project import ProjectSpec, create_project
 from socrates.state import (
     LearningStatePatch,
@@ -167,6 +169,66 @@ class ReportTests(unittest.TestCase):
                     },
                     indent=2,
                 ),
+                encoding="utf-8",
+                newline="\n",
+            )
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(summary.returncode, 0, summary.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- project-summary | stale | Project Summary | "
+                "07_exports/reports/project_summary.md",
+                stale_reports.stdout,
+            )
+            self.assertNotIn("weekly_report.md", stale_reports.stdout)
+
+    def test_report_list_marks_project_summary_stale_after_handoff_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            create_next_session_plan(
+                project,
+                session_id="session_0002",
+                as_of=date(2026, 6, 4),
+            )
+
+            summary = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            manifest_path = project / "02_learning_plan" / "next_session_plan_manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["due_reviews"] = 2
+            manifest_path.write_text(
+                json.dumps(manifest, indent=2) + "\n",
                 encoding="utf-8",
                 newline="\n",
             )
@@ -648,6 +710,622 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- Obsidian exports: 1", report_text)
             self.assertIn("- Obsidian exports to run: 1", report_text)
 
+    def test_weekly_report_includes_priority_actions_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            generate_atomic_note_draft(
+                project,
+                concept="Quotient Group",
+                note_type="definition",
+                body=(
+                    "A quotient group packages cosets of a normal subgroup.\n\n"
+                    "## Review Questions\n\n"
+                    "- Why is normality required for coset multiplication?\n"
+                ),
+                source_id="df-1",
+            )
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            workflow = (
+                "- workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>"
+            )
+            note = "- notes:quotient_group | 04_atomic_notes/drafts/quotient_group.md"
+            self.assertIn("## Priority Actions", report_text)
+            self.assertIn(workflow, report_text)
+            self.assertIn(note, report_text)
+            self.assertLess(report_text.index(workflow), report_text.index(note))
+
+    def test_project_summary_includes_priority_actions_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Priority Actions", report_text)
+            self.assertIn(
+                "- workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+                report_text,
+            )
+
+    def test_report_list_marks_weekly_report_stale_after_closeout_changes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+
+            weekly = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self._write_ready_closeout_manifest(project)
+            report_path = project / "07_exports" / "reports" / "weekly_report.md"
+            closeout_manifest = project / "08_evals" / "session_closeout_manifest.json"
+            base_time_ns = 4_000_000_000_000_000_000
+            os.utime(report_path, ns=(base_time_ns, base_time_ns))
+            os.utime(
+                closeout_manifest,
+                ns=(base_time_ns + 1_000_000_000, base_time_ns + 1_000_000_000),
+            )
+
+            stale_reports = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "list",
+                    "--project",
+                    str(project),
+                    "--status",
+                    "stale",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(weekly.returncode, 0, weekly.stderr)
+            self.assertEqual(stale_reports.returncode, 0, stale_reports.stderr)
+            self.assertIn(
+                "- weekly | stale | Weekly Learning Report | "
+                "07_exports/reports/weekly_report.md",
+                stale_reports.stdout,
+            )
+
+    def test_monthly_report_includes_recommended_focus(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "monthly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "monthly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Recommended Focus", report_text)
+            self.assertIn(
+                "- Next action: workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+                report_text,
+            )
+            self.assertIn("- Weak concept: quotient_group: 0.42", report_text)
+            self.assertIn("- Next review: quotient_group | high | 2026-06-04", report_text)
+            self.assertIn("- Active misconception: none recorded", report_text)
+
+    def test_project_summary_recommended_focus_includes_active_misconception(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session_0001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses conjugation invariance with centrality.",
+                            repair_suggestion="Compare normality with containment in Z(G).",
+                        )
+                    ],
+                ),
+            )
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Recommended Focus", report_text)
+            self.assertIn(
+                "- Next action: workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+                report_text,
+            )
+            self.assertIn(
+                "- Active misconception: normal_equals_central | normal_subgroup | active x1",
+                report_text,
+            )
+
+    def test_weekly_report_recommended_focus_uses_empty_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Recommended Focus", report_text)
+            self.assertIn("- Next action: none", report_text)
+            self.assertIn("- Weak concept: none recorded", report_text)
+            self.assertIn("- Next review: none scheduled", report_text)
+            self.assertIn("- Active misconception: none recorded", report_text)
+
+    def test_project_summary_includes_action_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Action Summary", report_text)
+            self.assertIn("- Completion: blocked", report_text)
+            self.assertIn("- Open actions: 6", report_text)
+            self.assertIn("- Blockers: 1", report_text)
+            self.assertIn("- Can continue learning: 1", report_text)
+            self.assertIn("- Needs human review: 4", report_text)
+            self.assertLess(
+                report_text.index("## Recommended Focus"),
+                report_text.index("## Action Summary"),
+            )
+
+    def test_weekly_report_action_summary_uses_empty_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Action Summary", report_text)
+            self.assertIn("- Completion: clear", report_text)
+            self.assertIn("- Open actions: 0", report_text)
+            self.assertIn("- Blockers: 0", report_text)
+            self.assertIn("- Can continue learning: 0", report_text)
+            self.assertIn("- Needs human review: 0", report_text)
+            self.assertIn("- Next action: none", report_text)
+
+    def test_project_summary_includes_repair_paths(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Repair Paths", report_text)
+            self.assertLess(
+                report_text.index("## Action Summary"),
+                report_text.index("## Repair Paths"),
+            )
+            self.assertIn(
+                (
+                    "- workflow:multi_session_regression | "
+                    "08_evals/session_closeout_manifest.json | "
+                    "status: not_run; run with: socrates lifecycle regression --project <project>"
+                ),
+                report_text,
+            )
+            repair_section = report_text.split("## Repair Paths", 1)[1].split(
+                "## Benchmark Snapshot",
+                1,
+            )[0]
+            self.assertNotIn(
+                "- reviews:quotient_group | 02_learning_plan/review_schedule.md",
+                repair_section,
+            )
+
+    def test_weekly_report_repair_paths_uses_empty_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Repair Paths", report_text)
+            self.assertIn("## Action Summary", report_text)
+            self.assertLess(
+                report_text.index("## Action Summary"),
+                report_text.index("## Repair Paths"),
+            )
+            self.assertIn("- none", report_text.split("## Repair Paths", 1)[1])
+
+    def test_project_summary_includes_risk_summary(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Risk Summary", report_text)
+            self.assertLess(
+                report_text.index("## Repair Paths"),
+                report_text.index("## Risk Summary"),
+            )
+            self.assertIn("- Risk level: blocked", report_text)
+            self.assertIn("- Blocker pressure: 1", report_text)
+            self.assertIn("- Review pressure: 1", report_text)
+            self.assertIn("- Human review backlog: 4", report_text)
+            self.assertIn("- Weak concepts: 1", report_text)
+            self.assertIn("- Active misconceptions: 0", report_text)
+
+    def test_weekly_report_risk_summary_uses_empty_fallbacks(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Risk Summary", report_text)
+            self.assertIn("- Risk level: clear", report_text)
+            self.assertIn("- Blocker pressure: 0", report_text)
+            self.assertIn("- Review pressure: 0", report_text)
+            self.assertIn("- Human review backlog: 0", report_text)
+            self.assertIn("- Weak concepts: 0", report_text)
+            self.assertIn("- Active misconceptions: 0", report_text)
+
+    def test_weekly_report_trend_summary_compares_previous_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+
+            first = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(first.returncode, 0, first.stderr)
+
+            update_learning_state(
+                load_project(project),
+                LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
+            )
+
+            second = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "weekly",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(second.returncode, 0, second.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "weekly_report.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Trend Summary", report_text)
+            self.assertLess(
+                report_text.index("## Risk Summary"),
+                report_text.index("## Trend Summary"),
+            )
+            self.assertIn("- Previous snapshot: 1", report_text)
+            self.assertIn("- Risk level change: clear -> attention", report_text)
+            self.assertIn("- Weak concepts change: +1", report_text)
+
+            history = json.loads(
+                (project / "07_exports" / "reports" / "risk_history.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(history["schema_version"], "v0.19")
+            self.assertEqual([item["snapshot_id"] for item in history["snapshots"]], [1, 2])
+            self.assertEqual(history["snapshots"][0]["report_type"], "weekly")
+            self.assertEqual(history["snapshots"][1]["weak_concepts"], 1)
+
+    def test_project_summary_trend_summary_uses_empty_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Trend Summary", report_text)
+            self.assertIn("- Previous snapshot: none", report_text)
+            self.assertIn("- Risk level change: baseline", report_text)
+
+            history = json.loads(
+                (project / "07_exports" / "reports" / "risk_history.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(history["snapshots"][0]["report_type"], "project-summary")
+            self.assertEqual(history["snapshots"][0]["risk_level"], "blocked")
+
+    def test_project_summary_includes_report_history_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            self._write_ready_closeout_manifest(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Report History Snapshot", report_text)
+            self.assertLess(
+                report_text.index("## Trend Summary"),
+                report_text.index("## Report History Snapshot"),
+            )
+            self.assertIn("- Report history: current", report_text)
+            self.assertIn("- Report history snapshots: 1", report_text)
+            self.assertIn("- Latest report history: #1 project-summary blocked", report_text)
+
     def test_report_clis_treat_malformed_learning_scores_as_weak(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -975,6 +1653,103 @@ class ReportTests(unittest.TestCase):
             self.assertIn(
                 "- Tutoring quality: pass (1/1 passed, 0 failed) - "
                 "08_evals/tutoring_quality_manifest.json",
+                report_text,
+            )
+
+    def test_project_summary_includes_session_score_snapshot_when_available(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            (project / "08_evals" / "session_score_manifest.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "session_id": "session_0001",
+                        "status": "pass",
+                        "score": 100,
+                        "passed_gates": 5,
+                        "total_gates": 5,
+                        "gates": [
+                            {"name": "Ingestion", "passed": True},
+                            {"name": "Note quality", "passed": True},
+                            {"name": "Exercise quality", "passed": True},
+                            {"name": "Exercise validation", "passed": True},
+                            {"name": "Tutoring quality", "passed": True},
+                        ],
+                    },
+                    indent=2,
+                )
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Session Score Snapshot", report_text)
+            self.assertIn("- Session: session_0001", report_text)
+            self.assertIn("- Score: 100/100", report_text)
+            self.assertIn("- Gates passed: 5/5", report_text)
+            self.assertIn("- Failed gates: none", report_text)
+            self.assertIn("- Manifest: 08_evals/session_score_manifest.json", report_text)
+
+    def test_project_summary_includes_next_session_handoff_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            project = self._create_report_fixture(root)
+            context = load_project(project)
+            build_review_schedule(context, as_of=date(2026, 6, 4))
+            create_next_session_plan(
+                project,
+                session_id="session_0002",
+                as_of=date(2026, 6, 4),
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "report",
+                    "project-summary",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            report_text = (
+                project / "07_exports" / "reports" / "project_summary.md"
+            ).read_text(encoding="utf-8")
+            self.assertIn("## Next Session Handoff Snapshot", report_text)
+            self.assertIn("- Session: session_0002", report_text)
+            self.assertIn("- Status: ready", report_text)
+            self.assertIn("- Due reviews: 1", report_text)
+            self.assertIn("- Previous session: session_0001", report_text)
+            self.assertIn(
+                "- Manifest: 02_learning_plan/next_session_plan_manifest.json",
                 report_text,
             )
 
@@ -1323,13 +2098,14 @@ class ReportTests(unittest.TestCase):
             project = self._create_report_fixture(root)
             manifest = {
                 "schema_version": 1,
-                "score": 75,
-                "passed_gates": 3,
-                "total_gates": 4,
+                "score": 80,
+                "passed_gates": 4,
+                "total_gates": 5,
                 "gates": [
                     {"name": "Ingestion", "passed": True},
                     {"name": "Note quality", "passed": True},
                     {"name": "Exercise quality", "passed": True},
+                    {"name": "Exercise validation", "passed": True},
                     {"name": "Tutoring quality", "passed": False},
                 ],
             }
@@ -1360,8 +2136,8 @@ class ReportTests(unittest.TestCase):
                 project / "07_exports" / "reports" / "project_summary.md"
             ).read_text(encoding="utf-8")
             self.assertIn("## Benchmark Snapshot", report_text)
-            self.assertIn("- Score: 75/100", report_text)
-            self.assertIn("- Gates passed: 3/4", report_text)
+            self.assertIn("- Score: 80/100", report_text)
+            self.assertIn("- Gates passed: 4/5", report_text)
             self.assertIn("- Failed gates: Tutoring quality", report_text)
             self.assertIn("- Manifest: 08_evals/benchmark_manifest.json", report_text)
 
@@ -1583,6 +2359,44 @@ class ReportTests(unittest.TestCase):
             self.assertIn("- normal_equals_central: normal_subgroup, active x1", report_text)
             self.assertNotIn("many", report_text)
 
+    def _write_ready_closeout_manifest(self, project: Path) -> None:
+        artifact_paths = (
+            "08_evals/session_score_report.md",
+            "08_evals/session_score_manifest.json",
+            "02_learning_plan/session_0002_plan.md",
+            "02_learning_plan/next_session_plan_manifest.json",
+            "07_exports/reports/project_summary.md",
+        )
+        for relative_path in artifact_paths:
+            artifact_path = project / relative_path
+            artifact_path.parent.mkdir(parents=True, exist_ok=True)
+            artifact_path.write_text("# Fixture Artifact\n", encoding="utf-8", newline="\n")
+        closeout_manifest = project / "08_evals" / "session_closeout_manifest.json"
+        closeout_manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "quality_boundary": "deterministic_session_closeout",
+                    "status": "ready",
+                    "session_id": "session_0001",
+                    "next_session_id": "session_0002",
+                    "session_score_status": "pass",
+                    "session_score": 100,
+                    "session_score_report_path": "08_evals/session_score_report.md",
+                    "session_score_manifest_path": "08_evals/session_score_manifest.json",
+                    "next_session_plan_path": "02_learning_plan/session_0002_plan.md",
+                    "next_session_plan_manifest_path": (
+                        "02_learning_plan/next_session_plan_manifest.json"
+                    ),
+                    "project_summary_path": "07_exports/reports/project_summary.md",
+                },
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
     def _create_report_fixture(self, root: Path) -> Path:
         project = create_project(ProjectSpec(topic="Group Theory", path=root / "p"))
         curated = project / "01_references" / "curated" / "normality.curated.md"
@@ -1640,7 +2454,7 @@ class ReportTests(unittest.TestCase):
             context=context,
             patch=LearningStatePatch(concept_mastery={"quotient_group": 0.42}),
         )
-        build_review_schedule(context)
+        build_review_schedule(context, as_of=date(2026, 6, 4))
         tool_verification_dir = project / "08_evals" / "tool_verification"
         tool_verification_dir.mkdir(exist_ok=True)
         (tool_verification_dir / "manifest.json").write_text(

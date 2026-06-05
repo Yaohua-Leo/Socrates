@@ -14,12 +14,14 @@ from socrates.artifacts import (
     generate_misconception_note_drafts,
 )
 from socrates.context import load_project
+from socrates.exercise_bank import build_exercise_bank
 from socrates.exercises import (
     approve_exercise_draft,
     grade_exercise_attempt,
     record_exercise_attempt,
 )
 from socrates.kb import build_reference_kb
+from socrates.multi_session import run_multi_session_regression
 from socrates.notes import export_reviewed_notes_to_obsidian, review_atomic_note
 from socrates.planning import create_learning_plan
 from socrates.project import ProjectSpec, create_project
@@ -29,6 +31,7 @@ from socrates.reports import (
     generate_project_summary,
     generate_weekly_report,
 )
+from socrates.session_score import score_teaching_session
 from socrates.state import (
     LearningStatePatch,
     MistakeRecord,
@@ -37,6 +40,7 @@ from socrates.state import (
 )
 from socrates.tool_verification import generate_lean_statement_skeleton
 from socrates.tutoring import run_scripted_tutoring_session
+from socrates.workflow import close_tutoring_session
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -64,12 +68,16 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 1)
-            self.assertIn("Lifecycle audit passed 1/16 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 2/23 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("- Project metadata: pass", report_text)
             self.assertIn("- Learning plans: fail", report_text)
             self.assertIn("- Obsidian export: fail", report_text)
+            self.assertIn("- Session score report: fail", report_text)
+            self.assertIn("- Session score manifest: fail", report_text)
+            self.assertIn("- Session closeout manifest: fail", report_text)
+            self.assertIn("- Multi-session regression: fail", report_text)
             self.assertIn("- Benchmark report: fail", report_text)
             self.assertIn("- Benchmark manifest: fail", report_text)
             self.assertIn("- Tool verification records: fail", report_text)
@@ -181,6 +189,37 @@ class LifecycleAuditTests(unittest.TestCase):
             report_text = report_path.read_text(encoding="utf-8")
             self.assertIn("- Obsidian export: pass", report_text)
 
+    def test_lifecycle_audit_rejects_corrupt_llm_suggestion_manifest(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            (project / "08_evals" / "llm_suggestions_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "lifecycle",
+                    "audit",
+                    "--project",
+                    str(project),
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 1)
+            report_text = (project / "08_evals" / "lifecycle_eval.md").read_text(
+                encoding="utf-8"
+            )
+            self.assertIn("- LLM suggestion drafts: fail", report_text)
+
     def test_lifecycle_audit_rejects_reviewed_notes_pending_obsidian_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -277,10 +316,12 @@ class LifecycleAuditTests(unittest.TestCase):
                 "ingestion_eval.md",
                 "note_quality_eval.md",
                 "exercise_quality_eval.md",
+                "exercise_validation_eval.md",
                 "tutoring_eval.md",
                 "ingestion_quality_manifest.json",
                 "note_quality_manifest.json",
                 "exercise_quality_manifest.json",
+                "exercise_validation_manifest.json",
                 "tutoring_quality_manifest.json",
             )
             for name in artifact_names:
@@ -388,7 +429,7 @@ class LifecycleAuditTests(unittest.TestCase):
             for name in artifact_names:
                 (evals / name).write_text("{}\n", encoding="utf-8", newline="\n")
             (evals / "benchmark_report.md").write_text(
-                "# Benchmark Report\n\n## Summary\n\n- Benchmark score: 75/100\n",
+                "# Benchmark Report\n\n## Summary\n\n- Benchmark score: 80/100\n",
                 encoding="utf-8",
                 newline="\n",
             )
@@ -396,9 +437,9 @@ class LifecycleAuditTests(unittest.TestCase):
                 json.dumps(
                     {
                         "schema_version": 1,
-                        "score": 75,
-                        "passed_gates": 3,
-                        "total_gates": 4,
+                        "score": 80,
+                        "passed_gates": 4,
+                        "total_gates": 5,
                         "gates": [
                             {
                                 "name": "Ingestion",
@@ -423,6 +464,14 @@ class LifecycleAuditTests(unittest.TestCase):
                                 "failed": 0,
                                 "report_path": "08_evals/exercise_quality_eval.md",
                                 "manifest_path": "08_evals/exercise_quality_manifest.json",
+                            },
+                            {
+                                "name": "Exercise validation",
+                                "passed": True,
+                                "checked": 5,
+                                "failed": 0,
+                                "report_path": "08_evals/exercise_validation_eval.md",
+                                "manifest_path": "08_evals/exercise_validation_manifest.json",
                             },
                             {
                                 "name": "Tutoring quality",
@@ -828,8 +877,26 @@ class LifecycleAuditTests(unittest.TestCase):
             generate_lean_statement_skeleton(project, object_id="normal_subgroup")
             generate_weekly_report(project)
             generate_monthly_report(project)
-            generate_project_summary(project)
+            script_2 = root / "session_0002.script"
+            script_2.write_text(
+                "topic: Kernel Normality\n"
+                "question: Why is a kernel normal?\n"
+                "hint: Use the homomorphism property.\n"
+                "hint: Compute phi(gkg^-1).\n"
+                "attempt: phi(gkg^-1)=e, so gkg^-1 is in the kernel.\n"
+                "next: Compare quotient groups with cosets.\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            run_scripted_tutoring_session(project, script_2, session_id="session_0002")
+            close_tutoring_session(
+                project,
+                session_id="session_0001",
+                next_session_id="session_0002",
+            )
+            run_multi_session_regression(project)
             run_project_benchmark(project, session_id="session_0001")
+            build_exercise_bank(project)
 
             result = subprocess.run(
                 [
@@ -848,7 +915,7 @@ class LifecycleAuditTests(unittest.TestCase):
             )
 
             self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertIn("Lifecycle audit passed 18/18 checks", result.stdout)
+            self.assertIn("Lifecycle audit passed 25/25 checks", result.stdout)
             report = project / "08_evals" / "lifecycle_eval.md"
             report_text = report.read_text(encoding="utf-8")
             self.assertIn("# Lifecycle Eval", report_text)
@@ -859,6 +926,12 @@ class LifecycleAuditTests(unittest.TestCase):
             self.assertIn("- Obsidian export completeness: pass", report_text)
             self.assertIn("- Learning reports: pass", report_text)
             self.assertIn("- Artifact quality: pass", report_text)
+            self.assertIn("- Exercise validation: pass", report_text)
+            self.assertIn("- Exercise bank: pass", report_text)
+            self.assertIn("- Session score report: pass", report_text)
+            self.assertIn("- Session score manifest: pass", report_text)
+            self.assertIn("- Session closeout manifest: pass", report_text)
+            self.assertIn("- Multi-session regression: pass", report_text)
             self.assertIn("- Benchmark report: pass", report_text)
             self.assertIn("- Benchmark manifest: pass", report_text)
             self.assertIn("- Tool verification records: pass", report_text)

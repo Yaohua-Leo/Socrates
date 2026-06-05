@@ -9,14 +9,18 @@ from pathlib import Path
 import sys
 from typing import Sequence
 
+from .deepseek import DeepSeekClient
 from .artifacts import (
     generate_atomic_note_draft,
     generate_exercise_drafts,
     generate_misconception_note_drafts,
     generate_targeted_review_exercise_drafts,
+    preview_targeted_review_exercise_drafts,
 )
-from .context import load_project
-from .contracts import REVIEW_PRIORITY_FILTERS
+from .context import ProjectContext, load_project
+from .contracts import ExerciseDraft, REVIEW_PRIORITY_FILTERS
+from .dashboard import build_study_dashboard_payload, format_study_dashboard
+from .exercise_bank import build_exercise_bank, read_exercise_bank
 from .exercises import (
     EXERCISE_TYPES,
     ExerciseSummary,
@@ -24,7 +28,9 @@ from .exercises import (
     grade_exercise_attempt,
     list_exercises,
     record_exercise_attempt,
+    suggest_exercise_feedback_with_llm,
 )
+from .exercise_validation import validate_exercise, validate_project_exercises
 from .kb import (
     CONCEPT_RELATIONSHIP_TYPES,
     OBJECT_TYPES,
@@ -36,7 +42,20 @@ from .kb import (
     read_reference_chapter_index,
     search_reference_kb,
 )
-from .learning_queue import QUEUE_SECTIONS, collect_learning_queue, format_learning_queue
+from .learning_queue import (
+    QUEUE_SECTIONS,
+    build_learning_queue_payload,
+    collect_learning_queue,
+    format_learning_queue,
+)
+from .llm import LlmMessage, LlmProviderError, LlmRequest
+from .llm_artifacts import list_llm_suggestions
+from .llm_config import load_llm_config
+from .llm_judge import suggest_session_judge_with_llm
+from .multi_session import (
+    read_multi_session_regression_status,
+    run_multi_session_regression,
+)
 from .notes import (
     AtomicNoteSummary,
     NOTE_TYPES,
@@ -48,14 +67,28 @@ from .obsidian import (
     obsidian_backlink_count as count_obsidian_backlinks,
     obsidian_export_count as count_obsidian_exports,
 )
-from .planning import adjust_short_term_plan_from_review_schedule, create_learning_plan
+from .planning import (
+    adjust_short_term_plan_from_review_schedule,
+    create_learning_plan,
+    create_next_session_plan,
+)
 from .project import ProjectExistsError, ProjectSpec, create_project
 from .project import slugify_topic
+from .project_brief_refresh import (
+    format_project_brief_refresh,
+    refresh_project_briefs_payload,
+)
 from .project_index import (
     build_cross_project_reference_graph,
     find_project_references,
     list_projects,
     scan_project_root,
+)
+from .project_resume import (
+    RESUME_STATE_FILTERS,
+    build_project_resume_index_payload,
+    format_project_resume_commands,
+    format_project_resume_index,
 )
 from .quality import (
     audit_project_lifecycle,
@@ -68,6 +101,7 @@ from .quality import (
 from .references import (
     CorrectionPatchSummary,
     SourceSummary,
+    attach_converted_markdown,
     apply_correction_patch,
     create_correction_patch,
     curate_reference,
@@ -75,15 +109,20 @@ from .references import (
     list_correction_patches,
     list_source_registry,
     review_correction_patch,
+    suggest_correction_patch_with_llm,
 )
 from .reports import (
     REPORT_TYPES,
+    ReportHistorySummary,
     ReportSummary,
     generate_monthly_report,
     generate_project_summary,
     generate_weekly_report,
     list_learning_reports,
+    summarize_report_history,
 )
+from .resume import build_project_resume_payload, format_project_resume
+from .session_score import score_teaching_session
 from .state import (
     EvalReportUpdate,
     LearningScoreSummary,
@@ -94,11 +133,15 @@ from .state import (
     ensure_learning_state_readable,
     list_learning_scores,
     list_misconceptions,
+    preview_review_schedule_repair,
     repair_review_schedule,
     resolve_active_misconceptions_for_concept,
+    coerce_occurrence_count,
     update_eval_report,
     update_learning_state,
 )
+from .study_brief import generate_study_brief
+from .study_brief_status import build_study_brief_status_payload, summarize_study_brief
 from .tool_verification import (
     check_tool_verification_records,
     check_lean_file,
@@ -120,10 +163,13 @@ from .tool_verification import (
     verify_sympy_identity,
     write_tool_inventory,
 )
+from .workflow import close_tutoring_session
+from .workflow_manifest import read_session_closeout_status
 from .tutoring import (
     TutoringSessionSummary,
     list_tutoring_sessions,
     run_scripted_tutoring_session,
+    suggest_next_question_with_llm,
 )
 
 
@@ -133,6 +179,25 @@ def build_parser() -> argparse.ArgumentParser:
         description="Project-based mathematics learning CLI.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
+
+    llm_parser = subparsers.add_parser(
+        "llm",
+        help="Inspect and smoke-test the configured local LLM provider.",
+    )
+    llm_subparsers = llm_parser.add_subparsers(dest="llm_command", required=True)
+    llm_config_parser = llm_subparsers.add_parser(
+        "config",
+        help="Print redacted LLM provider configuration.",
+    )
+    llm_config_parser.add_argument("--root", default=".", help="Directory containing .env.")
+    llm_config_parser.set_defaults(func=_handle_llm_config)
+    llm_smoke_parser = llm_subparsers.add_parser(
+        "smoke",
+        help="Call the configured LLM provider with a short prompt.",
+    )
+    llm_smoke_parser.add_argument("--root", default=".", help="Directory containing .env.")
+    llm_smoke_parser.add_argument("--prompt", required=True, help="Short smoke-test prompt.")
+    llm_smoke_parser.set_defaults(func=_handle_llm_smoke)
 
     init_parser = subparsers.add_parser(
         "init",
@@ -200,6 +265,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by exact source type; defaults to all.",
     )
     sources_list_parser.set_defaults(func=_handle_sources_list)
+    sources_attach_parser = sources_subparsers.add_parser(
+        "attach-conversion",
+        help="Attach an externally converted Markdown file to an imported source.",
+    )
+    sources_attach_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    sources_attach_parser.add_argument("--source-id", required=True, help="Source id from source_registry.yaml.")
+    sources_attach_parser.add_argument("--markdown", required=True, help="External converted Markdown file.")
+    sources_attach_parser.set_defaults(func=_handle_sources_attach_conversion)
 
     curate_parser = subparsers.add_parser(
         "curate",
@@ -255,6 +328,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="Filter by source registry id.",
     )
     patches_list_parser.set_defaults(func=_handle_patches_list)
+    patches_suggest_parser = patches_subparsers.add_parser(
+        "suggest",
+        help="Ask the configured LLM for one patch-only reference correction proposal.",
+    )
+    patches_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    patches_suggest_parser.add_argument("--source-id", required=True, help="Reference source id.")
+    patches_suggest_parser.add_argument(
+        "--location-hint",
+        default="",
+        help="Optional section or line hint to focus the LLM review.",
+    )
+    patches_suggest_parser.set_defaults(func=_handle_patches_suggest)
     patches_review_parser = patches_subparsers.add_parser(
         "review",
         help="Record a human review decision on a correction patch.",
@@ -305,6 +390,67 @@ def build_parser() -> argparse.ArgumentParser:
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
     status_parser.set_defaults(func=_handle_status)
 
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Show a compact read-only project dashboard.",
+    )
+    dashboard_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    dashboard_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the dashboard as deterministic JSON.",
+    )
+    dashboard_parser.set_defaults(func=_handle_dashboard)
+
+    resume_parser = subparsers.add_parser(
+        "resume",
+        help="Show a compact read-only resume card for a returning learner.",
+    )
+    resume_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    resume_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the resume card as deterministic JSON.",
+    )
+    resume_parser.set_defaults(func=_handle_resume)
+
+    brief_parser = subparsers.add_parser(
+        "brief",
+        help="Write or inspect deterministic study-start briefs.",
+    )
+    brief_parser.add_argument(
+        "--project",
+        default=None,
+        help="Socrates project directory for legacy brief generation.",
+    )
+    brief_subparsers = brief_parser.add_subparsers(dest="brief_command")
+    brief_generate_parser = brief_subparsers.add_parser(
+        "generate",
+        help="Write a deterministic study-start brief.",
+    )
+    brief_generate_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    brief_generate_parser.set_defaults(func=_handle_brief)
+    brief_status_parser = brief_subparsers.add_parser(
+        "status",
+        help="Inspect study brief freshness without writing artifacts.",
+    )
+    brief_status_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    brief_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print study brief status as deterministic JSON.",
+    )
+    brief_status_parser.set_defaults(func=_handle_brief_status)
+    brief_parser.set_defaults(func=_handle_brief)
+
     queue_parser = subparsers.add_parser(
         "queue",
         help="List actionable notes and exercises for a Socrates project.",
@@ -315,6 +461,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", *sorted(QUEUE_SECTIONS)),
         default="all",
         help="Show one queue section; defaults to all.",
+    )
+    queue_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the learning queue as deterministic JSON.",
     )
     queue_parser.set_defaults(func=_handle_queue)
 
@@ -329,6 +480,16 @@ def build_parser() -> argparse.ArgumentParser:
     )
     lifecycle_audit_parser.add_argument("--project", required=True, help="Socrates project directory.")
     lifecycle_audit_parser.set_defaults(func=_handle_lifecycle_audit)
+    lifecycle_regression_parser = lifecycle_subparsers.add_parser(
+        "regression",
+        help="Run deterministic multi-session product-loop regression.",
+    )
+    lifecycle_regression_parser.add_argument(
+        "--project",
+        required=True,
+        help="Socrates project directory.",
+    )
+    lifecycle_regression_parser.set_defaults(func=_handle_lifecycle_regression)
 
     projects_parser = subparsers.add_parser(
         "projects",
@@ -360,6 +521,61 @@ def build_parser() -> argparse.ArgumentParser:
     )
     projects_graph_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
     projects_graph_parser.set_defaults(func=_handle_projects_graph)
+    projects_refresh_briefs_parser = projects_subparsers.add_parser(
+        "refresh-briefs",
+        help="Generate study briefs for projects that need brief refresh.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--root",
+        required=True,
+        help="SocratesProjects root directory.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the project brief refresh result as deterministic JSON.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview selected project brief refreshes without writing artifacts.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="Maximum refresh-needed projects to select for this run.",
+    )
+    projects_refresh_briefs_parser.add_argument(
+        "--project-id",
+        action="append",
+        default=None,
+        help="Refresh only a child project id; repeat to target multiple projects.",
+    )
+    projects_refresh_briefs_parser.set_defaults(func=_handle_projects_refresh_briefs)
+    projects_resume_parser = projects_subparsers.add_parser(
+        "resume",
+        help="Show read-only resume state across projects.",
+    )
+    projects_resume_parser.add_argument("--root", required=True, help="SocratesProjects root directory.")
+    projects_resume_parser.add_argument(
+        "--state",
+        choices=RESUME_STATE_FILTERS,
+        default="all",
+        help="Filter projects by resume state; defaults to all.",
+    )
+    projects_resume_output_group = projects_resume_parser.add_mutually_exclusive_group()
+    projects_resume_output_group.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the project resume index as deterministic JSON.",
+    )
+    projects_resume_output_group.add_argument(
+        "--commands",
+        action="store_true",
+        help="Print only recommended child-project commands.",
+    )
+    projects_resume_parser.set_defaults(func=_handle_projects_resume)
 
     kb_parser = subparsers.add_parser(
         "kb",
@@ -516,6 +732,11 @@ def build_parser() -> argparse.ArgumentParser:
         default=None,
         help="ISO date used when assigning review dates; defaults to today.",
     )
+    review_schedule_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
     review_schedule_parser.set_defaults(func=_handle_review_schedule)
     review_exercises_parser = review_subparsers.add_parser(
         "exercises",
@@ -533,12 +754,32 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="Only generate exercises for review items with this priority; defaults to all.",
     )
+    review_exercises_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
+    review_exercises_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview targeted review exercise rows without writing files.",
+    )
     review_exercises_parser.set_defaults(func=_handle_review_exercises)
     review_adjust_plan_parser = review_subparsers.add_parser(
         "adjust-plan",
         help="Update the short-term plan from the review schedule.",
     )
     review_adjust_plan_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    review_adjust_plan_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
+    review_adjust_plan_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview short-term plan adjustments without writing the plan.",
+    )
     review_adjust_plan_parser.set_defaults(func=_handle_review_adjust_plan)
     review_due_parser = review_subparsers.add_parser(
         "due",
@@ -556,6 +797,11 @@ def build_parser() -> argparse.ArgumentParser:
         default="all",
         help="Filter due reviews by priority; defaults to all.",
     )
+    review_due_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of Markdown.",
+    )
     review_due_parser.set_defaults(func=_handle_review_due)
     review_repair_parser = review_subparsers.add_parser(
         "repair-schedule",
@@ -566,6 +812,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--as-of",
         default=None,
         help="ISO date used to repair missing or invalid dates; defaults to today.",
+    )
+    review_repair_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview repaired schedule rows without writing files.",
+    )
+    review_repair_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
     )
     review_repair_parser.set_defaults(func=_handle_review_repair_schedule)
     review_resolve_parser = review_subparsers.add_parser(
@@ -582,6 +838,16 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Concept whose misconceptions were repaired.",
     )
+    review_resolve_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview resolver rows without writing files.",
+    )
+    review_resolve_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
+    )
     review_resolve_parser.set_defaults(func=_handle_review_resolve)
     review_misconceptions_parser = review_subparsers.add_parser(
         "misconceptions",
@@ -597,6 +863,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", "active", "resolved"),
         default="all",
         help="Filter misconceptions by status; defaults to all.",
+    )
+    review_misconceptions_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of Markdown.",
     )
     review_misconceptions_parser.set_defaults(func=_handle_review_misconceptions)
     review_mastery_parser = review_subparsers.add_parser(
@@ -625,6 +896,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=float,
         default=0.7,
         help="Weak/ready cutoff; defaults to 0.7.",
+    )
+    review_mastery_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of Markdown.",
     )
     review_mastery_parser.set_defaults(func=_handle_review_mastery)
 
@@ -657,6 +933,35 @@ def build_parser() -> argparse.ArgumentParser:
     )
     exercise_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     exercise_check_parser.set_defaults(func=_handle_exercise_check)
+    exercise_validate_parser = exercise_subparsers.add_parser(
+        "validate",
+        help="Run v0.4 schema and evidence validation for generated exercise drafts.",
+    )
+    exercise_validate_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    validation_target = exercise_validate_parser.add_mutually_exclusive_group(required=True)
+    validation_target.add_argument("--all", action="store_true", help="Validate all generated exercises.")
+    validation_target.add_argument("--exercise", help="Generated exercise id, without .md.")
+    exercise_validate_parser.set_defaults(func=_handle_exercise_validate)
+    exercise_bank_parser = exercise_subparsers.add_parser(
+        "bank",
+        help="Build or inspect the approved exercise bank.",
+    )
+    exercise_bank_subparsers = exercise_bank_parser.add_subparsers(
+        dest="exercise_bank_command",
+        required=True,
+    )
+    exercise_bank_build_parser = exercise_bank_subparsers.add_parser(
+        "build",
+        help="Build the bank manifest from approved, passing validation exercises.",
+    )
+    exercise_bank_build_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_bank_build_parser.set_defaults(func=_handle_exercise_bank_build)
+    exercise_bank_status_parser = exercise_bank_subparsers.add_parser(
+        "status",
+        help="Show the current exercise bank manifest.",
+    )
+    exercise_bank_status_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_bank_status_parser.set_defaults(func=_handle_exercise_bank_status)
     exercise_approve_parser = exercise_subparsers.add_parser(
         "approve",
         help="Approve one generated exercise draft after quality checks.",
@@ -693,6 +998,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="Optional repair suggestion; defaults to the feedback text when a misconception is recorded.",
     )
     exercise_grade_parser.set_defaults(func=_handle_exercise_grade)
+    exercise_suggest_feedback_parser = exercise_subparsers.add_parser(
+        "suggest-feedback",
+        help="Ask the configured LLM for draft feedback on one exercise attempt.",
+    )
+    exercise_suggest_feedback_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    exercise_suggest_feedback_parser.add_argument("--attempt", required=True, help="Attempt id, without .md.")
+    exercise_suggest_feedback_parser.set_defaults(func=_handle_exercise_suggest_feedback)
 
     session_parser = subparsers.add_parser(
         "session",
@@ -718,6 +1030,52 @@ def build_parser() -> argparse.ArgumentParser:
     session_check_parser.add_argument("--project", required=True, help="Socrates project directory.")
     session_check_parser.add_argument("--session-id", required=True, help="Session identifier.")
     session_check_parser.set_defaults(func=_handle_session_check)
+    session_score_parser = session_subparsers.add_parser(
+        "score",
+        help="Write a session score report from deterministic quality gates.",
+    )
+    session_score_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_score_parser.add_argument("--session-id", required=True, help="Session identifier.")
+    session_score_parser.set_defaults(func=_handle_session_score)
+    session_plan_next_parser = session_subparsers.add_parser(
+        "plan-next",
+        help="Create a deterministic handoff plan for the next tutoring session.",
+    )
+    session_plan_next_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_plan_next_parser.add_argument("--session-id", required=True, help="Next session identifier.")
+    session_plan_next_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used as the due-review cutoff; defaults to today.",
+    )
+    session_plan_next_parser.set_defaults(func=_handle_session_plan_next)
+    session_closeout_parser = session_subparsers.add_parser(
+        "closeout",
+        help="Run deterministic post-session score, next-plan, and summary closeout.",
+    )
+    session_closeout_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_closeout_parser.add_argument("--session-id", required=True, help="Completed tutoring session id.")
+    session_closeout_parser.add_argument("--next-session-id", required=True, help="Next tutoring session id.")
+    session_closeout_parser.add_argument(
+        "--as-of",
+        default=None,
+        help="ISO date used as the due-review cutoff; defaults to today.",
+    )
+    session_closeout_parser.set_defaults(func=_handle_session_closeout)
+    session_suggest_parser = session_subparsers.add_parser(
+        "suggest-next",
+        help="Ask the configured LLM for a draft next Socratic question.",
+    )
+    session_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_suggest_parser.add_argument("--session-id", required=True, help="Tutoring session id.")
+    session_suggest_parser.set_defaults(func=_handle_session_suggest_next)
+    session_judge_suggest_parser = session_subparsers.add_parser(
+        "judge-suggest",
+        help="Ask the configured LLM for a review-only session judge draft.",
+    )
+    session_judge_suggest_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    session_judge_suggest_parser.add_argument("--session-id", required=True, help="Tutoring session id.")
+    session_judge_suggest_parser.set_defaults(func=_handle_session_judge_suggest)
 
     benchmark_parser = subparsers.add_parser(
         "benchmark",
@@ -931,6 +1289,34 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _handle_llm_config(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path(args.root))
+    print(config.redacted_summary(), end="")
+    return 0
+
+
+def _handle_llm_smoke(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path(args.root))
+    if not config.api_key_present:
+        print("error: DEEPSEEK_API_KEY is missing", file=sys.stderr)
+        return 1
+    client = DeepSeekClient(config)
+    try:
+        response = client.complete(
+            LlmRequest(
+                purpose="cli_smoke",
+                messages=(LlmMessage(role="user", content=args.prompt),),
+                temperature=0.0,
+                max_tokens=64,
+            )
+        )
+    except LlmProviderError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(response.content)
+    return 0
+
+
 def _handle_init(args: argparse.Namespace) -> int:
     spec = ProjectSpec(
         topic=args.topic,
@@ -996,6 +1382,16 @@ def _display_path(value: str) -> str:
     return value if value else "none"
 
 
+def _handle_sources_attach_conversion(args: argparse.Namespace) -> int:
+    curated_path = attach_converted_markdown(args.project, args.source_id, args.markdown)
+    context = load_project(args.project)
+    converted_path = context.references_dir / "converted" / "markdown" / f"{args.source_id}.md"
+    print(f"Attached converted reference {args.source_id}")
+    print(f"Converted markdown: {converted_path}")
+    print(f"Curated reference: {curated_path}")
+    return 0
+
+
 def _handle_curate(args: argparse.Namespace) -> int:
     path = curate_reference(args.project, args.source_id)
     if path.name.endswith(".conversion_pending.md"):
@@ -1022,6 +1418,23 @@ def _handle_patch(args: argparse.Namespace) -> int:
 def _handle_patches_list(args: argparse.Namespace) -> int:
     patches = list_correction_patches(args.project, source_id=args.source_id)
     print(_correction_patches_text(patches), end="")
+    return 0
+
+
+def _handle_patches_suggest(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        patch = suggest_correction_patch_with_llm(
+            args.project,
+            args.source_id,
+            client=client,
+            location_hint=args.location_hint,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM correction patch for {args.source_id}: {patch}")
     return 0
 
 
@@ -1126,6 +1539,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     misconception_note_draft_count = len(queue.misconception_notes_to_draft)
     obsidian_exports_to_run_count = len(queue.obsidian_exports_to_run)
     quality_checks_to_fix_count = len(queue.quality_checks_to_fix)
+    workflow_action_count = len(queue.workflow_actions)
     exercise_count = len(list(context.generated_exercises_dir.glob("*.md")))
     converted_count = _count_converted_references(context.references_dir)
     conversion_pending_count = _count_sources_with_status(
@@ -1137,6 +1551,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     pending_correction_patch_count = sum(
         1 for patch in correction_patches if patch.status == "pending"
     )
+    llm_suggestion_draft_count = _count_llm_suggestion_drafts(context.root)
     curated_count = len(list((context.references_dir / "curated").glob("*.md")))
     kb_status = reference_kb_status(context.root)
     kb_object_count = kb_status.object_count
@@ -1146,6 +1561,8 @@ def _handle_status(args: argparse.Namespace) -> int:
     scheduled_review_count = _count_scheduled_reviews(context.learning_state)
     next_review = _next_scheduled_review(context.learning_state)
     report_count = _count_learning_reports(context.root)
+    report_history = summarize_report_history(context.root)
+    study_brief_status = summarize_study_brief(context.root)
     tool_verification_count = _count_tool_verification_records(context.root)
     ingestion_quality = _read_quality_manifest_status(
         context.root,
@@ -1156,16 +1573,22 @@ def _handle_status(args: argparse.Namespace) -> int:
         context.root,
         "exercise_quality_manifest.json",
     )
+    exercise_validation = _read_exercise_validation_status(context.root)
     tutoring_quality = _read_quality_manifest_status(
         context.root,
         "tutoring_quality_manifest.json",
     )
     tool_verification_quality = _read_tool_verification_quality_status(context.root)
     benchmark_status = _read_benchmark_status(context.root)
+    session_score_status = _read_session_score_status(context.root)
+    session_closeout_status = read_session_closeout_status(context.root)
+    multi_session_regression_status = read_multi_session_regression_status(context.root)
+    next_session_plan_status = _read_next_session_plan_status(context.root)
     active_misconception_count, resolved_misconception_count = _count_misconceptions_by_status(
         context.learning_state
     )
     approved_exercise_count = _count_approved_exercises(context.root)
+    exercise_bank_count = _count_exercise_bank_entries(context.root)
     attempted_exercise_count = len(list((context.root / "05_exercises" / "attempted").glob("*.md")))
     graded_exercise_count = len(list((context.root / "05_exercises" / "graded").glob("*.md")))
     phase = _current_project_phase(
@@ -1198,6 +1621,7 @@ def _handle_status(args: argparse.Namespace) -> int:
     print(f"Conversion pending references: {conversion_pending_count}")
     print(f"Correction patches: {correction_patch_count}")
     print(f"Pending correction patches: {pending_correction_patch_count}")
+    print(f"LLM suggestion drafts: {llm_suggestion_draft_count}")
     print(f"Curated references: {curated_count}")
     print(f"KB objects: {kb_object_count}")
     print(f"Reference KB status: {kb_status.status}")
@@ -1223,13 +1647,49 @@ def _handle_status(args: argparse.Namespace) -> int:
         if repair:
             print(f"Next repair: {repair}")
     print(f"Learning reports: {report_count}")
+    print(f"Report history: {report_history.status}")
+    print(f"Report history snapshots: {report_history.total_snapshots}")
+    print(f"Latest report history: {_latest_report_history_text(report_history)}")
+    print(f"Study brief: {study_brief_status.status}")
+    print(f"Study brief recorded next action: {study_brief_status.recorded_next_action}")
+    print(f"Study brief current next action: {study_brief_status.current_next_action}")
+    print(f"Workflow actions: {workflow_action_count}")
     print(f"Quality checks to fix: {quality_checks_to_fix_count}")
     print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
     print(f"Note quality check: {_quality_manifest_status_text(note_quality)}")
     print(f"Exercise quality check: {_quality_manifest_status_text(exercise_quality)}")
+    print(f"Exercise validation: {_quality_manifest_status_text(exercise_validation)}")
+    print(f"Exercise bank entries: {exercise_bank_count}")
     print(f"Tutoring quality check: {_quality_manifest_status_text(tutoring_quality)}")
     print(f"Tool verification records: {tool_verification_count}")
     print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
+    print(f"Session score: {_session_score_status_text(session_score_status)}")
+    print(f"Session score gates: {_session_score_gates_text(session_score_status)}")
+    print(f"Session score failed gates: {_session_score_failed_gates_text(session_score_status)}")
+    print(f"Session closeout: {_session_closeout_status_text(session_closeout_status)}")
+    print(
+        "Session closeout sessions: "
+        f"{_session_closeout_sessions_text(session_closeout_status)}"
+    )
+    print(f"Session closeout score: {_session_closeout_score_text(session_closeout_status)}")
+    print(
+        "Multi-session regression: "
+        f"{_multi_session_regression_status_text(multi_session_regression_status)}"
+    )
+    print(
+        "Multi-session regression checks: "
+        f"{_multi_session_regression_checks_text(multi_session_regression_status)}"
+    )
+    print(
+        "Multi-session regression issues: "
+        f"{_multi_session_regression_issues_text(multi_session_regression_status)}"
+    )
+    print(f"Next session plan: {_next_session_plan_text(next_session_plan_status)}")
+    print(
+        "Next session due reviews: "
+        f"{_next_session_due_reviews_text(next_session_plan_status)}"
+    )
+    print(f"Next session handoff: {_next_session_handoff_text(next_session_plan_status)}")
     if benchmark_status is None:
         print("Benchmark score: none")
         print("Benchmark gates: none")
@@ -1252,6 +1712,15 @@ def _handle_status(args: argparse.Namespace) -> int:
 
 
 def _handle_queue(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_learning_queue_payload(args.project, section=args.section),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(
         format_learning_queue(
             collect_learning_queue(args.project),
@@ -1262,6 +1731,60 @@ def _handle_queue(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_dashboard(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_study_dashboard_payload(args.project),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    print(format_study_dashboard(args.project), end="")
+    return 0
+
+
+def _handle_resume(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_project_resume_payload(args.project),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    print(format_project_resume(args.project), end="")
+    return 0
+
+
+def _handle_brief(args: argparse.Namespace) -> int:
+    if args.project is None:
+        raise ValueError("brief requires --project or a subcommand")
+    brief_path = generate_study_brief(args.project)
+    print(f"Wrote study brief: {brief_path}")
+    return 0
+
+
+def _handle_brief_status(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_study_brief_status_payload(args.project),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    study_brief_status = summarize_study_brief(args.project)
+    print(f"Study brief: {study_brief_status.status}")
+    print(f"Study brief path: {study_brief_status.path}")
+    print(f"Study brief recorded next action: {study_brief_status.recorded_next_action}")
+    print(f"Study brief current next action: {study_brief_status.current_next_action}")
+    return 0
+
+
 def _handle_lifecycle_audit(args: argparse.Namespace) -> int:
     result = audit_project_lifecycle(args.project)
     print(
@@ -1269,6 +1792,18 @@ def _handle_lifecycle_audit(args: argparse.Namespace) -> int:
         f"{result.report_path}"
     )
     return 0 if result.passed_checks == result.total_checks else 1
+
+
+def _handle_lifecycle_regression(args: argparse.Namespace) -> int:
+    result = run_multi_session_regression(args.project)
+    issues = ", ".join(result.issues) if result.issues else "none"
+    print(f"Multi-session regression: {result.status}")
+    print(f"Regression checks: {result.passed_checks}/{result.total_checks}")
+    print(f"Regression issues: {issues}")
+    print(f"Regression report: {result.report_path}")
+    print(f"Regression manifest: {result.manifest_path}")
+    print(f"Project summary: {result.project_summary_path}")
+    return 0 if result.status == "pass" else 1
 
 
 def _handle_projects_scan(args: argparse.Namespace) -> int:
@@ -1312,6 +1847,56 @@ def _handle_projects_graph(args: argparse.Namespace) -> int:
     edge_count = len(edges) if isinstance(edges, list) else 0
     noun = "edge" if edge_count == 1 else "edges"
     print(f"Wrote cross-project graph with {edge_count} {noun}: {graph_path}")
+    return 0
+
+
+def _handle_projects_refresh_briefs(args: argparse.Namespace) -> int:
+    if args.limit is not None and args.limit <= 0:
+        print("error: limit must be positive", file=sys.stderr)
+        return 2
+    try:
+        if args.json:
+            print(
+                json.dumps(
+                    refresh_project_briefs_payload(
+                        args.root,
+                        dry_run=args.dry_run,
+                        limit=args.limit,
+                        project_ids=args.project_id,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+        else:
+            print(
+                format_project_brief_refresh(
+                    args.root,
+                    dry_run=args.dry_run,
+                    limit=args.limit,
+                    project_ids=args.project_id,
+                ),
+                end="",
+            )
+    except ValueError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    return 0
+
+
+def _handle_projects_resume(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_project_resume_index_payload(args.root, state_filter=args.state),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+    elif args.commands:
+        print(format_project_resume_commands(args.root, state_filter=args.state), end="")
+    else:
+        print(format_project_resume_index(args.root, state_filter=args.state), end="")
     return 0
 
 
@@ -1574,6 +2159,20 @@ def _handle_review_schedule(args: argparse.Namespace) -> int:
         as_of=as_of,
     )
     count = _count_scheduled_reviews(context.learning_state)
+    if args.json:
+        print(
+            json.dumps(
+                _review_schedule_payload(
+                    context,
+                    as_of=as_of,
+                    threshold=args.threshold,
+                    schedule_path=schedule_path,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "item" if count == 1 else "items"
     print(f"Scheduled {count} review {noun}: {schedule_path}")
     return 0
@@ -1585,25 +2184,96 @@ def _handle_review_exercises(args: argparse.Namespace) -> int:
     except ValueError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    context = load_project(args.project)
     try:
-        exercises = generate_targeted_review_exercise_drafts(
-            args.project,
-            due_by=due_by,
-            priority=args.priority,
-        )
+        if args.dry_run:
+            exercises = preview_targeted_review_exercise_drafts(
+                context.root,
+                due_by=due_by,
+                priority=args.priority,
+            )
+        else:
+            exercises = generate_targeted_review_exercise_drafts(
+                context.root,
+                due_by=due_by,
+                priority=args.priority,
+            )
     except json.JSONDecodeError:
         print(
             "error: invalid learning_state.json; repair the JSON before generating review exercises",
             file=sys.stderr,
         )
         return 1
+    if args.dry_run:
+        if args.json:
+            print(
+                json.dumps(
+                    _review_exercises_preview_payload(
+                        context,
+                        due_by=due_by,
+                        priority_filter=args.priority,
+                        exercises=exercises,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        print(_review_exercises_preview_text(exercises), end="")
+        return 0
+    if args.json:
+        print(
+            json.dumps(
+                _review_exercises_payload(
+                    context,
+                    due_by=due_by,
+                    priority_filter=args.priority,
+                    exercises=exercises,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "exercise" if len(exercises) == 1 else "exercises"
     print(f"Generated {len(exercises)} targeted review {noun}")
     return 0
 
 
 def _handle_review_adjust_plan(args: argparse.Namespace) -> int:
-    short_term_plan = adjust_short_term_plan_from_review_schedule(args.project)
+    context = load_project(args.project)
+    short_term_plan = context.learning_plan_dir / "short_term_plan.md"
+    if args.dry_run:
+        ensure_learning_state_readable(
+            context.learning_state,
+            action="adjusting review plans",
+        )
+        rows = _review_schedule_records(context.learning_state)
+        if args.json:
+            print(
+                json.dumps(
+                    _review_adjust_plan_preview_payload(
+                        context,
+                        short_term_plan,
+                        rows,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        print(_review_adjust_plan_preview_text(short_term_plan, rows), end="")
+        return 0
+    short_term_plan = adjust_short_term_plan_from_review_schedule(context.root)
+    if args.json:
+        print(
+            json.dumps(
+                _review_adjust_plan_payload(context, short_term_plan),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(f"Adjusted short-term plan: {short_term_plan}")
     return 0
 
@@ -1615,7 +2285,23 @@ def _handle_review_due(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     context = load_project(args.project)
-    print(_due_reviews_text(context.learning_state, as_of, priority=args.priority), end="")
+    rows, invalid_rows = _due_review_rows(context.learning_state, as_of, priority=args.priority)
+    if args.json:
+        print(
+            json.dumps(
+                _due_reviews_payload(
+                    context,
+                    as_of=as_of,
+                    priority_filter=args.priority,
+                    rows=rows,
+                    invalid_rows=invalid_rows,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
+    print(_due_reviews_text_from_rows(rows, invalid_rows), end="")
     return 0
 
 
@@ -1626,6 +2312,32 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     context = load_project(args.project)
+    if args.dry_run:
+        try:
+            repaired_count, schedule = preview_review_schedule_repair(context, as_of=as_of)
+        except json.JSONDecodeError:
+            print(
+                "error: invalid learning_state.json; repair the JSON before repairing review schedule",
+                file=sys.stderr,
+            )
+            return 1
+        rows = _review_schedule_records_from_schedule(schedule)
+        if args.json:
+            print(
+                json.dumps(
+                    _review_schedule_repair_preview_payload(
+                        context,
+                        as_of=as_of,
+                        repaired_count=repaired_count,
+                        rows=rows,
+                    ),
+                    indent=2,
+                    sort_keys=True,
+                )
+            )
+            return 0
+        print(_review_schedule_repair_preview_text(repaired_count, rows), end="")
+        return 0
     try:
         repaired_count, schedule_path = repair_review_schedule(context, as_of=as_of)
     except json.JSONDecodeError:
@@ -1634,6 +2346,20 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    if args.json:
+        print(
+            json.dumps(
+                _review_schedule_repair_payload(
+                    context,
+                    as_of=as_of,
+                    repaired_count=repaired_count,
+                    schedule_path=schedule_path,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "item" if repaired_count == 1 else "items"
     print(f"Repaired {repaired_count} review schedule {noun}: {schedule_path}")
     return 0
@@ -1641,7 +2367,52 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
 
 def _handle_review_resolve(args: argparse.Namespace) -> int:
     context = load_project(args.project)
-    resolved_count = resolve_active_misconceptions_for_concept(context, args.concept)
+    try:
+        rows = (
+            _active_misconception_records_for_concept(
+                context.learning_state,
+                args.concept,
+            )
+            if args.json or args.dry_run
+            else []
+        )
+        if args.dry_run:
+            if args.json:
+                print(
+                    json.dumps(
+                        _review_resolve_preview_payload(
+                            context,
+                            concept=args.concept,
+                            rows=rows,
+                        ),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+                return 0
+            print(_review_resolve_preview_text(args.concept, rows), end="")
+            return 0
+        resolved_count = resolve_active_misconceptions_for_concept(context, args.concept)
+    except json.JSONDecodeError:
+        print(
+            "error: invalid learning_state.json; repair the JSON before resolving misconceptions",
+            file=sys.stderr,
+        )
+        return 1
+    if args.json:
+        print(
+            json.dumps(
+                _review_resolve_payload(
+                    context,
+                    concept=args.concept,
+                    resolved_count=resolved_count,
+                    rows=rows,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "misconception" if resolved_count == 1 else "misconceptions"
     print(f"Resolved {resolved_count} active {noun} for {args.concept}")
     return 0
@@ -1650,6 +2421,15 @@ def _handle_review_resolve(args: argparse.Namespace) -> int:
 def _handle_review_misconceptions(args: argparse.Namespace) -> int:
     context = load_project(args.project)
     misconceptions = list_misconceptions(context, status=args.status)
+    if args.json:
+        print(
+            json.dumps(
+                _misconceptions_payload(context, args.status, misconceptions),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(_misconceptions_text(misconceptions), end="")
     return 0
 
@@ -1662,6 +2442,21 @@ def _handle_review_mastery(args: argparse.Namespace) -> int:
         status=args.status,
         threshold=args.threshold,
     )
+    if args.json:
+        print(
+            json.dumps(
+                _learning_scores_payload(
+                    context,
+                    kind_filter=args.kind,
+                    status_filter=args.status,
+                    threshold=args.threshold,
+                    scores=scores,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(_learning_scores_text(scores), end="")
     return 0
 
@@ -1689,6 +2484,37 @@ def _misconceptions_text(misconceptions: list[MisconceptionSummary]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _misconceptions_payload(
+    context: ProjectContext,
+    status_filter: str,
+    misconceptions: list[MisconceptionSummary],
+) -> dict[str, object]:
+    rows = [_misconception_record(item) for item in misconceptions]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_misconception_review",
+        "project": str(context.root),
+        "status_filter": status_filter,
+        "misconception_count": len(rows),
+        "active_count": sum(1 for item in misconceptions if item.status == "active"),
+        "resolved_count": sum(1 for item in misconceptions if item.status == "resolved"),
+        "misconceptions": rows,
+    }
+
+
+def _misconception_record(item: MisconceptionSummary) -> dict[str, object]:
+    return {
+        "misconception_id": item.misconception_id,
+        "status": item.status,
+        "concept": item.concept,
+        "count": item.count,
+        "last_session_id": item.last_session_id,
+        "analysis": item.analysis,
+        "repair_suggestion": item.repair_suggestion,
+        "follow_up_exercises": list(item.follow_up_exercises),
+    }
+
+
 def _learning_scores_text(scores: list[LearningScoreSummary]) -> str:
     lines = ["# Learning Mastery", ""]
     if not scores:
@@ -1699,6 +2525,38 @@ def _learning_scores_text(scores: list[LearningScoreSummary]) -> str:
         for item in scores
     )
     return "\n".join(lines) + "\n"
+
+
+def _learning_scores_payload(
+    context: ProjectContext,
+    *,
+    kind_filter: str,
+    status_filter: str,
+    threshold: float,
+    scores: list[LearningScoreSummary],
+) -> dict[str, object]:
+    rows = [_learning_score_record(item) for item in scores]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_learning_mastery_review",
+        "project": str(context.root),
+        "kind_filter": kind_filter,
+        "status_filter": status_filter,
+        "threshold": threshold,
+        "score_count": len(rows),
+        "weak_count": sum(1 for item in scores if item.status == "weak"),
+        "ready_count": sum(1 for item in scores if item.status == "ready"),
+        "scores": rows,
+    }
+
+
+def _learning_score_record(item: LearningScoreSummary) -> dict[str, object]:
+    return {
+        "score_type": item.score_type,
+        "item_id": item.item_id,
+        "status": item.status,
+        "score": item.score,
+    }
 
 
 def _handle_exercise_list(args: argparse.Namespace) -> int:
@@ -1736,6 +2594,61 @@ def _handle_exercise_check(args: argparse.Namespace) -> int:
     return 0
 
 
+def _handle_exercise_validate(args: argparse.Namespace) -> int:
+    if args.all:
+        result = validate_project_exercises(args.project)
+        print(
+            f"Validated {result.checked} exercise drafts: "
+            f"{result.passed} passed, {result.failed} failed"
+        )
+        print(f"Exercise validation checked: {result.checked}")
+        print(f"Exercise validation passed: {result.passed}")
+        print(f"Exercise validation failed: {result.failed}")
+        print(f"Exercise validation report: {result.report_path}")
+        print(f"Exercise validation manifest: {result.manifest_path}")
+        return 1 if result.failed else 0
+
+    result = validate_exercise(args.project, args.exercise)
+    print(f"Exercise validation {result.exercise_id}: {result.status}")
+    if result.issues:
+        print("Issues:")
+        for issue in result.issues:
+            print(f"- {issue}")
+    print(f"Exercise validation report: {result.report_path}")
+    print(f"Exercise validation artifact: {result.artifact_path}")
+    return 1 if result.status == "fail" else 0
+
+
+def _handle_exercise_bank_build(args: argparse.Namespace) -> int:
+    try:
+        result = build_exercise_bank(args.project)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Exercise bank entries: {result.total_exercises}")
+    print(f"Exercise bank manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_exercise_bank_status(args: argparse.Namespace) -> int:
+    try:
+        summaries = read_exercise_bank(args.project)
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print("# Exercise Bank")
+    print("")
+    if not summaries:
+        print("- none")
+        return 0
+    for item in summaries:
+        print(
+            f"- {item.exercise_id} | {item.concept} | "
+            f"difficulty {item.difficulty} | {item.path}"
+        )
+    return 0
+
+
 def _handle_exercise_approve(args: argparse.Namespace) -> int:
     approved = approve_exercise_draft(args.project, args.exercise)
     print(f"Approved exercise {args.exercise}: {approved}")
@@ -1759,6 +2672,22 @@ def _handle_exercise_grade(args: argparse.Namespace) -> int:
         repair_suggestion=args.repair_suggestion,
     )
     print(f"Graded attempt {args.attempt}: {grade}")
+    return 0
+
+
+def _handle_exercise_suggest_feedback(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        artifact = suggest_exercise_feedback_with_llm(
+            args.project,
+            args.attempt,
+            client=client,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM exercise-feedback draft: {artifact}")
     return 0
 
 
@@ -1792,6 +2721,88 @@ def _handle_session_check(args: argparse.Namespace) -> int:
     print(f"Checked session {result.session_id}: {result.status}")
     print(f"Tutoring quality report: {result.report_path}")
     print(f"Tutoring quality manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_score(args: argparse.Namespace) -> int:
+    result = score_teaching_session(args.project, session_id=args.session_id)
+    print(f"Scored session {result.session_id}: {result.score}/100")
+    print(f"Session score gates: {result.passed_gates}/{result.total_gates}")
+    print(f"Session score report: {result.report_path}")
+    print(f"Session score manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_plan_next(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else None
+        result = create_next_session_plan(
+            args.project,
+            session_id=args.session_id,
+            as_of=as_of,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Created next-session plan {result.session_id}: {result.plan_path}")
+    print(f"Due reviews: {result.due_reviews}")
+    if result.previous_session_id:
+        print(f"Previous session: {result.previous_session_id}")
+    else:
+        print("Previous session: none")
+    print(f"Next-session manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_closeout(args: argparse.Namespace) -> int:
+    try:
+        as_of = _parse_iso_date(args.as_of) if args.as_of else None
+        result = close_tutoring_session(
+            args.project,
+            session_id=args.session_id,
+            next_session_id=args.next_session_id,
+            as_of=as_of,
+        )
+    except (OSError, ValueError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Session closeout: {result.status}")
+    print(f"Session score: {result.session_score}/100 ({result.session_score_status})")
+    print(f"Next-session plan: {result.next_session_plan_path}")
+    print(f"Project summary: {result.project_summary_path}")
+    print(f"Closeout manifest: {result.manifest_path}")
+    return 0
+
+
+def _handle_session_suggest_next(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        artifact = suggest_next_question_with_llm(
+            args.project,
+            args.session_id,
+            client=client,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM next-question draft: {artifact}")
+    return 0
+
+
+def _handle_session_judge_suggest(args: argparse.Namespace) -> int:
+    config = load_llm_config(Path.cwd())
+    client = DeepSeekClient(config)
+    try:
+        artifact = suggest_session_judge_with_llm(
+            args.project,
+            args.session_id,
+            client=client,
+        )
+    except (OSError, ValueError, LlmProviderError) as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    print(f"Wrote LLM session-judge draft: {artifact}")
     return 0
 
 
@@ -2328,6 +3339,16 @@ def _count_learning_reports(project_root: Path) -> int:
     return len(list(reports_dir.glob("*.md")))
 
 
+def _latest_report_history_text(summary: ReportHistorySummary) -> str:
+    if summary.latest_snapshot_id is None:
+        return "none"
+    return (
+        f"#{summary.latest_snapshot_id} "
+        f"{summary.latest_report_type} "
+        f"{summary.latest_risk_level}"
+    )
+
+
 def _count_tool_verification_records(project_root: Path) -> int:
     manifest_path = project_root / "08_evals" / "tool_verification" / "manifest.json"
     if not manifest_path.exists():
@@ -2385,6 +3406,10 @@ def _quality_manifest_status_text(value: dict[str, object] | None) -> str:
         f"{value['status']} "
         f"({value['passed']}/{value['checked']} passed, {value['failed']} failed)"
     )
+
+
+def _read_exercise_validation_status(project_root: Path) -> dict[str, object] | None:
+    return _read_quality_manifest_status(project_root, "exercise_validation_manifest.json")
 
 
 def _read_tool_verification_quality_status(project_root: Path) -> dict[str, object] | None:
@@ -2450,6 +3475,165 @@ def _read_benchmark_status(project_root: Path) -> dict[str, object] | None:
     }
 
 
+def _read_session_score_status(project_root: Path) -> dict[str, object] | None:
+    manifest_path = project_root / "08_evals" / "session_score_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    score = manifest.get("score")
+    passed_gates = manifest.get("passed_gates")
+    total_gates = manifest.get("total_gates")
+    gates = manifest.get("gates")
+    if not all(isinstance(value, int) for value in (score, passed_gates, total_gates)):
+        return {"status": "invalid"}
+    if score < 0 or passed_gates < 0 or total_gates <= 0:
+        return {"status": "invalid"}
+    if not isinstance(gates, list) or len(gates) != total_gates:
+        return {"status": "invalid"}
+    return {
+        "status": str(manifest.get("status", "unknown")),
+        "score": score,
+        "passed_gates": passed_gates,
+        "total_gates": total_gates,
+        "failed_gates": _failed_benchmark_gates(gates),
+    }
+
+
+def _read_next_session_plan_status(project_root: Path) -> dict[str, object] | None:
+    manifest_path = project_root / "02_learning_plan" / "next_session_plan_manifest.json"
+    if not manifest_path.exists():
+        return None
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {"status": "invalid"}
+    if not isinstance(manifest, dict) or manifest.get("schema_version") != 1:
+        return {"status": "invalid"}
+    if manifest.get("quality_boundary") != "deterministic_handoff_plan":
+        return {"status": "invalid"}
+    session_id = manifest.get("session_id")
+    status = manifest.get("status")
+    due_reviews = manifest.get("due_reviews")
+    if not isinstance(session_id, str) or not isinstance(status, str):
+        return {"status": "invalid"}
+    if not isinstance(due_reviews, int) or due_reviews < 0:
+        return {"status": "invalid"}
+    return {
+        "status": status,
+        "session_id": session_id,
+        "due_reviews": due_reviews,
+    }
+
+
+def _session_score_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['score']}/100"
+
+
+def _session_score_gates_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['passed_gates']}/{value['total_gates']}"
+
+
+def _session_score_failed_gates_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    failed_gates = value.get("failed_gates", [])
+    if isinstance(failed_gates, list) and failed_gates:
+        return ", ".join(str(name) for name in failed_gates)
+    passed_gates = value.get("passed_gates")
+    total_gates = value.get("total_gates")
+    if (
+        isinstance(passed_gates, int)
+        and isinstance(total_gates, int)
+        and passed_gates < total_gates
+    ):
+        return "unknown"
+    return "none"
+
+
+def _session_closeout_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    return str(value.get("status", "invalid"))
+
+
+def _session_closeout_sessions_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['session_id']} -> {value['next_session_id']}"
+
+
+def _session_closeout_score_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['session_score']}/100 ({value['session_score_status']})"
+
+
+def _multi_session_regression_status_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    return str(value.get("status", "invalid"))
+
+
+def _multi_session_regression_checks_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return f"{value['passed_checks']}/{value['total_checks']}"
+
+
+def _multi_session_regression_issues_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    issues = value.get("issues", [])
+    if isinstance(issues, list) and issues:
+        return ", ".join(str(issue) for issue in issues)
+    return "none"
+
+
+def _next_session_plan_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not created"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return str(value["session_id"])
+
+
+def _next_session_due_reviews_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "none"
+    if value.get("status") == "invalid":
+        return "invalid"
+    return str(value["due_reviews"])
+
+
+def _next_session_handoff_text(value: dict[str, object] | None) -> str:
+    if value is None:
+        return "not run"
+    return str(value.get("status", "invalid"))
+
+
 def _failed_benchmark_gates(value: object) -> list[str]:
     if not isinstance(value, list):
         return []
@@ -2463,6 +3647,13 @@ def _failed_benchmark_gates(value: object) -> list[str]:
         if name:
             failed.append(name)
     return failed
+
+
+def _count_llm_suggestion_drafts(project_path: Path) -> int:
+    try:
+        return sum(1 for item in list_llm_suggestions(project_path) if item.status == "draft")
+    except (OSError, ValueError, json.JSONDecodeError):
+        return 0
 
 
 def _benchmark_failed_gates_text(benchmark_status: dict[str, object]) -> str:
@@ -2641,6 +3832,18 @@ def _count_approved_exercises(project_root: Path) -> int:
     return approved
 
 
+def _count_exercise_bank_entries(project_root: Path) -> int:
+    manifest_path = project_root / "05_exercises" / "exercise_bank_manifest.json"
+    if not manifest_path.exists():
+        return 0
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return 0
+    records = manifest.get("records", []) if isinstance(manifest, dict) else []
+    return len(records) if isinstance(records, list) else 0
+
+
 def _count_scheduled_reviews(learning_state: Path) -> int:
     state = _read_learning_state_for_status(learning_state)
     schedule = state.get("review_schedule", [])
@@ -2680,6 +3883,367 @@ def _next_scheduled_review(learning_state: Path) -> dict[str, str] | None:
     return sorted(rows, key=lambda row: (row["scheduled_for"], row["concept"]))[0]
 
 
+def _review_exercises_payload(
+    context: ProjectContext,
+    *,
+    due_by: date | None,
+    priority_filter: str,
+    exercises: list[ExerciseDraft],
+) -> dict[str, object]:
+    rows = [_exercise_draft_record(exercise) for exercise in exercises]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_exercise_writer",
+        "project": str(context.root),
+        "due_by": due_by.isoformat() if due_by is not None else None,
+        "priority_filter": priority_filter,
+        "generated_count": len(rows),
+        "generated_exercises": rows,
+    }
+
+
+def _review_exercises_preview_payload(
+    context: ProjectContext,
+    *,
+    due_by: date | None,
+    priority_filter: str,
+    exercises: list[ExerciseDraft],
+) -> dict[str, object]:
+    rows = [_exercise_draft_record(exercise) for exercise in exercises]
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_exercise_preview",
+        "project": str(context.root),
+        "due_by": due_by.isoformat() if due_by is not None else None,
+        "priority_filter": priority_filter,
+        "dry_run": True,
+        "generated_count": len(rows),
+        "generated_exercises": rows,
+    }
+
+
+def _review_exercises_preview_text(exercises: list[ExerciseDraft]) -> str:
+    noun = "exercise" if len(exercises) == 1 else "exercises"
+    lines = [
+        f"Exercise preview: {len(exercises)} targeted review {noun} would be generated",
+        "",
+    ]
+    if not exercises:
+        lines.append("- none")
+    else:
+        lines.extend(_exercise_draft_row_text(exercise) for exercise in exercises)
+    return "\n".join(lines) + "\n"
+
+
+def _exercise_draft_row_text(exercise: ExerciseDraft) -> str:
+    return (
+        f"- {exercise.id} | {exercise.type} | "
+        f"difficulty {exercise.difficulty} | {exercise.path}"
+    )
+
+
+def _exercise_draft_record(exercise: ExerciseDraft) -> dict[str, object]:
+    return {
+        "id": exercise.id,
+        "type": exercise.type,
+        "difficulty": exercise.difficulty,
+        "path": exercise.path,
+    }
+
+
+def _review_schedule_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    threshold: float,
+    schedule_path: Path,
+) -> dict[str, object]:
+    rows = _review_schedule_records(context.learning_state)
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_schedule_writer",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "threshold": threshold,
+        "scheduled_count": len(rows),
+        "schedule_path": str(schedule_path),
+        "scheduled_reviews": rows,
+    }
+
+
+def _review_adjust_plan_payload(
+    context: ProjectContext,
+    short_term_plan_path: Path,
+) -> dict[str, object]:
+    rows = _review_schedule_records(context.learning_state)
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_adjust_plan_writer",
+        "project": str(context.root),
+        "short_term_plan_path": str(short_term_plan_path),
+        "adjustment_count": len(rows),
+        "review_adjustments": rows,
+    }
+
+
+def _review_adjust_plan_preview_payload(
+    context: ProjectContext,
+    short_term_plan_path: Path,
+    rows: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_adjust_plan_preview",
+        "project": str(context.root),
+        "short_term_plan_path": str(short_term_plan_path),
+        "dry_run": True,
+        "adjustment_count": len(rows),
+        "review_adjustments": rows,
+    }
+
+
+def _review_adjust_plan_preview_text(
+    short_term_plan_path: Path,
+    rows: list[dict[str, str]],
+) -> str:
+    noun = "adjustment" if len(rows) == 1 else "adjustments"
+    lines = [
+        (
+            f"Plan adjustment preview: {len(rows)} review {noun} "
+            f"would be written to {short_term_plan_path}"
+        ),
+        "",
+    ]
+    if not rows:
+        lines.append("- none")
+    else:
+        lines.extend(_review_adjustment_row_text(row) for row in rows)
+    return "\n".join(lines) + "\n"
+
+
+def _review_adjustment_row_text(row: dict[str, str]) -> str:
+    line = (
+        f"- {row['concept']} | {row['scheduled_for']} | "
+        f"{row['priority']} | {row['due']} | {row['reason']}"
+    )
+    repair = row.get("repair", "")
+    if repair:
+        line = f"{line} | repair: {repair}"
+    return line
+
+
+def _review_resolve_payload(
+    context: ProjectContext,
+    *,
+    concept: str,
+    resolved_count: int,
+    rows: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_misconception_resolver",
+        "project": str(context.root),
+        "concept": concept,
+        "resolved_count": resolved_count,
+        "resolved_misconceptions": rows,
+    }
+
+
+def _review_resolve_preview_payload(
+    context: ProjectContext,
+    *,
+    concept: str,
+    rows: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_misconception_resolver_preview",
+        "project": str(context.root),
+        "concept": concept,
+        "dry_run": True,
+        "resolved_count": len(rows),
+        "resolved_misconceptions": rows,
+    }
+
+
+def _review_resolve_preview_text(
+    concept: str,
+    rows: list[dict[str, object]],
+) -> str:
+    noun = "misconception" if len(rows) == 1 else "misconceptions"
+    lines = [
+        (
+            f"Misconception resolution preview: {len(rows)} active {noun} "
+            f"would be resolved for {concept}"
+        ),
+        "",
+    ]
+    if not rows:
+        lines.append("- none")
+    else:
+        lines.extend(_review_resolve_row_text(row) for row in rows)
+    return "\n".join(lines) + "\n"
+
+
+def _review_resolve_row_text(row: dict[str, object]) -> str:
+    line = (
+        f"- {row['misconception_id']} | {row['concept']} | "
+        f"count {row['count']}"
+    )
+    last_session_id = str(row.get("last_session_id", ""))
+    if last_session_id:
+        line = f"{line} | last session {last_session_id}"
+    analysis = str(row.get("analysis", ""))
+    if analysis:
+        line = f"{line} | {analysis}"
+    repair = str(row.get("repair_suggestion", ""))
+    if repair:
+        line = f"{line} | repair: {repair}"
+    follow_up_exercises = row.get("follow_up_exercises", [])
+    if isinstance(follow_up_exercises, list) and follow_up_exercises:
+        follow_up = ", ".join(str(item) for item in follow_up_exercises)
+        line = f"{line} | follow-up: {follow_up}"
+    return line
+
+
+def _active_misconception_records_for_concept(
+    learning_state: Path,
+    concept: str,
+) -> list[dict[str, object]]:
+    if not learning_state.exists():
+        return []
+    loaded = json.loads(learning_state.read_text(encoding="utf-8"))
+    if not isinstance(loaded, dict):
+        return []
+    misconceptions = loaded.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return []
+
+    target_concept = slugify_topic(concept)
+    rows: list[dict[str, object]] = []
+    for misconception_id, value in sorted(misconceptions.items()):
+        if not isinstance(value, dict):
+            continue
+        stored_concept = str(value.get("concept", ""))
+        if stored_concept != concept and slugify_topic(stored_concept) != target_concept:
+            continue
+        status = value.get("status", "active")
+        if status != "active":
+            continue
+        follow_up_exercises = value.get("follow_up_exercises", [])
+        rows.append(
+            {
+                "misconception_id": str(misconception_id),
+                "concept": stored_concept,
+                "previous_status": str(status),
+                "status": "resolved",
+                "count": coerce_occurrence_count(value.get("count", 1)),
+                "last_session_id": str(value.get("last_session_id", "")),
+                "analysis": str(value.get("analysis", "")),
+                "repair_suggestion": str(value.get("repair_suggestion", "")),
+                "follow_up_exercises": (
+                    [str(item) for item in follow_up_exercises]
+                    if isinstance(follow_up_exercises, list)
+                    else []
+                ),
+            }
+        )
+    return rows
+
+
+def _review_schedule_repair_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    repaired_count: int,
+    schedule_path: Path,
+) -> dict[str, object]:
+    rows = _review_schedule_records(context.learning_state)
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_schedule_repair_writer",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "repaired_count": repaired_count,
+        "schedule_path": str(schedule_path),
+        "scheduled_reviews": rows,
+    }
+
+
+def _review_schedule_repair_preview_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    repaired_count: int,
+    rows: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_review_schedule_repair_preview",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "dry_run": True,
+        "repaired_count": repaired_count,
+        "scheduled_reviews": rows,
+    }
+
+
+def _review_schedule_repair_preview_text(
+    repaired_count: int,
+    rows: list[dict[str, str]],
+) -> str:
+    noun = "item" if repaired_count == 1 else "items"
+    lines = [
+        f"Repair preview: {repaired_count} review schedule {noun} would be repaired",
+        "",
+    ]
+    if not rows:
+        lines.append("- none")
+    else:
+        lines.extend(_review_schedule_row_text(row) for row in rows)
+    return "\n".join(lines) + "\n"
+
+
+def _review_schedule_records(learning_state: Path) -> list[dict[str, str]]:
+    state = _read_learning_state_for_status(learning_state)
+    schedule = state.get("review_schedule", [])
+    return _review_schedule_records_from_schedule(schedule)
+
+
+def _review_schedule_records_from_schedule(schedule: object) -> list[dict[str, str]]:
+    if not isinstance(schedule, list):
+        return []
+
+    rows: list[dict[str, str]] = []
+    for item in schedule:
+        if not isinstance(item, dict):
+            continue
+        rows.append(
+            {
+                "concept": str(item.get("concept", "review")),
+                "priority": str(item.get("priority", "medium")),
+                "due": str(item.get("due", "")),
+                "scheduled_for": str(item.get("scheduled_for", "")),
+                "reason": str(item.get("reason", "review scheduled")),
+                "repair": "; ".join(
+                    _due_review_repair_suggestions(item.get("repair_context", []))
+                ),
+            }
+        )
+    return rows
+
+
+def _review_schedule_row_text(row: dict[str, str]) -> str:
+    line = (
+        f"- {row['concept']} | {row['scheduled_for']} | "
+        f"{row['priority']} | {row['reason']}"
+    )
+    repair = row.get("repair", "")
+    if repair:
+        line = f"{line} | repair: {repair}"
+    return line
+
+
 def _count_misconceptions_by_status(learning_state: Path) -> tuple[int, int]:
     state = _read_learning_state_for_status(learning_state)
     misconceptions = state.get("misconceptions", {})
@@ -2717,8 +4281,15 @@ def _parse_iso_date(value: str) -> date:
 
 
 def _due_reviews_text(learning_state: Path, as_of: date, *, priority: str = "all") -> str:
-    lines = ["# Due Reviews", ""]
     rows, invalid_rows = _due_review_rows(learning_state, as_of, priority=priority)
+    return _due_reviews_text_from_rows(rows, invalid_rows)
+
+
+def _due_reviews_text_from_rows(
+    rows: list[dict[str, str]],
+    invalid_rows: list[dict[str, str]],
+) -> str:
+    lines = ["# Due Reviews", ""]
     if not rows:
         lines.append("- none")
     else:
@@ -2733,6 +4304,45 @@ def _due_reviews_text(learning_state: Path, as_of: date, *, priority: str = "all
             for row in invalid_rows
         )
     return "\n".join(lines) + "\n"
+
+
+def _due_reviews_payload(
+    context: ProjectContext,
+    *,
+    as_of: date,
+    priority_filter: str,
+    rows: list[dict[str, str]],
+    invalid_rows: list[dict[str, str]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_due_review",
+        "project": str(context.root),
+        "as_of": as_of.isoformat(),
+        "priority_filter": priority_filter,
+        "due_count": len(rows),
+        "invalid_count": len(invalid_rows),
+        "due_reviews": [_due_review_record(row) for row in rows],
+        "invalid_reviews": [_invalid_due_review_record(row) for row in invalid_rows],
+    }
+
+
+def _due_review_record(row: dict[str, str]) -> dict[str, str]:
+    return {
+        "concept": row["concept"],
+        "scheduled_for": row["scheduled_for"],
+        "priority": row["priority"],
+        "reason": row["reason"],
+        "repair": row.get("repair", ""),
+    }
+
+
+def _invalid_due_review_record(row: dict[str, str]) -> dict[str, str]:
+    return {
+        "concept": row["concept"],
+        "scheduled_for": row["scheduled_for"],
+        "status": "invalid_scheduled_for",
+    }
 
 
 def _due_review_rows(

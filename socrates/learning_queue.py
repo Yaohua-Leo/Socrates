@@ -6,13 +6,21 @@ from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
 
-from .context import load_project, read_json
+from .context import load_project, project_title, read_json
+from .multi_session import (
+    MULTI_SESSION_REGRESSION_MANIFEST_PATH,
+    read_multi_session_regression_status,
+)
 from .obsidian import obsidian_exported_note_ids
 from .project import slugify_topic
+from .workflow_manifest import SESSION_CLOSEOUT_MANIFEST_PATH, read_session_closeout_status
 
 
 QUEUE_SECTIONS = frozenset(
     {
+        "summary",
+        "repairs",
+        "priority",
         "notes",
         "obsidian-exports",
         "misconceptions",
@@ -22,8 +30,10 @@ QUEUE_SECTIONS = frozenset(
         "attempts",
         "quality-checks",
         "tool-verifications",
+        "workflow",
     }
 )
+QUEUE_QUALITY_BOUNDARY = "deterministic_learning_queue"
 
 
 @dataclass(frozen=True)
@@ -46,6 +56,7 @@ class LearningQueue:
     exercise_drafts_to_approve: list[QueueItem]
     exercises_to_attempt: list[QueueItem]
     attempts_to_grade: list[QueueItem]
+    workflow_actions: list[QueueItem]
     quality_checks_to_fix: list[QueueItem]
     tool_verifications_to_fix: list[QueueItem]
 
@@ -62,19 +73,51 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
         exercise_drafts_to_approve=_exercise_drafts_to_approve(context.root),
         exercises_to_attempt=_exercises_to_attempt(context.root),
         attempts_to_grade=_attempts_to_grade(context.root),
+        workflow_actions=_workflow_actions(context.root),
         quality_checks_to_fix=_artifact_quality_checks_to_fix(context.root),
         tool_verifications_to_fix=_tool_verifications_to_fix(context.root),
     )
 
 
+def build_learning_queue_payload(
+    project_path: Path | str,
+    *,
+    section: str = "all",
+) -> dict[str, object]:
+    """Build the machine-readable read-only queue payload."""
+
+    _validate_queue_section(section)
+    context = load_project(project_path)
+    queue = collect_learning_queue(context.root)
+    return {
+        "schema_version": 1,
+        "quality_boundary": QUEUE_QUALITY_BOUNDARY,
+        "project": project_title(context.project_file, fallback=context.root.name),
+        "root": str(context.root),
+        "section": section,
+        "action_summary": action_summary_record(queue),
+        "sections": [_section_record(row) for row in _selected_queue_sections(queue, section)],
+    }
+
+
 def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
     """Render a stable CLI queue summary."""
 
-    if section != "all" and section not in QUEUE_SECTIONS:
-        allowed = ", ".join(sorted({"all", *QUEUE_SECTIONS}))
-        raise ValueError(f"Unknown queue section {section!r}; expected one of: {allowed}")
+    _validate_queue_section(section)
 
     lines = ["# Learning Queue", ""]
+    if section in {"all", "summary"}:
+        lines.extend(["## Action Summary", ""])
+        lines.extend(action_summary_lines(queue))
+        lines.append("")
+        if section == "summary":
+            return "\n".join(lines).rstrip() + "\n"
+
+    if section in {"all", "repairs"}:
+        lines.extend(_section("Repair Paths", repair_path_items(queue)))
+        if section == "repairs":
+            return "\n".join(lines).rstrip() + "\n"
+
     for section_id, title, items in _queue_sections(queue):
         if section != "all" and section != section_id:
             continue
@@ -84,6 +127,7 @@ def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
 
 def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem]]]:
     return [
+        ("priority", "Priority Actions", priority_queue_items(queue)),
         ("notes", "Notes To Review", queue.notes_to_review),
         ("obsidian-exports", "Obsidian Exports To Run", queue.obsidian_exports_to_run),
         ("misconceptions", "Misconception Notes To Draft", queue.misconception_notes_to_draft),
@@ -91,9 +135,145 @@ def _queue_sections(queue: LearningQueue) -> list[tuple[str, str, list[QueueItem
         ("exercise-drafts", "Exercise Drafts To Approve", queue.exercise_drafts_to_approve),
         ("exercises", "Exercises To Attempt", queue.exercises_to_attempt),
         ("attempts", "Attempts To Grade", queue.attempts_to_grade),
+        ("workflow", "Workflow Actions", queue.workflow_actions),
         ("quality-checks", "Quality Checks To Fix", queue.quality_checks_to_fix),
         ("tool-verifications", "Tool Verifications To Fix", queue.tool_verifications_to_fix),
     ]
+
+
+def repair_path_items(queue: LearningQueue) -> list[QueueItem]:
+    """Return blocker queue items in deterministic repair order."""
+
+    return _prefixed_queue_items(
+        (
+            ("workflow", queue.workflow_actions),
+            ("quality-checks", queue.quality_checks_to_fix),
+            ("tool-verifications", queue.tool_verifications_to_fix),
+        )
+    )
+
+
+def action_summary_lines(queue: LearningQueue) -> list[str]:
+    """Return completion/blocker rows derived from existing queue buckets."""
+
+    summary = action_summary_record(queue)
+    return [
+        f"- Completion: {summary['completion']}",
+        f"- Open actions: {summary['open_actions']}",
+        f"- Blockers: {summary['blockers']}",
+        f"- Can continue learning: {summary['can_continue_learning']}",
+        f"- Needs human review: {summary['needs_human_review']}",
+        f"- Next action: {summary['next_action']}",
+    ]
+
+
+def action_summary_record(queue: LearningQueue) -> dict[str, object]:
+    """Return structured completion/blocker fields from existing queue buckets."""
+
+    blockers = (
+        len(queue.workflow_actions)
+        + len(queue.quality_checks_to_fix)
+        + len(queue.tool_verifications_to_fix)
+    )
+    can_continue = len(queue.scheduled_reviews) + len(queue.exercises_to_attempt)
+    human_review = (
+        len(queue.obsidian_exports_to_run)
+        + len(queue.notes_to_review)
+        + len(queue.misconception_notes_to_draft)
+        + len(queue.exercise_drafts_to_approve)
+        + len(queue.attempts_to_grade)
+    )
+    open_actions = blockers + can_continue + human_review
+    completion = "clear" if open_actions == 0 else "blocked" if blockers else "in_progress"
+    next_actions = priority_queue_items(queue)
+    next_action = "none"
+    if next_actions:
+        next_action = _queue_line(next_actions[0]).removeprefix("- ")
+    return {
+        "completion": completion,
+        "open_actions": open_actions,
+        "blockers": blockers,
+        "can_continue_learning": can_continue,
+        "needs_human_review": human_review,
+        "next_action": next_action,
+    }
+
+
+def priority_queue_items(queue: LearningQueue) -> list[QueueItem]:
+    """Return existing queue items in deterministic operator priority order."""
+
+    return _priority_actions(queue)
+
+
+def _priority_actions(queue: LearningQueue) -> list[QueueItem]:
+    ordered_sections = (
+        ("workflow", queue.workflow_actions),
+        ("quality-checks", queue.quality_checks_to_fix),
+        ("tool-verifications", queue.tool_verifications_to_fix),
+        ("obsidian-exports", queue.obsidian_exports_to_run),
+        ("notes", queue.notes_to_review),
+        ("misconceptions", queue.misconception_notes_to_draft),
+        ("reviews", queue.scheduled_reviews),
+        ("exercise-drafts", queue.exercise_drafts_to_approve),
+        ("exercises", queue.exercises_to_attempt),
+        ("attempts", queue.attempts_to_grade),
+    )
+    return _prefixed_queue_items(ordered_sections)
+
+
+def _prefixed_queue_items(
+    ordered_sections: tuple[tuple[str, list[QueueItem]], ...],
+) -> list[QueueItem]:
+    actions: list[QueueItem] = []
+    for section_id, items in ordered_sections:
+        actions.extend(
+            QueueItem(
+                item_id=f"{section_id}:{item.item_id}",
+                path=item.path,
+                detail=item.detail,
+            )
+            for item in items
+        )
+    return actions
+
+
+def _validate_queue_section(section: str) -> None:
+    if section != "all" and section not in QUEUE_SECTIONS:
+        allowed = ", ".join(sorted({"all", *QUEUE_SECTIONS}))
+        raise ValueError(f"Unknown queue section {section!r}; expected one of: {allowed}")
+
+
+def _selected_queue_sections(
+    queue: LearningQueue,
+    section: str,
+) -> list[tuple[str, str, list[QueueItem]]]:
+    repair_paths = ("repairs", "Repair Paths", repair_path_items(queue))
+    if section == "summary":
+        return []
+    if section == "repairs":
+        return [repair_paths]
+    sections = _queue_sections(queue)
+    if section == "all":
+        return [repair_paths, *sections]
+    return [row for row in sections if row[0] == section]
+
+
+def _section_record(row: tuple[str, str, list[QueueItem]]) -> dict[str, object]:
+    section_id, title, items = row
+    return {
+        "section": section_id,
+        "title": title,
+        "count": len(items),
+        "items": [_queue_item_record(item) for item in items],
+    }
+
+
+def _queue_item_record(item: QueueItem) -> dict[str, str]:
+    return {
+        "item_id": item.item_id,
+        "path": item.path,
+        "detail": item.detail,
+    }
 
 
 def _notes_to_review(project_root: Path) -> list[QueueItem]:
@@ -276,6 +456,54 @@ def _attempts_to_grade(project_root: Path) -> list[QueueItem]:
             continue
         items.append(_queue_item(attempt_path, project_root))
     return items
+
+
+def _workflow_actions(project_root: Path) -> list[QueueItem]:
+    closeout = read_session_closeout_status(project_root)
+    regression = read_multi_session_regression_status(project_root)
+    if regression is None and closeout is not None and closeout.get("status") == "ready":
+        return [
+            QueueItem(
+                item_id="multi_session_regression",
+                path=SESSION_CLOSEOUT_MANIFEST_PATH.as_posix(),
+                detail=(
+                    "status: not_run; "
+                    "run with: socrates lifecycle regression --project <project>"
+                ),
+            )
+        ]
+    if regression is not None and regression.get("status") == "invalid":
+        return [
+            QueueItem(
+                item_id="multi_session_regression",
+                path=MULTI_SESSION_REGRESSION_MANIFEST_PATH.as_posix(),
+                detail=(
+                    "status: invalid; "
+                    "rerun with: socrates lifecycle regression --project <project>"
+                ),
+            )
+        ]
+    if regression is not None and regression.get("status") == "fail":
+        issues = regression.get("issues", [])
+        return [
+            QueueItem(
+                item_id="multi_session_regression",
+                path=MULTI_SESSION_REGRESSION_MANIFEST_PATH.as_posix(),
+                detail=(
+                    "status: fail; "
+                    f"issues: {_workflow_issue_text(issues)}; "
+                    "rerun with: socrates lifecycle regression --project <project>"
+                ),
+            )
+        ]
+    return []
+
+
+def _workflow_issue_text(value: object) -> str:
+    if not isinstance(value, list):
+        return "none recorded"
+    issues = [str(issue).strip() for issue in value if str(issue).strip()]
+    return "; ".join(issues) if issues else "none recorded"
 
 
 def _artifact_quality_checks_to_fix(project_root: Path) -> list[QueueItem]:
