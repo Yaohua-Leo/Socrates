@@ -6,14 +6,15 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.54-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.55-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured learning-queue JSON, structured
-study-dashboard JSON, structured study-brief-status JSON,
+long-term report-surface refresh, structured project-status JSON, structured
+learning-queue JSON, structured study-dashboard JSON, structured
+study-brief-status JSON,
 dry-run-previewable structured misconception
 resolver writer,
 dry-run-previewable structured
@@ -122,6 +123,7 @@ python -m socrates brief generate --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory" --json
 python -m socrates status --project ".\projects\group_theory"
+python -m socrates status --project ".\projects\group_theory" --json
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
 
@@ -288,6 +290,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   including action summary and section-filtered item rows.
 - v0.54 `brief status --json` emits manifest-backed study-brief freshness as
   structured JSON without generating or refreshing the saved brief.
+- v0.55 `status --json` emits the central project status as structured JSON,
+  including current phase, counts, Reference KB status, report history, study
+  brief freshness, queue summary, quality checks, workflow/session status,
+  benchmark status, and misconception counts.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -355,6 +361,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   deterministic evidence. It is not a writer, command runner, repair runner,
   readiness gate, report refresh, LLM call, score, tutor, prediction, approval,
   or project-state mutation.
+- `status --json` is a read-only structured project-status view over the same
+  deterministic evidence as prose `status`. It is not a writer, repair runner,
+  report refresh, readiness-gate expansion, LLM call, score, tutor, prediction,
+  approval, or project-state mutation.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

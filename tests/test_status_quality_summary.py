@@ -20,6 +20,152 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
 class StatusQualitySummaryTests(unittest.TestCase):
+    def test_status_cli_json_summarizes_empty_project_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            project_files_before = _project_file_snapshot(project)
+
+            status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "status",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertNotIn("Project:", status.stdout)
+            payload = json.loads(status.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_project_status")
+            self.assertEqual(payload["project"], "Group Theory")
+            self.assertEqual(payload["root"], str(project))
+            self.assertEqual(payload["current_phase"], "planning_complete")
+            self.assertEqual(payload["counts"]["imported_sources"], 0)
+            self.assertEqual(payload["counts"]["pending_draft_notes"], 0)
+            self.assertEqual(payload["counts"]["learning_reports"], 0)
+            self.assertEqual(
+                payload["reference_kb"],
+                {"status": "not_applicable", "object_count": 0},
+            )
+            self.assertEqual(
+                payload["report_history"],
+                {"status": "not_run", "snapshots": 0, "latest": "none"},
+            )
+            self.assertEqual(
+                payload["study_brief"],
+                {
+                    "status": "not_run",
+                    "recorded_next_action": "none",
+                    "current_next_action": "none",
+                },
+            )
+            self.assertEqual(
+                payload["queue"],
+                {
+                    "workflow_actions": 0,
+                    "quality_checks_to_fix": 0,
+                    "action_summary": {
+                        "completion": "clear",
+                        "open_actions": 0,
+                        "blockers": 0,
+                        "can_continue_learning": 0,
+                        "needs_human_review": 0,
+                        "next_action": "none",
+                    },
+                },
+            )
+            self.assertEqual(payload["quality"]["ingestion"], {"status": "not_run"})
+            self.assertEqual(payload["quality"]["note"], {"status": "not_run"})
+            self.assertEqual(payload["quality"]["exercise"], {"status": "not_run"})
+            self.assertEqual(payload["quality"]["exercise_validation"], {"status": "not_run"})
+            self.assertEqual(payload["quality"]["tutoring"], {"status": "not_run"})
+            self.assertEqual(payload["quality"]["tool_verification"], {"status": "not_run"})
+            self.assertEqual(payload["session_score"], {"status": "not_run"})
+            self.assertEqual(payload["session_closeout"], {"status": "not_run"})
+            self.assertEqual(payload["multi_session_regression"], {"status": "not_run"})
+            self.assertEqual(payload["next_session_plan"], {"status": "not_created"})
+            self.assertEqual(payload["benchmark"], {"status": "not_run"})
+            self.assertEqual(payload["misconceptions"], {"active": 0, "resolved": 0})
+            self.assertEqual(_project_file_snapshot(project), project_files_before)
+
+    def test_status_cli_json_reports_invalid_manifests_conservatively(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            evals = project / "08_evals"
+            (evals / "ingestion_quality_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "note_quality_manifest.json").write_text(
+                json.dumps({"schema_version": 1, "checked": 2, "passed": 2, "failed": 1})
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "exercise_quality_manifest.json").write_text(
+                "[]\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "tool_verification_quality_manifest.json").write_text(
+                json.dumps({"schema_version": 1, "status": "pass", "checked": "1"})
+                + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "session_score_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "session_closeout_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+            (evals / "multi_session_regression_manifest.json").write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            status = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "status",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(status.returncode, 0, status.stderr)
+            payload = json.loads(status.stdout)
+            self.assertEqual(payload["quality"]["ingestion"], {"status": "invalid"})
+            self.assertEqual(payload["quality"]["note"], {"status": "invalid"})
+            self.assertEqual(payload["quality"]["exercise"], {"status": "invalid"})
+            self.assertEqual(payload["quality"]["tutoring"], {"status": "not_run"})
+            self.assertEqual(payload["quality"]["tool_verification"], {"status": "invalid"})
+            self.assertEqual(payload["session_score"], {"status": "invalid"})
+            self.assertEqual(payload["session_closeout"], {"status": "invalid"})
+            self.assertEqual(payload["multi_session_regression"], {"status": "invalid"})
+
     def test_status_cli_summarizes_report_history(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -1063,6 +1209,14 @@ class StatusQualitySummaryTests(unittest.TestCase):
             self.assertIn("Learning reports: 1", status.stdout)
             self.assertIn("Obsidian exports to run: 1", status.stdout)
             self.assertIn("Current phase: obsidian_export_pending", status.stdout)
+
+
+def _project_file_snapshot(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
 
 
 if __name__ == "__main__":
