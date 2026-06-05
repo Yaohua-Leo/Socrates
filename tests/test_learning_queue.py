@@ -121,6 +121,158 @@ class LearningQueueTests(unittest.TestCase):
             self.assertNotIn("## Attempts To Grade", notes_only.stdout)
             self.assertNotIn("normal_subgroup_03", notes_only.stdout)
 
+    def test_queue_cli_json_summarizes_empty_project_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            project_files_before = _project_file_snapshot(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Learning Queue", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_learning_queue")
+            self.assertEqual(payload["project"], "Group Theory")
+            self.assertEqual(payload["root"], str(project))
+            self.assertEqual(payload["section"], "all")
+            self.assertEqual(
+                payload["action_summary"],
+                {
+                    "completion": "clear",
+                    "open_actions": 0,
+                    "blockers": 0,
+                    "can_continue_learning": 0,
+                    "needs_human_review": 0,
+                    "next_action": "none",
+                },
+            )
+            self.assertEqual(
+                payload["sections"],
+                [
+                    {"section": "repairs", "title": "Repair Paths", "count": 0, "items": []},
+                    {"section": "priority", "title": "Priority Actions", "count": 0, "items": []},
+                    {"section": "notes", "title": "Notes To Review", "count": 0, "items": []},
+                    {
+                        "section": "obsidian-exports",
+                        "title": "Obsidian Exports To Run",
+                        "count": 0,
+                        "items": [],
+                    },
+                    {
+                        "section": "misconceptions",
+                        "title": "Misconception Notes To Draft",
+                        "count": 0,
+                        "items": [],
+                    },
+                    {"section": "reviews", "title": "Scheduled Reviews", "count": 0, "items": []},
+                    {
+                        "section": "exercise-drafts",
+                        "title": "Exercise Drafts To Approve",
+                        "count": 0,
+                        "items": [],
+                    },
+                    {
+                        "section": "exercises",
+                        "title": "Exercises To Attempt",
+                        "count": 0,
+                        "items": [],
+                    },
+                    {"section": "attempts", "title": "Attempts To Grade", "count": 0, "items": []},
+                    {"section": "workflow", "title": "Workflow Actions", "count": 0, "items": []},
+                    {
+                        "section": "quality-checks",
+                        "title": "Quality Checks To Fix",
+                        "count": 0,
+                        "items": [],
+                    },
+                    {
+                        "section": "tool-verifications",
+                        "title": "Tool Verifications To Fix",
+                        "count": 0,
+                        "items": [],
+                    },
+                ],
+            )
+            self.assertEqual(_project_file_snapshot(project), project_files_before)
+
+    def test_queue_cli_json_filters_priority_section_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = _create_ready_closeout_fixture(Path(temp_dir))
+            project_files_before = _project_file_snapshot(project)
+
+            result = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "queue",
+                    "--project",
+                    str(project),
+                    "--section",
+                    "priority",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("# Learning Queue", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["quality_boundary"], "deterministic_learning_queue")
+            self.assertEqual(payload["section"], "priority")
+            self.assertEqual(payload["action_summary"]["completion"], "blocked")
+            self.assertEqual(payload["action_summary"]["open_actions"], 7)
+            self.assertEqual(payload["action_summary"]["blockers"], 1)
+            self.assertEqual(
+                payload["action_summary"]["next_action"],
+                "workflow:multi_session_regression | "
+                "08_evals/session_closeout_manifest.json | "
+                "status: not_run; run with: socrates lifecycle regression --project <project>",
+            )
+            self.assertEqual(len(payload["sections"]), 1)
+            priority = payload["sections"][0]
+            self.assertEqual(priority["section"], "priority")
+            self.assertEqual(priority["title"], "Priority Actions")
+            self.assertEqual(priority["count"], 7)
+            self.assertEqual(
+                priority["items"][0],
+                {
+                    "item_id": "workflow:multi_session_regression",
+                    "path": "08_evals/session_closeout_manifest.json",
+                    "detail": (
+                        "status: not_run; "
+                        "run with: socrates lifecycle regression --project <project>"
+                    ),
+                },
+            )
+            self.assertIn(
+                {
+                    "item_id": "notes:normal_subgroup",
+                    "path": "04_atomic_notes/drafts/normal_subgroup.md",
+                    "detail": "",
+                },
+                priority["items"],
+            )
+            self.assertEqual(_project_file_snapshot(project), project_files_before)
+
     def test_queue_cli_lists_reviewed_notes_pending_obsidian_export(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -1105,6 +1257,14 @@ def _write_session_script(path: Path, session_id: str) -> None:
         encoding="utf-8",
         newline="\n",
     )
+
+
+def _project_file_snapshot(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
 
 
 if __name__ == "__main__":

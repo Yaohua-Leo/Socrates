@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
-
-from .context import load_project
+from .context import load_project, project_title
 from .learning_queue import (
-    LearningQueue,
     QueueItem,
+    action_summary_record,
     collect_learning_queue,
     priority_queue_items,
 )
@@ -53,7 +50,7 @@ def build_study_dashboard_payload(project_path: Path | str) -> dict[str, object]
             "reports_stale": report_counts["stale"],
             "reports_missing": report_counts["missing"],
         },
-        "action_summary": _action_summary_record(queue),
+        "action_summary": action_summary_record(queue),
         "top_priority_actions": [_queue_item_record(item) for item in priority_actions],
         "report_health": [_report_record(report) for report in reports],
     }
@@ -109,36 +106,6 @@ def format_study_dashboard(project_path: Path | str) -> str:
         "",
     ]
     return "\n".join(lines)
-
-
-def _action_summary_record(queue: LearningQueue) -> dict[str, object]:
-    blockers = (
-        len(queue.workflow_actions)
-        + len(queue.quality_checks_to_fix)
-        + len(queue.tool_verifications_to_fix)
-    )
-    can_continue = len(queue.scheduled_reviews) + len(queue.exercises_to_attempt)
-    human_review = (
-        len(queue.obsidian_exports_to_run)
-        + len(queue.notes_to_review)
-        + len(queue.misconception_notes_to_draft)
-        + len(queue.exercise_drafts_to_approve)
-        + len(queue.attempts_to_grade)
-    )
-    open_actions = blockers + can_continue + human_review
-    completion = "clear" if open_actions == 0 else "blocked" if blockers else "in_progress"
-    priority_actions = priority_queue_items(queue)
-    next_action = "none"
-    if priority_actions:
-        next_action = _queue_item_summary(_queue_item_record(priority_actions[0]))
-    return {
-        "completion": completion,
-        "open_actions": open_actions,
-        "blockers": blockers,
-        "can_continue_learning": can_continue,
-        "needs_human_review": human_review,
-        "next_action": next_action,
-    }
 
 
 def _action_summary_lines(summary: object) -> list[str]:
@@ -210,32 +177,3 @@ def _status_label(value: dict[str, object] | None) -> str:
         return "not_run"
     status = value.get("status")
     return status if isinstance(status, str) else "invalid"
-
-
-def project_title(project_file: Path, *, fallback: str) -> str:
-    try:
-        lines = project_file.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return fallback
-    in_project = False
-    for line in lines:
-        stripped = line.strip()
-        if stripped == "project:":
-            in_project = True
-            continue
-        if in_project and stripped.startswith("title:"):
-            title = _yaml_like_string(stripped.removeprefix("title:").strip())
-            return title or fallback
-        if in_project and line and not line.startswith(" "):
-            break
-    return fallback
-
-
-def _yaml_like_string(value: str) -> str:
-    if value in {"", "null"}:
-        return ""
-    try:
-        parsed = json.loads(value)
-    except json.JSONDecodeError:
-        return value.strip("'\"")
-    return parsed if isinstance(parsed, str) else str(parsed)

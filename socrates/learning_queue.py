@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
 
-from .context import load_project, read_json
+from .context import load_project, project_title, read_json
 from .multi_session import (
     MULTI_SESSION_REGRESSION_MANIFEST_PATH,
     read_multi_session_regression_status,
@@ -33,6 +33,7 @@ QUEUE_SECTIONS = frozenset(
         "workflow",
     }
 )
+QUEUE_QUALITY_BOUNDARY = "deterministic_learning_queue"
 
 
 @dataclass(frozen=True)
@@ -78,12 +79,31 @@ def collect_learning_queue(project_path: Path | str) -> LearningQueue:
     )
 
 
+def build_learning_queue_payload(
+    project_path: Path | str,
+    *,
+    section: str = "all",
+) -> dict[str, object]:
+    """Build the machine-readable read-only queue payload."""
+
+    _validate_queue_section(section)
+    context = load_project(project_path)
+    queue = collect_learning_queue(context.root)
+    return {
+        "schema_version": 1,
+        "quality_boundary": QUEUE_QUALITY_BOUNDARY,
+        "project": project_title(context.project_file, fallback=context.root.name),
+        "root": str(context.root),
+        "section": section,
+        "action_summary": action_summary_record(queue),
+        "sections": [_section_record(row) for row in _selected_queue_sections(queue, section)],
+    }
+
+
 def format_learning_queue(queue: LearningQueue, *, section: str = "all") -> str:
     """Render a stable CLI queue summary."""
 
-    if section != "all" and section not in QUEUE_SECTIONS:
-        allowed = ", ".join(sorted({"all", *QUEUE_SECTIONS}))
-        raise ValueError(f"Unknown queue section {section!r}; expected one of: {allowed}")
+    _validate_queue_section(section)
 
     lines = ["# Learning Queue", ""]
     if section in {"all", "summary"}:
@@ -136,6 +156,20 @@ def repair_path_items(queue: LearningQueue) -> list[QueueItem]:
 def action_summary_lines(queue: LearningQueue) -> list[str]:
     """Return completion/blocker rows derived from existing queue buckets."""
 
+    summary = action_summary_record(queue)
+    return [
+        f"- Completion: {summary['completion']}",
+        f"- Open actions: {summary['open_actions']}",
+        f"- Blockers: {summary['blockers']}",
+        f"- Can continue learning: {summary['can_continue_learning']}",
+        f"- Needs human review: {summary['needs_human_review']}",
+        f"- Next action: {summary['next_action']}",
+    ]
+
+
+def action_summary_record(queue: LearningQueue) -> dict[str, object]:
+    """Return structured completion/blocker fields from existing queue buckets."""
+
     blockers = (
         len(queue.workflow_actions)
         + len(queue.quality_checks_to_fix)
@@ -155,14 +189,14 @@ def action_summary_lines(queue: LearningQueue) -> list[str]:
     next_action = "none"
     if next_actions:
         next_action = _queue_line(next_actions[0]).removeprefix("- ")
-    return [
-        f"- Completion: {completion}",
-        f"- Open actions: {open_actions}",
-        f"- Blockers: {blockers}",
-        f"- Can continue learning: {can_continue}",
-        f"- Needs human review: {human_review}",
-        f"- Next action: {next_action}",
-    ]
+    return {
+        "completion": completion,
+        "open_actions": open_actions,
+        "blockers": blockers,
+        "can_continue_learning": can_continue,
+        "needs_human_review": human_review,
+        "next_action": next_action,
+    }
 
 
 def priority_queue_items(queue: LearningQueue) -> list[QueueItem]:
@@ -201,6 +235,45 @@ def _prefixed_queue_items(
             for item in items
         )
     return actions
+
+
+def _validate_queue_section(section: str) -> None:
+    if section != "all" and section not in QUEUE_SECTIONS:
+        allowed = ", ".join(sorted({"all", *QUEUE_SECTIONS}))
+        raise ValueError(f"Unknown queue section {section!r}; expected one of: {allowed}")
+
+
+def _selected_queue_sections(
+    queue: LearningQueue,
+    section: str,
+) -> list[tuple[str, str, list[QueueItem]]]:
+    repair_paths = ("repairs", "Repair Paths", repair_path_items(queue))
+    if section == "summary":
+        return []
+    if section == "repairs":
+        return [repair_paths]
+    sections = _queue_sections(queue)
+    if section == "all":
+        return [repair_paths, *sections]
+    return [row for row in sections if row[0] == section]
+
+
+def _section_record(row: tuple[str, str, list[QueueItem]]) -> dict[str, object]:
+    section_id, title, items = row
+    return {
+        "section": section_id,
+        "title": title,
+        "count": len(items),
+        "items": [_queue_item_record(item) for item in items],
+    }
+
+
+def _queue_item_record(item: QueueItem) -> dict[str, str]:
+    return {
+        "item_id": item.item_id,
+        "path": item.path,
+        "detail": item.detail,
+    }
 
 
 def _notes_to_review(project_root: Path) -> list[QueueItem]:

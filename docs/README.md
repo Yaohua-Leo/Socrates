@@ -7,9 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.52-alpha structured study-dashboard JSON
-  over v0.51 dry-run-previewable structured misconception resolver writer JSON,
-  v0.50 structured misconception resolver writer JSON, v0.49
+- Current implementation baseline: v0.53-alpha structured learning-queue JSON
+  over v0.52 structured study-dashboard JSON, v0.51 dry-run-previewable
+  structured misconception resolver writer JSON, v0.50 structured
+  misconception resolver writer JSON, v0.49
   dry-run-previewable structured review-adjust-plan writer JSON, v0.48
   structured review-adjust-plan writer JSON, v0.47 dry-run-previewable
   structured review-exercise writer
@@ -165,3 +166,5 @@ from the source planning conversation.
   v0.51 plan for no-write misconception resolver previews.
 - `superpowers/plans/2026-06-04-v52-dashboard-json.md`: executable v0.52
   plan for read-only structured study-dashboard output.
+- `superpowers/plans/2026-06-04-v53-queue-json.md`: executable v0.53 plan
+  for read-only structured learning-queue output.

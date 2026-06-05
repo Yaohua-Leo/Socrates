@@ -42,7 +42,12 @@ from .kb import (
     read_reference_chapter_index,
     search_reference_kb,
 )
-from .learning_queue import QUEUE_SECTIONS, collect_learning_queue, format_learning_queue
+from .learning_queue import (
+    QUEUE_SECTIONS,
+    build_learning_queue_payload,
+    collect_learning_queue,
+    format_learning_queue,
+)
 from .llm import LlmMessage, LlmProviderError, LlmRequest
 from .llm_artifacts import list_llm_suggestions
 from .llm_config import load_llm_config
@@ -451,6 +456,11 @@ def build_parser() -> argparse.ArgumentParser:
         choices=("all", *sorted(QUEUE_SECTIONS)),
         default="all",
         help="Show one queue section; defaults to all.",
+    )
+    queue_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the learning queue as deterministic JSON.",
     )
     queue_parser.set_defaults(func=_handle_queue)
 
@@ -1697,6 +1707,15 @@ def _handle_status(args: argparse.Namespace) -> int:
 
 
 def _handle_queue(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_learning_queue_payload(args.project, section=args.section),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(
         format_learning_queue(
             collect_learning_queue(args.project),

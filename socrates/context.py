@@ -85,6 +85,35 @@ def read_json(path: Path) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def project_title(project_file: Path, *, fallback: str) -> str:
+    try:
+        lines = project_file.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return fallback
+    in_project = False
+    for line in lines:
+        stripped = line.strip()
+        if stripped == "project:":
+            in_project = True
+            continue
+        if in_project and stripped.startswith("title:"):
+            title = _yaml_like_string(stripped.removeprefix("title:").strip())
+            return title or fallback
+        if in_project and line and not line.startswith(" "):
+            break
+    return fallback
+
+
+def _yaml_like_string(value: str) -> str:
+    if value in {"", "null"}:
+        return ""
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return value.strip("'\"")
+    return parsed if isinstance(parsed, str) else str(parsed)
+
+
 def write_json(path: Path, value: object) -> None:
     path.write_text(
         json.dumps(value, ensure_ascii=False, indent=2) + "\n",

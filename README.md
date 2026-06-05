@@ -6,13 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.52-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.53-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured study-dashboard JSON,
+long-term report-surface refresh, structured learning-queue JSON, structured
+study-dashboard JSON,
 dry-run-previewable structured misconception
 resolver writer,
 dry-run-previewable structured
@@ -96,6 +97,7 @@ python -m socrates queue --project ".\projects\group_theory" --section summary
 python -m socrates queue --project ".\projects\group_theory" --section repairs
 python -m socrates queue --project ".\projects\group_theory" --section priority
 python -m socrates queue --project ".\projects\group_theory" --section workflow
+python -m socrates queue --project ".\projects\group_theory" --json
 python -m socrates report weekly --project ".\projects\group_theory"
 python -m socrates report monthly --project ".\projects\group_theory"
 python -m socrates report project-summary --project ".\projects\group_theory"
@@ -281,6 +283,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.52 `dashboard --json` emits the read-only operator dashboard as structured
   JSON, including snapshot, action summary, top priority action, and report
   health rows.
+- v0.53 `queue --json` emits the read-only learning queue as structured JSON,
+  including action summary and section-filtered item rows.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -344,6 +348,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   deterministic evidence. It is not a writer, readiness gate, report refresh,
   repair runner, LLM call, score, tutor, prediction, approval, or project-state
   mutation.
+- `queue --json` is a read-only structured action-queue view over existing
+  deterministic evidence. It is not a writer, command runner, repair runner,
+  readiness gate, report refresh, LLM call, score, tutor, prediction, approval,
+  or project-state mutation.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

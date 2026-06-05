@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .context import load_project
-from .dashboard import project_title
+from .context import load_project, project_title
 from .study_brief_status import StudyBriefStatus, summarize_study_brief
 
 

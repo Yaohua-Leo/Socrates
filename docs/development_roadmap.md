@@ -2626,6 +2626,37 @@ read-only shared payload
 - JSON mode 保持只读，不写 project logs、reports、briefs、learning state 或 queue artifacts。
 - 这不是 writer、readiness gate、report refresh、repair runner、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic dashboard evidence 的 structured reader output mode。
 
+v0.53：queue JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取完整 learning queue 和 section-filtered queue rows，而不用解析 Markdown queue。
+
+必须完成：
+
+`queue --json`
+
+`queue --section <section> --json`
+
+structured action summary
+
+structured section rows
+
+structured queue item rows
+
+project file-tree no-write proof
+
+当前状态（2026-06-04）：
+
+- `python -m socrates queue --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_learning_queue`、`project`、`root`、`section`、`action_summary` 和 `sections`。
+- `action_summary` 已结构化暴露 completion、open actions、blockers、can continue learning、needs human review 和 first next action。
+- `sections` 已结构化暴露 section id、title、count 和 items；items 包含 `item_id`、`path` 和 `detail`。
+- `--section priority --json` 只输出 priority section rows，且保留 workflow blocker 在 note review 之前的确定性排序。
+- `--section summary --json` 返回 action summary，且不返回 section rows。
+- JSON mode 保持只读，不写 project logs、reports、briefs、learning state、queue artifacts 或任何 project file。
+- 这不是 writer、command runner、repair runner、readiness gate、report refresh、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic learning queue evidence 的 structured reader output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
