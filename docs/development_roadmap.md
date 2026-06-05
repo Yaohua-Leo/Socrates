@@ -2571,6 +2571,31 @@ post-action resolved status
 - 腐坏 `learning_state.json` 在 JSON mode 下仍 clean fail，且不会追加 mistake bank。
 - 这不是 dry-run、read-only ledger、note generator、tutor、score、report refresh、LLM call 或额外 learning-state truth；它只是现有 misconception resolver writer 的 structured result output mode。
 
+v0.51：review resolve dry-run
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以在 resolver mutation 前预览同一 active misconception rows。
+
+必须完成：
+
+`review resolve --dry-run`
+
+`review resolve --dry-run --json`
+
+no learning_state rewrite
+
+no mistake-bank append
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review resolve --project <project> --concept <concept> --dry-run` 已输出 no-write prose preview。
+- `--dry-run --json` 已输出 `quality_boundary: deterministic_misconception_resolver_preview`、`dry_run: true`、concept metadata、`resolved_count` 和 would-be resolved misconception rows。
+- dry-run mode 不会重写 `learning_state.json` 或追加 mistake bank。
+- No-match dry-run JSON 返回空 rows，且不会写入 project artifacts。
+- 腐坏 `learning_state.json` 在 dry-run mode 下仍 clean fail，且不会追加 mistake bank。
+- 这不是 writer、read-only ledger、note generator、tutor、score、report refresh、LLM call 或 learning-state mutation；它只是现有 misconception resolver writer selection 的 no-write preview output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

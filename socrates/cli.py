@@ -819,6 +819,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Concept whose misconceptions were repaired.",
     )
     review_resolve_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview resolver rows without writing files.",
+    )
+    review_resolve_parser.add_argument(
         "--json",
         action="store_true",
         help="Emit deterministic JSON instead of prose.",
@@ -2321,9 +2326,25 @@ def _handle_review_resolve(args: argparse.Namespace) -> int:
                 context.learning_state,
                 args.concept,
             )
-            if args.json
+            if args.json or args.dry_run
             else []
         )
+        if args.dry_run:
+            if args.json:
+                print(
+                    json.dumps(
+                        _review_resolve_preview_payload(
+                            context,
+                            concept=args.concept,
+                            rows=rows,
+                        ),
+                        indent=2,
+                        sort_keys=True,
+                    )
+                )
+                return 0
+            print(_review_resolve_preview_text(args.concept, rows), end="")
+            return 0
         resolved_count = resolve_active_misconceptions_for_concept(context, args.concept)
     except json.JSONDecodeError:
         print(
@@ -3979,6 +4000,63 @@ def _review_resolve_payload(
         "resolved_count": resolved_count,
         "resolved_misconceptions": rows,
     }
+
+
+def _review_resolve_preview_payload(
+    context: ProjectContext,
+    *,
+    concept: str,
+    rows: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_misconception_resolver_preview",
+        "project": str(context.root),
+        "concept": concept,
+        "dry_run": True,
+        "resolved_count": len(rows),
+        "resolved_misconceptions": rows,
+    }
+
+
+def _review_resolve_preview_text(
+    concept: str,
+    rows: list[dict[str, object]],
+) -> str:
+    noun = "misconception" if len(rows) == 1 else "misconceptions"
+    lines = [
+        (
+            f"Misconception resolution preview: {len(rows)} active {noun} "
+            f"would be resolved for {concept}"
+        ),
+        "",
+    ]
+    if not rows:
+        lines.append("- none")
+    else:
+        lines.extend(_review_resolve_row_text(row) for row in rows)
+    return "\n".join(lines) + "\n"
+
+
+def _review_resolve_row_text(row: dict[str, object]) -> str:
+    line = (
+        f"- {row['misconception_id']} | {row['concept']} | "
+        f"count {row['count']}"
+    )
+    last_session_id = str(row.get("last_session_id", ""))
+    if last_session_id:
+        line = f"{line} | last session {last_session_id}"
+    analysis = str(row.get("analysis", ""))
+    if analysis:
+        line = f"{line} | {analysis}"
+    repair = str(row.get("repair_suggestion", ""))
+    if repair:
+        line = f"{line} | repair: {repair}"
+    follow_up_exercises = row.get("follow_up_exercises", [])
+    if isinstance(follow_up_exercises, list) and follow_up_exercises:
+        follow_up = ", ".join(str(item) for item in follow_up_exercises)
+        line = f"{line} | follow-up: {follow_up}"
+    return line
 
 
 def _active_misconception_records_for_concept(

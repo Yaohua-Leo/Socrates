@@ -6,13 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.50-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.51-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured misconception resolver writer,
+long-term report-surface refresh, dry-run-previewable structured misconception
+resolver writer,
 dry-run-previewable structured
 review-adjust-plan writer,
 dry-run-previewable structured
@@ -81,6 +82,7 @@ python -m socrates review exercises --project ".\projects\group_theory" --due-by
 python -m socrates review mastery --project ".\projects\group_theory" --json
 python -m socrates review misconceptions --project ".\projects\group_theory" --json
 python -m socrates review resolve --project ".\projects\group_theory" --concept normal_subgroup --json
+python -m socrates review resolve --project ".\projects\group_theory" --concept normal_subgroup --dry-run --json
 python -m socrates note review --project ".\projects\group_theory" --note normal_subgroup
 python -m socrates note export-obsidian --project ".\projects\group_theory"
 python -m socrates exercise validate --project ".\projects\group_theory" --all
@@ -271,6 +273,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.50 `review resolve --json` emits the explicit misconception resolver
   writer result as structured JSON, including rows captured before mutation and
   serialized with post-action resolved status.
+- v0.51 `review resolve --dry-run` previews the same misconception resolver
+  rows in prose or JSON without rewriting learning state or appending the
+  mistake bank.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -338,6 +343,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   `learning_state.json` and appends the mistake bank; it is not a dry-run,
   read-only ledger, note generator, tutor, score, report refresh, LLM call, or
   extra learning-state truth beyond the existing resolver write.
+- `review resolve --dry-run` is a no-write misconception resolver preview. It
+  must not rewrite `learning_state.json` or append the mistake bank; it is not
+  a writer, read-only ledger, note generator, tutor, score, report refresh, LLM
+  call, or learning-state mutation.
 - `review mastery --json` is a read-only structured view over persisted
   concept mastery and proof-skill rows. It is not a scheduler, planner, tutor,
   score writer, report refresh, LLM call, or learning-state mutation.

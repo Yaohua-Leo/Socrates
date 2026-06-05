@@ -535,6 +535,260 @@ class StateEvalTests(unittest.TestCase):
                 original_mistake_bank,
             )
 
+    def test_review_resolve_dry_run_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                            follow_up_exercises=["normal_subgroup_review_01"],
+                        ),
+                        MistakeRecord(
+                            session_id="session-002",
+                            concept="quotient_group",
+                            misconception_id="cosets_are_subgroups",
+                            user_answer="Every coset is a subgroup.",
+                            analysis="Confuses cosets with subgroups.",
+                            repair_suggestion="Check whether a coset contains the identity.",
+                        ),
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--dry-run",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertIn(
+                "Misconception resolution preview: 1 active misconception would be resolved for normal_subgroup",
+                preview.stdout,
+            )
+            self.assertIn(
+                "- normal_equals_central | normal_subgroup | count 1 | last session session-001",
+                preview.stdout,
+            )
+            self.assertIn("repair: Compare normality with commutativity.", preview.stdout)
+            self.assertIn("follow-up: normal_subgroup_review_01", preview.stdout)
+            self.assertNotIn("Resolved 1 active misconception", preview.stdout)
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_dry_run_json_reports_preview_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                            follow_up_exercises=["normal_subgroup_review_01"],
+                        )
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            self.assertNotIn("Misconception resolution preview", preview.stdout)
+            payload = json.loads(preview.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(
+                payload["quality_boundary"],
+                "deterministic_misconception_resolver_preview",
+            )
+            self.assertEqual(payload["project"], str(project))
+            self.assertEqual(payload["concept"], "normal_subgroup")
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["resolved_count"], 1)
+            self.assertEqual(
+                payload["resolved_misconceptions"],
+                [
+                    {
+                        "misconception_id": "normal_equals_central",
+                        "concept": "normal_subgroup",
+                        "previous_status": "active",
+                        "status": "resolved",
+                        "count": 1,
+                        "last_session_id": "session-001",
+                        "analysis": "Confuses normality with centrality.",
+                        "repair_suggestion": "Compare normality with commutativity.",
+                        "follow_up_exercises": ["normal_subgroup_review_01"],
+                    }
+                ],
+            )
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_dry_run_json_reports_noop_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            update_learning_state(
+                context,
+                LearningStatePatch(
+                    mistakes=[
+                        MistakeRecord(
+                            session_id="session-001",
+                            concept="normal_subgroup",
+                            misconception_id="normal_equals_central",
+                            user_answer="Normal means central.",
+                            analysis="Confuses normality with centrality.",
+                            repair_suggestion="Compare normality with commutativity.",
+                        )
+                    ],
+                ),
+            )
+            learning_state_before = context.learning_state.read_text(encoding="utf-8")
+            mistake_bank_before = context.mistake_bank.read_text(encoding="utf-8")
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "rings",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 0, preview.stderr)
+            payload = json.loads(preview.stdout)
+            self.assertEqual(payload["concept"], "rings")
+            self.assertTrue(payload["dry_run"])
+            self.assertEqual(payload["resolved_count"], 0)
+            self.assertEqual(payload["resolved_misconceptions"], [])
+            self.assertEqual(
+                context.learning_state.read_text(encoding="utf-8"),
+                learning_state_before,
+            )
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                mistake_bank_before,
+            )
+
+    def test_review_resolve_dry_run_json_rejects_corrupt_learning_state_without_mistake_bank_append(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            context = load_project(project)
+            original_mistake_bank = context.mistake_bank.read_text(encoding="utf-8")
+            context.learning_state.write_text(
+                "{not valid json\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+
+            preview = subprocess.run(
+                [
+                    sys.executable,
+                    "-m",
+                    "socrates",
+                    "review",
+                    "resolve",
+                    "--project",
+                    str(project),
+                    "--concept",
+                    "normal_subgroup",
+                    "--dry-run",
+                    "--json",
+                ],
+                cwd=REPO_ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(preview.returncode, 1)
+            self.assertEqual(preview.stdout, "")
+            self.assertIn("error: invalid learning_state.json", preview.stderr)
+            self.assertIn(
+                "repair the JSON before resolving misconceptions",
+                preview.stderr,
+            )
+            self.assertNotIn("Expecting property name", preview.stderr)
+            self.assertEqual(
+                context.mistake_bank.read_text(encoding="utf-8"),
+                original_mistake_bank,
+            )
+
     def test_status_cli_recovers_corrupt_learning_state_json(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
