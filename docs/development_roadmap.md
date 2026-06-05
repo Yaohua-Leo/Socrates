@@ -2596,6 +2596,36 @@ no mistake-bank append
 - 腐坏 `learning_state.json` 在 dry-run mode 下仍 clean fail，且不会追加 mistake bank。
 - 这不是 writer、read-only ledger、note generator、tutor、score、report refresh、LLM call 或 learning-state mutation；它只是现有 misconception resolver writer selection 的 no-write preview output mode。
 
+v0.52：dashboard JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取一屏 dashboard evidence，而不用解析 Markdown dashboard。
+
+必须完成：
+
+`dashboard --json`
+
+structured snapshot
+
+structured action summary
+
+top priority action rows
+
+report health rows
+
+read-only shared payload
+
+当前状态（2026-06-04）：
+
+- `python -m socrates dashboard --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_study_dashboard`、`project`、`root`、`snapshot`、`action_summary`、`top_priority_actions` 和 `report_health`。
+- `snapshot` 已结构化暴露 workflow action count、closeout/regression/report-history status、report-history snapshot count、study-brief freshness fields 和 report health counts。
+- `action_summary` 已结构化暴露 completion、open actions、blockers、can continue learning、needs human review 和 first next action。
+- Markdown dashboard 现在从同一个 structured payload 渲染，避免 wrapper-facing JSON 与 human-facing Markdown 走两套 evidence path。
+- JSON mode 保持只读，不写 project logs、reports、briefs、learning state 或 queue artifacts。
+- 这不是 writer、readiness gate、report refresh、repair runner、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic dashboard evidence 的 structured reader output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

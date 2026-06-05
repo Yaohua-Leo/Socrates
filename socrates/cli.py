@@ -19,7 +19,7 @@ from .artifacts import (
 )
 from .context import ProjectContext, load_project
 from .contracts import ExerciseDraft, REVIEW_PRIORITY_FILTERS
-from .dashboard import format_study_dashboard
+from .dashboard import build_study_dashboard_payload, format_study_dashboard
 from .exercise_bank import build_exercise_bank, read_exercise_bank
 from .exercises import (
     EXERCISE_TYPES,
@@ -390,6 +390,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show a compact read-only project dashboard.",
     )
     dashboard_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    dashboard_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the dashboard as deterministic JSON.",
+    )
     dashboard_parser.set_defaults(func=_handle_dashboard)
 
     resume_parser = subparsers.add_parser(
@@ -1703,6 +1708,15 @@ def _handle_queue(args: argparse.Namespace) -> int:
 
 
 def _handle_dashboard(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_study_dashboard_payload(args.project),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     print(format_study_dashboard(args.project), end="")
     return 0
 

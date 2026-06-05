@@ -7,11 +7,12 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.51-alpha dry-run-previewable structured
-  misconception resolver writer JSON over v0.50 structured misconception
-  resolver writer JSON, v0.49 dry-run-previewable structured review-adjust-plan
-  writer JSON, v0.48 structured review-adjust-plan writer JSON, v0.47
-  dry-run-previewable structured review-exercise writer
+- Current implementation baseline: v0.52-alpha structured study-dashboard JSON
+  over v0.51 dry-run-previewable structured misconception resolver writer JSON,
+  v0.50 structured misconception resolver writer JSON, v0.49
+  dry-run-previewable structured review-adjust-plan writer JSON, v0.48
+  structured review-adjust-plan writer JSON, v0.47 dry-run-previewable
+  structured review-exercise writer
   JSON, v0.46 structured review-exercise writer
   JSON, v0.45 dry-run-previewable structured review-schedule repair writer
   JSON, v0.44 structured review-schedule repair writer JSON, v0.43 structured
@@ -162,3 +163,5 @@ from the source planning conversation.
   v0.50 plan for structured misconception resolver writer output.
 - `superpowers/plans/2026-06-04-v51-review-resolve-dry-run.md`: executable
   v0.51 plan for no-write misconception resolver previews.
+- `superpowers/plans/2026-06-04-v52-dashboard-json.md`: executable v0.52
+  plan for read-only structured study-dashboard output.
