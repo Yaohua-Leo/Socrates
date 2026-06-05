@@ -2683,6 +2683,168 @@ project file-tree no-write proof
 - JSON mode 保持只读，不写 `study_brief.md`、`study_brief_manifest.json`、project logs、learning state、queue artifacts 或任何 project file。
 - 这不是 generator、writer、readiness gate、report refresh、repair runner、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic study brief freshness evidence 的 structured reader output mode。
 
+v0.55：status JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取中央 project status，而不用解析 `status` prose。
+
+必须完成：
+
+`status --json`
+
+structured project status payload
+
+current phase and counts
+
+quality/session/workflow status records
+
+project file-tree no-write proof
+
+当前状态（2026-06-05）：
+
+- `python -m socrates status --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_project_status`、`project`、`root`、`current_phase`、`counts`、`reference_kb`、`report_history`、`study_brief`、`queue`、`quality`、`session_score`、`session_closeout`、`multi_session_regression`、`next_session_plan`、`benchmark` 和 `misconceptions`。
+- Prose `status` 现在从同一 structured payload 渲染，避免 wrapper-facing JSON 与 human-facing status drift。
+- JSON mode 保持只读，不写 project logs、reports、briefs、learning state、queue artifacts 或任何 project file。
+- 这不是 writer、repair runner、readiness-gate expansion、report refresh、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic project status evidence 的 structured reader output mode。
+
+v0.56：MVP lifecycle canary
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以用一个确定性的临时项目 canary 检查最小 v1.0 学习项目场景是否仍能端到端组合，而不用把长期 workflow drift 藏在单个命令测试之后。
+
+必须完成：
+
+`lifecycle canary`
+
+`lifecycle canary --json`
+
+temporary-project MVP scenario evidence
+
+lifecycle audit and artifact counts
+
+temporary cleanup proof
+
+offline/no user-project writes boundary
+
+当前状态（2026-06-05）：
+
+- `python -m socrates lifecycle canary` 已输出 deterministic pass/fail summary。
+- `python -m socrates lifecycle canary --json` 已输出 `schema_version: 1`、`quality_boundary: deterministic_mvp_lifecycle_canary`、scenario、lifecycle counts、artifact counts、check rows、temporary project cleanup 和 status。
+- Canary scenario 会在临时项目中覆盖 init/reference/curation/KB/plan/two scripted sessions/notes/exercises/state/reports/session closeout/multi-session regression/benchmark/lifecycle audit。
+- Canary 默认只使用临时目录并在结束时清理，不接受 `--project`，不写用户学习项目。
+- 这不是 live LLM、UI/plugin、OCR/PDF backend、proof assistant、自动教学执行或真实 learner validation；它只是一个 deterministic workflow-composition readiness canary。
+
+v0.57：inspectable lifecycle canary artifacts
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 在 canary pass/fail 之外，可以显式保留一个可审计的 canary project artifact bundle，而不是只能相信 stdout。
+
+必须完成：
+
+`lifecycle canary --artifacts <dir>`
+
+`canary_report.json`
+
+copied canary project tree
+
+temporary cleanup recorded after cleanup
+
+non-empty output directory protection
+
+当前状态（2026-06-05）：
+
+- `python -m socrates lifecycle canary --artifacts <dir> --json` 会输出 structured canary payload，并在 `<dir>` 中写入 `canary_report.json` 与 `project/`。
+- `artifact_bundle` payload 记录 `written`、`root`、`project_path` 和 `report_path`。
+- `canary_report.json` 写入 temp project 已清理后的最终 payload，便于 operator 审计 cleanup boundary。
+- 非空 artifact output directory 会以 exit code 2 clean-fail，避免覆盖用户文件。
+- 这仍不是 user-project runner、隐式 writer、live LLM、UI/plugin、OCR/PDF backend、proof assistant、自动教学执行或真实 learner validation；它只是显式选择的 canary evidence bundle。
+
+v0.58：returning-learner lifecycle canary evidence
+
+建议目标：
+
+让 MVP lifecycle canary 不只证明 workflow artifacts 能生成，也证明完成后的学习项目可以被已有 returning-learner surfaces 重新进入：study brief、dashboard 和 resume 必须在同一个 canary 中保持一致。
+
+必须完成：
+
+generated study brief inside canary project
+
+returning_learner JSON evidence
+
+dashboard study brief continuity
+
+resume ready state continuity
+
+artifact bundle includes brief and manifest
+
+当前状态（2026-06-05）：
+
+- `python -m socrates lifecycle canary --json` 已包含 `returning_learner` evidence。
+- Canary 会在 lifecycle audit 后生成 study brief，并从现有 dashboard/resume readers 读取 `study_brief: current`、`dashboard_study_brief: current`、`resume_state: ready` 和 `recommended_command: none`。
+- Artifact counts 已包含 generated study brief artifacts。
+- `python -m socrates lifecycle canary --artifacts <dir> --json` 会把 `study_brief.md` 与 `study_brief_manifest.json` 复制到 inspectable project bundle，并在 `canary_report.json` 中记录同一 returning-learner evidence。
+- 这仍不是 UI/plugin、自动教学执行、live LLM、proof assistant、真实 learner outcome validation 或 user-project mutation；它只是 deterministic temporary-project canary 中的 re-entry surface continuity evidence。
+
+v0.59：product readiness audit
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 在选择下一条大产品路线前，可以看到最终 v1.0 目标对应的能力、当前证据、剩余 gap 和必须敲定的分支决策。
+
+必须完成：
+
+`product readiness`
+
+`product readiness --json`
+
+ten final-goal capability rows
+
+implemented / partial / missing status summary
+
+next major product lane decision point
+
+当前状态（2026-06-05）：
+
+- `python -m socrates product readiness` 已输出 deterministic repo-level Markdown audit。
+- `python -m socrates product readiness --json` 已输出 `schema_version: 1`、`quality_boundary: deterministic_product_readiness_audit`、`product_goal: v1.0_math_learning_agent` 和 `overall_status: not_v1_ready`。
+- Audit 映射了 project initialization、reference discovery/management、literature cleaning/structuring、learning-plan design、guided teaching、personal KB capture、exercise generation、learning-state modeling、misconception bank 和 verification/evaluation 十个最终目标能力区。
+- JSON 明确列出下一条大产品路线的待决选项：`ocr_pdf_backend`、`autonomous_llm_tutoring`、`ui_plugin_surface`、`real_long_term_validation`。
+- 这不是 v1.0 completion proof、learner-project inspection、project mutation、live LLM call、OCR/PDF backend、UI/plugin 或真实 learner validation；它只是选择下一条产品分支前的 deterministic capability/gap map。
+
+v0.60：real-use validation runbook
+
+建议目标：
+
+在继续实现新功能前，让 Leo 用一个真实学习主题和一份小资料跑一轮当前 Socrates CLI workflow，收集真实摩擦点，再决定 v0.61 路线。
+
+必须完成：
+
+`docs/superpowers/plans/2026-06-05-v60-real-use-validation-runbook.md`
+
+real-use setup variables
+
+core learning-flow command sequence
+
+optional review / closeout / regression sequence
+
+artifact checklist
+
+feedback template
+
+development pause contract
+
+当前状态（2026-06-05）：
+
+- 已选择 v0.59 decision point 中的 `real_long_term_validation` lane。
+- v0.60 runbook 已覆盖 init/import/source-id discovery/curate/KB/plan/teach/status/dashboard/queue/brief/resume 以及可选 review/closeout/regression/report 流程。
+- 真实 validation cycle 由 Leo 运行；Codex 不代跑这个用户体验验证，因为要观察真实使用摩擦。
+- 开发暂停在 v0.60：在 Leo 返回反馈前，不继续实现 OCR/PDF backend、autonomous LLM tutoring、UI/plugin surface 或新增 workflow feature。
+- 这不是新产品能力、v1.0 completion proof、自动 learner validation、OCR/PDF backend、UI/plugin 或 autonomous tutor；它是进入 v0.61 前的人工真实使用验证门。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

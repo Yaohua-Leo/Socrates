@@ -6,14 +6,20 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.54-alpha prototype. Its strongest surfaces are the
-deterministic CLI, file contracts, provenance checks, Reference KB indexing,
+The current codebase is a v0.60 validation-ready prototype. Its strongest
+surfaces are the real-use validation runbook, deterministic CLI, repo-level
+product readiness audit, file contracts,
+provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured learning-queue JSON, structured
-study-dashboard JSON, structured study-brief-status JSON,
+long-term report-surface refresh, a deterministic temporary-project MVP
+lifecycle canary with optional inspectable artifact bundles and returning-learner
+continuity evidence, product-readiness capability/gap audit, structured
+project-status JSON, structured learning-queue JSON, structured
+study-dashboard JSON, structured
+study-brief-status JSON,
 dry-run-previewable structured misconception
 resolver writer,
 dry-run-previewable structured
@@ -35,7 +41,18 @@ opt-in LLM provider layer for
 reviewable draft suggestions, including
 review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
 tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
-remain future work.
+remain future work. v0.60 intentionally pauses feature development until a real
+learner/operator validation run produces feedback.
+
+## v0.60 Real-Use Validation
+
+Before selecting the next build lane, run the validation checklist in
+`docs/superpowers/plans/2026-06-05-v60-real-use-validation-runbook.md`.
+
+The runbook asks Leo to use one real math topic and one small source, then
+capture where the current CLI flow succeeds, fails, or feels awkward. It is the
+current development pause point: do not treat it as authorization to build OCR,
+autonomous tutoring, UI/plugin work, or additional workflow features.
 
 ## Quick Start
 
@@ -93,6 +110,11 @@ python -m socrates session score --project ".\projects\group_theory" --session-i
 python -m socrates session plan-next --project ".\projects\group_theory" --session-id session_0002
 python -m socrates session closeout --project ".\projects\group_theory" --session-id session_0001 --next-session-id session_0002
 python -m socrates lifecycle regression --project ".\projects\group_theory"
+python -m socrates lifecycle canary
+python -m socrates lifecycle canary --json
+python -m socrates lifecycle canary --artifacts ".\canary_artifacts" --json
+python -m socrates product readiness
+python -m socrates product readiness --json
 python -m socrates queue --project ".\projects\group_theory" --section summary
 python -m socrates queue --project ".\projects\group_theory" --section repairs
 python -m socrates queue --project ".\projects\group_theory" --section priority
@@ -122,6 +144,7 @@ python -m socrates brief generate --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory" --json
 python -m socrates status --project ".\projects\group_theory"
+python -m socrates status --project ".\projects\group_theory" --json
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
 
@@ -288,6 +311,24 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   including action summary and section-filtered item rows.
 - v0.54 `brief status --json` emits manifest-backed study-brief freshness as
   structured JSON without generating or refreshing the saved brief.
+- v0.55 `status --json` emits the central project status as structured JSON,
+  including current phase, counts, Reference KB status, report history, study
+  brief freshness, queue summary, quality checks, workflow/session status,
+  benchmark status, and misconception counts.
+- v0.56 `lifecycle canary` runs a deterministic temporary-project MVP learning
+  scenario and emits prose or JSON pass/fail evidence for the composed
+  lifecycle.
+- v0.57 `lifecycle canary --artifacts <dir>` persists an explicit inspectable
+  canary bundle with `canary_report.json` and a copied project tree.
+- v0.58 `lifecycle canary --json` records returning-learner continuity
+  evidence from generated study brief, dashboard, and resume readers so the
+  canary also proves the re-entry surfaces compose.
+- v0.59 `product readiness` renders a deterministic repo-level v1.0
+  capability/gap audit, including implemented evidence, remaining gaps, and the
+  next major product-lane decision point.
+- v0.60 real-use validation runbook selects the `real_long_term_validation`
+  lane and pauses new feature development until Leo returns feedback from one
+  real learner/operator run.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -355,6 +396,28 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   deterministic evidence. It is not a writer, command runner, repair runner,
   readiness gate, report refresh, LLM call, score, tutor, prediction, approval,
   or project-state mutation.
+- `status --json` is a read-only structured project-status view over the same
+  deterministic evidence as prose `status`. It is not a writer, repair runner,
+  report refresh, readiness-gate expansion, LLM call, score, tutor, prediction,
+  approval, or project-state mutation.
+- `lifecycle canary` is a deterministic temporary-project MVP regression. It
+  initializes and cleans up its own project state and reports composed workflow
+  evidence; it is not a user-project writer, live LLM call, UI/plugin, OCR/PDF
+  backend, proof assistant, or real learner validation.
+- `lifecycle canary --artifacts <dir>` writes only to the explicit output
+  directory and rejects non-empty directories to avoid overwriting user files.
+  It is an inspectability bundle, not a user-project workflow runner.
+- Returning-learner canary evidence reuses generated study brief, dashboard,
+  and resume readers inside the temporary canary project. It is not a UI,
+  autonomous tutor, human outcome validation, or user-project mutation.
+- `product readiness` is a deterministic repo-level capability/gap map. It
+  does not inspect or mutate learner projects, prove v1.0 completion, run OCR,
+  call an LLM, generate reports, validate real learner outcomes, or choose the
+  next major product lane.
+- v0.60 real-use validation is a human-run product validation pass over the
+  existing v0.59 prototype. It is not a new product feature, automated learner
+  outcome proof, OCR/PDF backend, autonomous LLM tutor, UI/plugin layer, or
+  permission to continue feature work before Leo returns feedback.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

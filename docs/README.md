@@ -7,8 +7,13 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.54-alpha structured study-brief-status
-  JSON over v0.53 structured learning-queue JSON, v0.52 structured
+- Current implementation baseline: v0.60 real-use validation runbook and
+  development pause over v0.59-alpha deterministic product readiness audit,
+  v0.58 returning-learner MVP lifecycle canary evidence, v0.57
+  inspectable MVP lifecycle canary artifact bundles, and v0.56 deterministic
+  MVP lifecycle canary,
+  v0.55 structured project-status JSON, and v0.54 structured study-brief-status
+  JSON, v0.53 structured learning-queue JSON, v0.52 structured
   study-dashboard JSON, v0.51 dry-run-previewable
   structured misconception resolver writer JSON, v0.50 structured
   misconception resolver writer JSON, v0.49
@@ -171,3 +176,16 @@ from the source planning conversation.
   for read-only structured learning-queue output.
 - `superpowers/plans/2026-06-04-v54-brief-status-json.md`: executable v0.54
   plan for read-only structured study-brief-status output.
+- `superpowers/plans/2026-06-05-v55-status-json.md`: executable v0.55
+  plan for read-only structured project-status output.
+- `superpowers/plans/2026-06-05-v56-mvp-lifecycle-canary.md`: executable
+  v0.56 plan for a deterministic temporary-project MVP lifecycle canary.
+- `superpowers/plans/2026-06-05-v57-canary-artifacts.md`: executable v0.57
+  plan for explicit inspectable lifecycle canary artifact bundles.
+- `superpowers/plans/2026-06-05-v58-returning-learner-canary.md`: executable
+  v0.58 plan for returning-learner continuity evidence in the lifecycle
+  canary.
+- `superpowers/plans/2026-06-05-v59-product-readiness-audit.md`: executable
+  v0.59 plan for the read-only product readiness capability/gap audit.
+- `superpowers/plans/2026-06-05-v60-real-use-validation-runbook.md`:
+  executable v0.60 real-use validation runbook and development pause contract.

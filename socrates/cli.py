@@ -17,7 +17,7 @@ from .artifacts import (
     generate_targeted_review_exercise_drafts,
     preview_targeted_review_exercise_drafts,
 )
-from .context import ProjectContext, load_project
+from .context import ProjectContext, load_project, project_title
 from .contracts import ExerciseDraft, REVIEW_PRIORITY_FILTERS
 from .dashboard import build_study_dashboard_payload, format_study_dashboard
 from .exercise_bank import build_exercise_bank, read_exercise_bank
@@ -44,9 +44,15 @@ from .kb import (
 )
 from .learning_queue import (
     QUEUE_SECTIONS,
+    action_summary_record,
     build_learning_queue_payload,
     collect_learning_queue,
     format_learning_queue,
+)
+from .lifecycle_canary import (
+    CanaryArtifactError,
+    format_mvp_lifecycle_canary,
+    run_mvp_lifecycle_canary,
 )
 from .llm import LlmMessage, LlmProviderError, LlmRequest
 from .llm_artifacts import list_llm_suggestions
@@ -89,6 +95,10 @@ from .project_resume import (
     build_project_resume_index_payload,
     format_project_resume_commands,
     format_project_resume_index,
+)
+from .product_readiness import (
+    build_product_readiness_payload,
+    format_product_readiness,
 )
 from .quality import (
     audit_project_lifecycle,
@@ -388,6 +398,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Show a Socrates project status summary.",
     )
     status_parser.add_argument("--project", required=True, help="Socrates project directory.")
+    status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the project status as deterministic JSON.",
+    )
     status_parser.set_defaults(func=_handle_status)
 
     dashboard_parser = subparsers.add_parser(
@@ -490,6 +505,37 @@ def build_parser() -> argparse.ArgumentParser:
         help="Socrates project directory.",
     )
     lifecycle_regression_parser.set_defaults(func=_handle_lifecycle_regression)
+    lifecycle_canary_parser = lifecycle_subparsers.add_parser(
+        "canary",
+        help="Run the deterministic temporary-project MVP lifecycle canary.",
+    )
+    lifecycle_canary_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured canary evidence as JSON.",
+    )
+    lifecycle_canary_parser.add_argument(
+        "--artifacts",
+        type=Path,
+        help="Persist an inspectable canary artifact bundle to this directory.",
+    )
+    lifecycle_canary_parser.set_defaults(func=_handle_lifecycle_canary)
+
+    product_parser = subparsers.add_parser(
+        "product",
+        help="Inspect repo-level product readiness against the final goal.",
+    )
+    product_subparsers = product_parser.add_subparsers(dest="product_command", required=True)
+    product_readiness_parser = product_subparsers.add_parser(
+        "readiness",
+        help="Show the deterministic v1.0 product readiness audit.",
+    )
+    product_readiness_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the product readiness audit as deterministic JSON.",
+    )
+    product_readiness_parser.set_defaults(func=_handle_product_readiness)
 
     projects_parser = subparsers.add_parser(
         "projects",
@@ -1530,8 +1576,20 @@ def _handle_teach(args: argparse.Namespace) -> int:
     return 0
 
 
+PROJECT_STATUS_QUALITY_BOUNDARY = "deterministic_project_status"
+
+
 def _handle_status(args: argparse.Namespace) -> int:
-    context = load_project(args.project)
+    payload = _build_status_payload(args.project)
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    _print_status_payload(payload)
+    return 0
+
+
+def _build_status_payload(project_path: Path | str) -> dict[str, object]:
+    context = load_project(project_path)
     latest_session = _latest_session(context.sessions_dir)
     source_count = _count_sources(context.source_registry)
     queue = collect_learning_queue(context.root)
@@ -1614,29 +1672,115 @@ def _handle_status(args: argparse.Namespace) -> int:
         ),
     )
 
-    print(f"Project: {context.root}")
-    print(f"Current phase: {phase}")
-    print(f"Imported sources: {source_count}")
-    print(f"Converted references: {converted_count}")
-    print(f"Conversion pending references: {conversion_pending_count}")
-    print(f"Correction patches: {correction_patch_count}")
-    print(f"Pending correction patches: {pending_correction_patch_count}")
-    print(f"LLM suggestion drafts: {llm_suggestion_draft_count}")
-    print(f"Curated references: {curated_count}")
-    print(f"KB objects: {kb_object_count}")
-    print(f"Reference KB status: {kb_status.status}")
-    print(f"Latest session: {latest_session}")
-    print(f"Pending draft notes: {draft_count}")
-    print(f"Misconception notes to draft: {misconception_note_draft_count}")
-    print(f"Reviewed notes: {reviewed_count}")
-    print(f"Generated exercises: {exercise_count}")
-    print(f"Approved exercises: {approved_exercise_count}")
-    print(f"Attempted exercises: {attempted_exercise_count}")
-    print(f"Graded exercises: {graded_exercise_count}")
-    print(f"Obsidian exports: {obsidian_export_count}")
-    print(f"Obsidian exports to run: {obsidian_exports_to_run_count}")
-    print(f"Obsidian backlinks: {obsidian_backlink_count}")
-    print(f"Scheduled reviews: {scheduled_review_count}")
+    return {
+        "schema_version": 1,
+        "quality_boundary": PROJECT_STATUS_QUALITY_BOUNDARY,
+        "project": project_title(context.project_file, fallback=context.root.name),
+        "root": str(context.root),
+        "current_phase": phase,
+        "latest_session": latest_session,
+        "counts": {
+            "imported_sources": source_count,
+            "converted_references": converted_count,
+            "conversion_pending_references": conversion_pending_count,
+            "correction_patches": correction_patch_count,
+            "pending_correction_patches": pending_correction_patch_count,
+            "llm_suggestion_drafts": llm_suggestion_draft_count,
+            "curated_references": curated_count,
+            "kb_objects": kb_object_count,
+            "pending_draft_notes": draft_count,
+            "misconception_notes_to_draft": misconception_note_draft_count,
+            "reviewed_notes": reviewed_count,
+            "generated_exercises": exercise_count,
+            "approved_exercises": approved_exercise_count,
+            "attempted_exercises": attempted_exercise_count,
+            "graded_exercises": graded_exercise_count,
+            "obsidian_exports": obsidian_export_count,
+            "obsidian_exports_to_run": obsidian_exports_to_run_count,
+            "obsidian_backlinks": obsidian_backlink_count,
+            "scheduled_reviews": scheduled_review_count,
+            "learning_reports": report_count,
+            "exercise_bank_entries": exercise_bank_count,
+            "tool_verification_records": tool_verification_count,
+        },
+        "reference_kb": {
+            "status": kb_status.status,
+            "object_count": kb_object_count,
+        },
+        "next_review": _next_review_record(next_review),
+        "report_history": {
+            "status": report_history.status,
+            "snapshots": report_history.total_snapshots,
+            "latest": _latest_report_history_text(report_history),
+        },
+        "study_brief": {
+            "status": study_brief_status.status,
+            "recorded_next_action": study_brief_status.recorded_next_action,
+            "current_next_action": study_brief_status.current_next_action,
+        },
+        "queue": {
+            "workflow_actions": workflow_action_count,
+            "quality_checks_to_fix": quality_checks_to_fix_count,
+            "action_summary": action_summary_record(queue),
+        },
+        "quality": {
+            "ingestion": _status_record(ingestion_quality),
+            "note": _status_record(note_quality),
+            "exercise": _status_record(exercise_quality),
+            "exercise_validation": _status_record(exercise_validation),
+            "tutoring": _status_record(tutoring_quality),
+            "tool_verification": _status_record(tool_verification_quality),
+        },
+        "session_score": _status_record(session_score_status),
+        "session_closeout": _status_record(session_closeout_status),
+        "multi_session_regression": _status_record(multi_session_regression_status),
+        "next_session_plan": _status_record(next_session_plan_status, missing_status="not_created"),
+        "benchmark": _status_record(benchmark_status),
+        "misconceptions": {
+            "active": active_misconception_count,
+            "resolved": resolved_misconception_count,
+        },
+    }
+
+
+def _print_status_payload(payload: dict[str, object]) -> None:
+    counts = payload["counts"]
+    reference_kb = payload["reference_kb"]
+    report_history = payload["report_history"]
+    study_brief = payload["study_brief"]
+    queue = payload["queue"]
+    quality = payload["quality"]
+    session_score = payload["session_score"]
+    session_closeout = payload["session_closeout"]
+    multi_session_regression = payload["multi_session_regression"]
+    next_session_plan = payload["next_session_plan"]
+    benchmark = payload["benchmark"]
+    misconceptions = payload["misconceptions"]
+
+    print(f"Project: {payload['root']}")
+    print(f"Current phase: {payload['current_phase']}")
+    print(f"Imported sources: {counts['imported_sources']}")
+    print(f"Converted references: {counts['converted_references']}")
+    print(f"Conversion pending references: {counts['conversion_pending_references']}")
+    print(f"Correction patches: {counts['correction_patches']}")
+    print(f"Pending correction patches: {counts['pending_correction_patches']}")
+    print(f"LLM suggestion drafts: {counts['llm_suggestion_drafts']}")
+    print(f"Curated references: {counts['curated_references']}")
+    print(f"KB objects: {counts['kb_objects']}")
+    print(f"Reference KB status: {reference_kb['status']}")
+    print(f"Latest session: {payload['latest_session']}")
+    print(f"Pending draft notes: {counts['pending_draft_notes']}")
+    print(f"Misconception notes to draft: {counts['misconception_notes_to_draft']}")
+    print(f"Reviewed notes: {counts['reviewed_notes']}")
+    print(f"Generated exercises: {counts['generated_exercises']}")
+    print(f"Approved exercises: {counts['approved_exercises']}")
+    print(f"Attempted exercises: {counts['attempted_exercises']}")
+    print(f"Graded exercises: {counts['graded_exercises']}")
+    print(f"Obsidian exports: {counts['obsidian_exports']}")
+    print(f"Obsidian exports to run: {counts['obsidian_exports_to_run']}")
+    print(f"Obsidian backlinks: {counts['obsidian_backlinks']}")
+    print(f"Scheduled reviews: {counts['scheduled_reviews']}")
+    next_review = payload["next_review"]
     if next_review is not None:
         print(
             "Next review: "
@@ -1646,69 +1790,207 @@ def _handle_status(args: argparse.Namespace) -> int:
         repair = next_review.get("repair", "")
         if repair:
             print(f"Next repair: {repair}")
-    print(f"Learning reports: {report_count}")
-    print(f"Report history: {report_history.status}")
-    print(f"Report history snapshots: {report_history.total_snapshots}")
-    print(f"Latest report history: {_latest_report_history_text(report_history)}")
-    print(f"Study brief: {study_brief_status.status}")
-    print(f"Study brief recorded next action: {study_brief_status.recorded_next_action}")
-    print(f"Study brief current next action: {study_brief_status.current_next_action}")
-    print(f"Workflow actions: {workflow_action_count}")
-    print(f"Quality checks to fix: {quality_checks_to_fix_count}")
-    print(f"Ingestion quality check: {_quality_manifest_status_text(ingestion_quality)}")
-    print(f"Note quality check: {_quality_manifest_status_text(note_quality)}")
-    print(f"Exercise quality check: {_quality_manifest_status_text(exercise_quality)}")
-    print(f"Exercise validation: {_quality_manifest_status_text(exercise_validation)}")
-    print(f"Exercise bank entries: {exercise_bank_count}")
-    print(f"Tutoring quality check: {_quality_manifest_status_text(tutoring_quality)}")
-    print(f"Tool verification records: {tool_verification_count}")
-    print(f"Tool verification check: {_tool_verification_quality_text(tool_verification_quality)}")
-    print(f"Session score: {_session_score_status_text(session_score_status)}")
-    print(f"Session score gates: {_session_score_gates_text(session_score_status)}")
-    print(f"Session score failed gates: {_session_score_failed_gates_text(session_score_status)}")
-    print(f"Session closeout: {_session_closeout_status_text(session_closeout_status)}")
+    print(f"Learning reports: {counts['learning_reports']}")
+    print(f"Report history: {report_history['status']}")
+    print(f"Report history snapshots: {report_history['snapshots']}")
+    print(f"Latest report history: {report_history['latest']}")
+    print(f"Study brief: {study_brief['status']}")
+    print(f"Study brief recorded next action: {study_brief['recorded_next_action']}")
+    print(f"Study brief current next action: {study_brief['current_next_action']}")
+    print(f"Workflow actions: {queue['workflow_actions']}")
+    print(f"Quality checks to fix: {queue['quality_checks_to_fix']}")
+    print(f"Ingestion quality check: {_quality_status_record_text(quality['ingestion'])}")
+    print(f"Note quality check: {_quality_status_record_text(quality['note'])}")
+    print(f"Exercise quality check: {_quality_status_record_text(quality['exercise'])}")
+    print(f"Exercise validation: {_quality_status_record_text(quality['exercise_validation'])}")
+    print(f"Exercise bank entries: {counts['exercise_bank_entries']}")
+    print(f"Tutoring quality check: {_quality_status_record_text(quality['tutoring'])}")
+    print(f"Tool verification records: {counts['tool_verification_records']}")
+    print(f"Tool verification check: {_quality_status_record_text(quality['tool_verification'])}")
+    print(f"Session score: {_session_score_record_text(session_score)}")
+    print(f"Session score gates: {_session_score_gates_record_text(session_score)}")
+    print(f"Session score failed gates: {_session_score_failed_gates_record_text(session_score)}")
+    print(f"Session closeout: {_status_value_text(session_closeout, not_run_text='not run')}")
     print(
         "Session closeout sessions: "
-        f"{_session_closeout_sessions_text(session_closeout_status)}"
+        f"{_session_closeout_sessions_record_text(session_closeout)}"
     )
-    print(f"Session closeout score: {_session_closeout_score_text(session_closeout_status)}")
+    print(f"Session closeout score: {_session_closeout_score_record_text(session_closeout)}")
     print(
         "Multi-session regression: "
-        f"{_multi_session_regression_status_text(multi_session_regression_status)}"
+        f"{_status_value_text(multi_session_regression, not_run_text='not run')}"
     )
     print(
         "Multi-session regression checks: "
-        f"{_multi_session_regression_checks_text(multi_session_regression_status)}"
+        f"{_multi_session_regression_checks_record_text(multi_session_regression)}"
     )
     print(
         "Multi-session regression issues: "
-        f"{_multi_session_regression_issues_text(multi_session_regression_status)}"
+        f"{_multi_session_regression_issues_record_text(multi_session_regression)}"
     )
-    print(f"Next session plan: {_next_session_plan_text(next_session_plan_status)}")
+    print(f"Next session plan: {_next_session_plan_record_text(next_session_plan)}")
     print(
         "Next session due reviews: "
-        f"{_next_session_due_reviews_text(next_session_plan_status)}"
+        f"{_next_session_due_reviews_record_text(next_session_plan)}"
     )
-    print(f"Next session handoff: {_next_session_handoff_text(next_session_plan_status)}")
-    if benchmark_status is None:
+    print(f"Next session handoff: {_next_session_handoff_record_text(next_session_plan)}")
+    if benchmark["status"] == "not_run":
         print("Benchmark score: none")
         print("Benchmark gates: none")
-    elif benchmark_status.get("status") == "invalid":
+    elif benchmark["status"] == "invalid":
         print("Benchmark score: invalid")
         print("Benchmark gates: invalid")
     else:
-        print(f"Benchmark score: {benchmark_status['score']}/100")
+        print(f"Benchmark score: {benchmark['score']}/100")
         print(
             "Benchmark gates: "
-            f"{benchmark_status['passed_gates']}/{benchmark_status['total_gates']}"
+            f"{benchmark['passed_gates']}/{benchmark['total_gates']}"
         )
         print(
             "Benchmark failed gates: "
-            f"{_benchmark_failed_gates_text(benchmark_status)}"
+            f"{_benchmark_failed_gates_text(benchmark)}"
         )
-    print(f"Active misconceptions: {active_misconception_count}")
-    print(f"Resolved misconceptions: {resolved_misconception_count}")
-    return 0
+    print(f"Active misconceptions: {misconceptions['active']}")
+    print(f"Resolved misconceptions: {misconceptions['resolved']}")
+
+
+def _status_record(
+    value: dict[str, object] | None,
+    *,
+    missing_status: str = "not_run",
+) -> dict[str, object]:
+    if value is None:
+        return {"status": missing_status}
+    return dict(value)
+
+
+def _next_review_record(value: dict[str, str] | None) -> dict[str, str] | None:
+    if value is None:
+        return None
+    return dict(value)
+
+
+def _quality_status_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    status = record.get("status")
+    if status == "not_run":
+        return "not run"
+    if status == "invalid":
+        return "invalid"
+    return (
+        f"{record['status']} "
+        f"({record['passed']}/{record['checked']} passed, {record['failed']} failed)"
+    )
+
+
+def _status_value_text(value: object, *, not_run_text: str) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    status = record.get("status")
+    if status == "not_run":
+        return not_run_text
+    return str(status if isinstance(status, str) else "invalid")
+
+
+def _session_score_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "not run"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return f"{record['score']}/100"
+
+
+def _session_score_gates_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return f"{record['passed_gates']}/{record['total_gates']}"
+
+
+def _session_score_failed_gates_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    failed_gates = record.get("failed_gates", [])
+    if isinstance(failed_gates, list) and failed_gates:
+        return ", ".join(str(name) for name in failed_gates)
+    passed_gates = record.get("passed_gates")
+    total_gates = record.get("total_gates")
+    if (
+        isinstance(passed_gates, int)
+        and isinstance(total_gates, int)
+        and passed_gates < total_gates
+    ):
+        return "unknown"
+    return "none"
+
+
+def _session_closeout_sessions_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return f"{record['session_id']} -> {record['next_session_id']}"
+
+
+def _session_closeout_score_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return f"{record['session_score']}/100 ({record['session_score_status']})"
+
+
+def _multi_session_regression_checks_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return f"{record['passed_checks']}/{record['total_checks']}"
+
+
+def _multi_session_regression_issues_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_run":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    issues = record.get("issues", [])
+    if isinstance(issues, list) and issues:
+        return ", ".join(str(issue) for issue in issues)
+    return "none"
+
+
+def _next_session_plan_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_created":
+        return "not created"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return str(record["session_id"])
+
+
+def _next_session_due_reviews_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_created":
+        return "none"
+    if record.get("status") == "invalid":
+        return "invalid"
+    return str(record["due_reviews"])
+
+
+def _next_session_handoff_record_text(value: object) -> str:
+    record = value if isinstance(value, dict) else {"status": "invalid"}
+    if record.get("status") == "not_created":
+        return "not run"
+    return str(record.get("status", "invalid"))
 
 
 def _handle_queue(args: argparse.Namespace) -> int:
@@ -1804,6 +2086,28 @@ def _handle_lifecycle_regression(args: argparse.Namespace) -> int:
     print(f"Regression manifest: {result.manifest_path}")
     print(f"Project summary: {result.project_summary_path}")
     return 0 if result.status == "pass" else 1
+
+
+def _handle_lifecycle_canary(args: argparse.Namespace) -> int:
+    try:
+        result = run_mvp_lifecycle_canary(args.artifacts)
+    except CanaryArtifactError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
+    if args.json:
+        print(json.dumps(result.to_payload(), indent=2, sort_keys=True))
+    else:
+        print(format_mvp_lifecycle_canary(result))
+    return 0 if result.status == "pass" else 1
+
+
+def _handle_product_readiness(args: argparse.Namespace) -> int:
+    payload = build_product_readiness_payload()
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    print(format_product_readiness(payload), end="")
+    return 0
 
 
 def _handle_projects_scan(args: argparse.Namespace) -> int:
