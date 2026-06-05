@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
+import shutil
 import tempfile
 
 from .artifacts import (
@@ -42,6 +44,10 @@ CANARY_QUALITY_BOUNDARY = "deterministic_mvp_lifecycle_canary"
 CANARY_SCENARIO = "normal_subgroup_mvp"
 
 
+class CanaryArtifactError(ValueError):
+    """Raised when the requested canary artifact bundle cannot be written."""
+
+
 @dataclass(frozen=True)
 class MvpLifecycleCanaryResult:
     """Structured result for the MVP lifecycle canary."""
@@ -51,6 +57,7 @@ class MvpLifecycleCanaryResult:
     artifacts: dict[str, int]
     checks: tuple[dict[str, str], ...]
     temporary_project_cleaned: bool
+    artifact_bundle: dict[str, object]
 
     def to_payload(self) -> dict[str, object]:
         """Return the JSON-serializable canary payload."""
@@ -66,12 +73,14 @@ class MvpLifecycleCanaryResult:
             "temporary_project": {
                 "cleaned": self.temporary_project_cleaned,
             },
+            "artifact_bundle": self.artifact_bundle,
         }
 
 
-def run_mvp_lifecycle_canary() -> MvpLifecycleCanaryResult:
+def run_mvp_lifecycle_canary(artifact_dir: Path | None = None) -> MvpLifecycleCanaryResult:
     """Run the deterministic MVP scenario in a temporary project."""
 
+    artifact_bundle: dict[str, object] = {"written": False}
     with tempfile.TemporaryDirectory(prefix="socrates-canary-") as temp_dir:
         root = Path(temp_dir)
         project = _build_canary_project(root)
@@ -83,37 +92,44 @@ def run_mvp_lifecycle_canary() -> MvpLifecycleCanaryResult:
         status = "pass" if audit.passed_checks == audit.total_checks else "fail"
         artifacts = _artifact_counts(project)
         checks = _read_audit_checks(audit.report_path)
-    return MvpLifecycleCanaryResult(
+        if artifact_dir is not None:
+            artifact_bundle = _copy_artifact_bundle(artifact_dir, project)
+    result = MvpLifecycleCanaryResult(
         status=status,
         lifecycle=lifecycle,
         artifacts=artifacts,
         checks=checks,
         temporary_project_cleaned=not root.exists(),
+        artifact_bundle=artifact_bundle,
     )
+    if artifact_dir is not None:
+        _write_artifact_report(result)
+    return result
 
 
 def format_mvp_lifecycle_canary(result: MvpLifecycleCanaryResult) -> str:
     """Render a human-facing canary summary."""
 
     artifacts = result.artifacts
-    return "\n".join(
-        [
-            f"MVP lifecycle canary: {result.status}",
-            f"Scenario: {CANARY_SCENARIO}",
-            (
-                "Lifecycle audit: "
-                f"{result.lifecycle['passed_checks']}/{result.lifecycle['total_checks']}"
-            ),
-            (
-                "Artifacts: "
-                f"kb={artifacts['kb_objects']}, "
-                f"notes={artifacts['reviewed_notes']}, "
-                f"exercises={artifacts['generated_exercises']}, "
-                f"reports={artifacts['learning_reports']}"
-            ),
-            "Temporary project: cleaned",
-        ]
-    )
+    lines = [
+        f"MVP lifecycle canary: {result.status}",
+        f"Scenario: {CANARY_SCENARIO}",
+        (
+            "Lifecycle audit: "
+            f"{result.lifecycle['passed_checks']}/{result.lifecycle['total_checks']}"
+        ),
+        (
+            "Artifacts: "
+            f"kb={artifacts['kb_objects']}, "
+            f"notes={artifacts['reviewed_notes']}, "
+            f"exercises={artifacts['generated_exercises']}, "
+            f"reports={artifacts['learning_reports']}"
+        ),
+        "Temporary project: cleaned",
+    ]
+    if result.artifact_bundle.get("written"):
+        lines.append(f"Artifact bundle: {result.artifact_bundle['root']}")
+    return "\n".join(lines)
 
 
 def _build_canary_project(root: Path) -> Path:
@@ -280,3 +296,27 @@ def _markdown_count(path: Path) -> int:
     if not path.exists():
         return 0
     return len(list(path.glob("*.md")))
+
+
+def _copy_artifact_bundle(artifact_dir: Path, project: Path) -> dict[str, object]:
+    root = artifact_dir
+    if root.exists() and any(root.iterdir()):
+        raise CanaryArtifactError(f"artifact directory is not empty: {root}")
+    root.mkdir(parents=True, exist_ok=True)
+    project_path = root / "project"
+    shutil.copytree(project, project_path)
+    return {
+        "written": True,
+        "root": str(root),
+        "project_path": str(project_path),
+        "report_path": str(root / "canary_report.json"),
+    }
+
+
+def _write_artifact_report(result: MvpLifecycleCanaryResult) -> None:
+    report_path = Path(str(result.artifact_bundle["report_path"]))
+    report_path.write_text(
+        json.dumps(result.to_payload(), indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )

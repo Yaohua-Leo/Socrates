@@ -6,14 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.56-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.57-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
 long-term report-surface refresh, a deterministic temporary-project MVP
-lifecycle canary, structured project-status JSON, structured
+lifecycle canary with optional inspectable artifact bundles, structured project-status JSON, structured
 learning-queue JSON, structured study-dashboard JSON, structured
 study-brief-status JSON,
 dry-run-previewable structured misconception
@@ -97,6 +97,7 @@ python -m socrates session closeout --project ".\projects\group_theory" --sessio
 python -m socrates lifecycle regression --project ".\projects\group_theory"
 python -m socrates lifecycle canary
 python -m socrates lifecycle canary --json
+python -m socrates lifecycle canary --artifacts ".\canary_artifacts" --json
 python -m socrates queue --project ".\projects\group_theory" --section summary
 python -m socrates queue --project ".\projects\group_theory" --section repairs
 python -m socrates queue --project ".\projects\group_theory" --section priority
@@ -300,6 +301,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.56 `lifecycle canary` runs a deterministic temporary-project MVP learning
   scenario and emits prose or JSON pass/fail evidence for the composed
   lifecycle.
+- v0.57 `lifecycle canary --artifacts <dir>` persists an explicit inspectable
+  canary bundle with `canary_report.json` and a copied project tree.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -375,6 +378,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   initializes and cleans up its own project state and reports composed workflow
   evidence; it is not a user-project writer, live LLM call, UI/plugin, OCR/PDF
   backend, proof assistant, or real learner validation.
+- `lifecycle canary --artifacts <dir>` writes only to the explicit output
+  directory and rejects non-empty directories to avoid overwriting user files.
+  It is an inspectability bundle, not a user-project workflow runner.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

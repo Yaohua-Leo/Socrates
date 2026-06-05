@@ -49,7 +49,11 @@ from .learning_queue import (
     collect_learning_queue,
     format_learning_queue,
 )
-from .lifecycle_canary import format_mvp_lifecycle_canary, run_mvp_lifecycle_canary
+from .lifecycle_canary import (
+    CanaryArtifactError,
+    format_mvp_lifecycle_canary,
+    run_mvp_lifecycle_canary,
+)
 from .llm import LlmMessage, LlmProviderError, LlmRequest
 from .llm_artifacts import list_llm_suggestions
 from .llm_config import load_llm_config
@@ -505,6 +509,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Emit structured canary evidence as JSON.",
+    )
+    lifecycle_canary_parser.add_argument(
+        "--artifacts",
+        type=Path,
+        help="Persist an inspectable canary artifact bundle to this directory.",
     )
     lifecycle_canary_parser.set_defaults(func=_handle_lifecycle_canary)
 
@@ -2060,7 +2069,11 @@ def _handle_lifecycle_regression(args: argparse.Namespace) -> int:
 
 
 def _handle_lifecycle_canary(args: argparse.Namespace) -> int:
-    result = run_mvp_lifecycle_canary()
+    try:
+        result = run_mvp_lifecycle_canary(args.artifacts)
+    except CanaryArtifactError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 2
     if args.json:
         print(json.dumps(result.to_payload(), indent=2, sort_keys=True))
     else:

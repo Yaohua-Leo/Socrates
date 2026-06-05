@@ -2737,6 +2737,32 @@ offline/no user-project writes boundary
 - Canary 默认只使用临时目录并在结束时清理，不接受 `--project`，不写用户学习项目。
 - 这不是 live LLM、UI/plugin、OCR/PDF backend、proof assistant、自动教学执行或真实 learner validation；它只是一个 deterministic workflow-composition readiness canary。
 
+v0.57：inspectable lifecycle canary artifacts
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 在 canary pass/fail 之外，可以显式保留一个可审计的 canary project artifact bundle，而不是只能相信 stdout。
+
+必须完成：
+
+`lifecycle canary --artifacts <dir>`
+
+`canary_report.json`
+
+copied canary project tree
+
+temporary cleanup recorded after cleanup
+
+non-empty output directory protection
+
+当前状态（2026-06-05）：
+
+- `python -m socrates lifecycle canary --artifacts <dir> --json` 会输出 structured canary payload，并在 `<dir>` 中写入 `canary_report.json` 与 `project/`。
+- `artifact_bundle` payload 记录 `written`、`root`、`project_path` 和 `report_path`。
+- `canary_report.json` 写入 temp project 已清理后的最终 payload，便于 operator 审计 cleanup boundary。
+- 非空 artifact output directory 会以 exit code 2 clean-fail，避免覆盖用户文件。
+- 这仍不是 user-project runner、隐式 writer、live LLM、UI/plugin、OCR/PDF backend、proof assistant、自动教学执行或真实 learner validation；它只是显式选择的 canary evidence bundle。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
