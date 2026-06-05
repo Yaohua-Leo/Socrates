@@ -112,10 +112,10 @@ bash scripts/check.sh
 
 Result: all verification commands passed. Full unittest discovery and both check scripts reported 477 tests OK with 1 skipped; Bash emitted the existing WSL localhost/NAT notice and Git CRLF warning for `scripts/check.ps1`.
 
-- [ ] **Step 3: Commit and publish to the existing draft PR**
+- [x] **Step 3: Commit and publish to the existing draft PR**
 
 Commit the v0.58 repo changes with a why-first Lore message and `Co-authored-by: OmX <omx@oh-my-codex.dev>`, then push to `codex/v02-closure` so draft PR `https://github.com/Yaohua-Leo/Socrates/pull/5` includes returning-learner continuity evidence.
 
-- [ ] **Step 4: Update llmwiki**
+- [x] **Step 4: Update llmwiki**
 
 Update the Socrates wiki page, wiki index, and wiki log with the v0.58 commit id, verification evidence, returning-learner canary boundary, and the reusable lesson that product canaries should cover both artifact generation and the operator/learner re-entry surfaces that consume those artifacts.

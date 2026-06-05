@@ -6,16 +6,18 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.58-alpha prototype. Its strongest surfaces are the
-deterministic CLI, file contracts, provenance checks, Reference KB indexing,
+The current codebase is a v0.59-alpha prototype. Its strongest surfaces are the
+deterministic CLI, repo-level product readiness audit, file contracts,
+provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
 long-term report-surface refresh, a deterministic temporary-project MVP
 lifecycle canary with optional inspectable artifact bundles and returning-learner
-continuity evidence, structured project-status JSON, structured
-learning-queue JSON, structured study-dashboard JSON, structured
+continuity evidence, product-readiness capability/gap audit, structured
+project-status JSON, structured learning-queue JSON, structured
+study-dashboard JSON, structured
 study-brief-status JSON,
 dry-run-previewable structured misconception
 resolver writer,
@@ -99,6 +101,8 @@ python -m socrates lifecycle regression --project ".\projects\group_theory"
 python -m socrates lifecycle canary
 python -m socrates lifecycle canary --json
 python -m socrates lifecycle canary --artifacts ".\canary_artifacts" --json
+python -m socrates product readiness
+python -m socrates product readiness --json
 python -m socrates queue --project ".\projects\group_theory" --section summary
 python -m socrates queue --project ".\projects\group_theory" --section repairs
 python -m socrates queue --project ".\projects\group_theory" --section priority
@@ -307,6 +311,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.58 `lifecycle canary --json` records returning-learner continuity
   evidence from generated study brief, dashboard, and resume readers so the
   canary also proves the re-entry surfaces compose.
+- v0.59 `product readiness` renders a deterministic repo-level v1.0
+  capability/gap audit, including implemented evidence, remaining gaps, and the
+  next major product-lane decision point.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -388,6 +395,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - Returning-learner canary evidence reuses generated study brief, dashboard,
   and resume readers inside the temporary canary project. It is not a UI,
   autonomous tutor, human outcome validation, or user-project mutation.
+- `product readiness` is a deterministic repo-level capability/gap map. It
+  does not inspect or mutate learner projects, prove v1.0 completion, run OCR,
+  call an LLM, generate reports, validate real learner outcomes, or choose the
+  next major product lane.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

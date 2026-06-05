@@ -2789,6 +2789,32 @@ artifact bundle includes brief and manifest
 - `python -m socrates lifecycle canary --artifacts <dir> --json` 会把 `study_brief.md` 与 `study_brief_manifest.json` 复制到 inspectable project bundle，并在 `canary_report.json` 中记录同一 returning-learner evidence。
 - 这仍不是 UI/plugin、自动教学执行、live LLM、proof assistant、真实 learner outcome validation 或 user-project mutation；它只是 deterministic temporary-project canary 中的 re-entry surface continuity evidence。
 
+v0.59：product readiness audit
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 在选择下一条大产品路线前，可以看到最终 v1.0 目标对应的能力、当前证据、剩余 gap 和必须敲定的分支决策。
+
+必须完成：
+
+`product readiness`
+
+`product readiness --json`
+
+ten final-goal capability rows
+
+implemented / partial / missing status summary
+
+next major product lane decision point
+
+当前状态（2026-06-05）：
+
+- `python -m socrates product readiness` 已输出 deterministic repo-level Markdown audit。
+- `python -m socrates product readiness --json` 已输出 `schema_version: 1`、`quality_boundary: deterministic_product_readiness_audit`、`product_goal: v1.0_math_learning_agent` 和 `overall_status: not_v1_ready`。
+- Audit 映射了 project initialization、reference discovery/management、literature cleaning/structuring、learning-plan design、guided teaching、personal KB capture、exercise generation、learning-state modeling、misconception bank 和 verification/evaluation 十个最终目标能力区。
+- JSON 明确列出下一条大产品路线的待决选项：`ocr_pdf_backend`、`autonomous_llm_tutoring`、`ui_plugin_surface`、`real_long_term_validation`。
+- 这不是 v1.0 completion proof、learner-project inspection、project mutation、live LLM call、OCR/PDF backend、UI/plugin 或真实 learner validation；它只是选择下一条产品分支前的 deterministic capability/gap map。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

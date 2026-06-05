@@ -96,6 +96,10 @@ from .project_resume import (
     format_project_resume_commands,
     format_project_resume_index,
 )
+from .product_readiness import (
+    build_product_readiness_payload,
+    format_product_readiness,
+)
 from .quality import (
     audit_project_lifecycle,
     check_atomic_note_quality,
@@ -516,6 +520,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Persist an inspectable canary artifact bundle to this directory.",
     )
     lifecycle_canary_parser.set_defaults(func=_handle_lifecycle_canary)
+
+    product_parser = subparsers.add_parser(
+        "product",
+        help="Inspect repo-level product readiness against the final goal.",
+    )
+    product_subparsers = product_parser.add_subparsers(dest="product_command", required=True)
+    product_readiness_parser = product_subparsers.add_parser(
+        "readiness",
+        help="Show the deterministic v1.0 product readiness audit.",
+    )
+    product_readiness_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print the product readiness audit as deterministic JSON.",
+    )
+    product_readiness_parser.set_defaults(func=_handle_product_readiness)
 
     projects_parser = subparsers.add_parser(
         "projects",
@@ -2079,6 +2099,15 @@ def _handle_lifecycle_canary(args: argparse.Namespace) -> int:
     else:
         print(format_mvp_lifecycle_canary(result))
     return 0 if result.status == "pass" else 1
+
+
+def _handle_product_readiness(args: argparse.Namespace) -> int:
+    payload = build_product_readiness_payload()
+    if args.json:
+        print(json.dumps(payload, indent=2, sort_keys=True))
+        return 0
+    print(format_product_readiness(payload), end="")
+    return 0
 
 
 def _handle_projects_scan(args: argparse.Namespace) -> int:

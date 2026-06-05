@@ -7,9 +7,10 @@ from the source planning conversation.
 - `development_roadmap.md`: phased development roadmap and MVP milestones.
 - `development_log.md`: current implementation progress, verification evidence,
   remaining gaps, and recommended next steps.
-- Current implementation baseline: v0.58-alpha returning-learner MVP lifecycle
-  canary evidence over v0.57 inspectable MVP lifecycle canary artifact bundles
-  and v0.56 deterministic MVP lifecycle canary,
+- Current implementation baseline: v0.59-alpha deterministic product readiness
+  audit over v0.58 returning-learner MVP lifecycle canary evidence, v0.57
+  inspectable MVP lifecycle canary artifact bundles, and v0.56 deterministic
+  MVP lifecycle canary,
   v0.55 structured project-status JSON, and v0.54 structured study-brief-status
   JSON, v0.53 structured learning-queue JSON, v0.52 structured
   study-dashboard JSON, v0.51 dry-run-previewable
@@ -183,3 +184,5 @@ from the source planning conversation.
 - `superpowers/plans/2026-06-05-v58-returning-learner-canary.md`: executable
   v0.58 plan for returning-learner continuity evidence in the lifecycle
   canary.
+- `superpowers/plans/2026-06-05-v59-product-readiness-audit.md`: executable
+  v0.59 plan for the read-only product readiness capability/gap audit.
