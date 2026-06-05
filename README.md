@@ -6,14 +6,15 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.57-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.58-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
 long-term report-surface refresh, a deterministic temporary-project MVP
-lifecycle canary with optional inspectable artifact bundles, structured project-status JSON, structured
+lifecycle canary with optional inspectable artifact bundles and returning-learner
+continuity evidence, structured project-status JSON, structured
 learning-queue JSON, structured study-dashboard JSON, structured
 study-brief-status JSON,
 dry-run-previewable structured misconception
@@ -303,6 +304,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   lifecycle.
 - v0.57 `lifecycle canary --artifacts <dir>` persists an explicit inspectable
   canary bundle with `canary_report.json` and a copied project tree.
+- v0.58 `lifecycle canary --json` records returning-learner continuity
+  evidence from generated study brief, dashboard, and resume readers so the
+  canary also proves the re-entry surfaces compose.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -381,6 +385,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - `lifecycle canary --artifacts <dir>` writes only to the explicit output
   directory and rejects non-empty directories to avoid overwriting user files.
   It is an inspectability bundle, not a user-project workflow runner.
+- Returning-learner canary evidence reuses generated study brief, dashboard,
+  and resume readers inside the temporary canary project. It is not a UI,
+  autonomous tutor, human outcome validation, or user-project mutation.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

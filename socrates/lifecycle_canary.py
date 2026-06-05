@@ -14,6 +14,7 @@ from .artifacts import (
     generate_misconception_note_drafts,
 )
 from .context import load_project
+from .dashboard import build_study_dashboard_payload
 from .exercise_bank import build_exercise_bank
 from .exercises import (
     approve_exercise_draft,
@@ -29,12 +30,14 @@ from .planning import create_learning_plan
 from .project import ProjectSpec, create_project
 from .quality import audit_project_lifecycle, run_project_benchmark
 from .reports import generate_monthly_report, generate_weekly_report
+from .resume import build_project_resume_payload
 from .state import (
     LearningStatePatch,
     MistakeRecord,
     build_review_schedule,
     update_learning_state,
 )
+from .study_brief import generate_study_brief
 from .tool_verification import generate_lean_statement_skeleton
 from .tutoring import list_tutoring_sessions, run_scripted_tutoring_session
 from .workflow import close_tutoring_session
@@ -55,6 +58,7 @@ class MvpLifecycleCanaryResult:
     status: str
     lifecycle: dict[str, int]
     artifacts: dict[str, int]
+    returning_learner: dict[str, object]
     checks: tuple[dict[str, str], ...]
     temporary_project_cleaned: bool
     artifact_bundle: dict[str, object]
@@ -69,6 +73,7 @@ class MvpLifecycleCanaryResult:
             "status": self.status,
             "lifecycle": self.lifecycle,
             "artifacts": self.artifacts,
+            "returning_learner": self.returning_learner,
             "checks": list(self.checks),
             "temporary_project": {
                 "cleaned": self.temporary_project_cleaned,
@@ -90,7 +95,9 @@ def run_mvp_lifecycle_canary(artifact_dir: Path | None = None) -> MvpLifecycleCa
             "total_checks": audit.total_checks,
         }
         status = "pass" if audit.passed_checks == audit.total_checks else "fail"
+        generate_study_brief(project)
         artifacts = _artifact_counts(project)
+        returning_learner = _returning_learner_evidence(project)
         checks = _read_audit_checks(audit.report_path)
         if artifact_dir is not None:
             artifact_bundle = _copy_artifact_bundle(artifact_dir, project)
@@ -98,6 +105,7 @@ def run_mvp_lifecycle_canary(artifact_dir: Path | None = None) -> MvpLifecycleCa
         status=status,
         lifecycle=lifecycle,
         artifacts=artifacts,
+        returning_learner=returning_learner,
         checks=checks,
         temporary_project_cleaned=not root.exists(),
         artifact_bundle=artifact_bundle,
@@ -123,7 +131,13 @@ def format_mvp_lifecycle_canary(result: MvpLifecycleCanaryResult) -> str:
             f"kb={artifacts['kb_objects']}, "
             f"notes={artifacts['reviewed_notes']}, "
             f"exercises={artifacts['generated_exercises']}, "
+            f"briefs={artifacts['study_briefs']}, "
             f"reports={artifacts['learning_reports']}"
+        ),
+        (
+            "Returning learner: "
+            f"resume={result.returning_learner['resume_state']}, "
+            f"brief={result.returning_learner['study_brief']}"
         ),
         "Temporary project: cleaned",
     ]
@@ -276,6 +290,22 @@ def _artifact_counts(project: Path) -> dict[str, int]:
         "attempted_exercises": _markdown_count(project / "05_exercises" / "attempted"),
         "graded_exercises": _markdown_count(project / "05_exercises" / "graded"),
         "learning_reports": _markdown_count(project / "07_exports" / "reports"),
+        "study_briefs": _markdown_count(project / "07_exports" / "briefs"),
+        "study_brief_manifests": _json_count(project / "07_exports" / "briefs"),
+    }
+
+
+def _returning_learner_evidence(project: Path) -> dict[str, object]:
+    dashboard = build_study_dashboard_payload(project)
+    resume = build_project_resume_payload(project)
+    snapshot = dashboard["snapshot"] if isinstance(dashboard["snapshot"], dict) else {}
+    return {
+        "study_brief": resume["study_brief"],
+        "dashboard_study_brief": snapshot.get("study_brief", "invalid"),
+        "resume_state": resume["resume_state"],
+        "recommended_command": resume["recommended_command"],
+        "current_next_action": resume["current_next_action"],
+        "study_brief_path": resume["study_brief_path"],
     }
 
 
@@ -296,6 +326,12 @@ def _markdown_count(path: Path) -> int:
     if not path.exists():
         return 0
     return len(list(path.glob("*.md")))
+
+
+def _json_count(path: Path) -> int:
+    if not path.exists():
+        return 0
+    return len(list(path.glob("*.json")))
 
 
 def _copy_artifact_bundle(artifact_dir: Path, project: Path) -> dict[str, object]:

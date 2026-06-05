@@ -56,6 +56,11 @@ class LifecycleCanaryTests(unittest.TestCase):
         self.assertGreaterEqual(payload["artifacts"]["reviewed_notes"], 2)
         self.assertGreaterEqual(payload["artifacts"]["generated_exercises"], 5)
         self.assertGreaterEqual(payload["artifacts"]["learning_reports"], 3)
+        self.assertGreaterEqual(payload["artifacts"]["study_briefs"], 1)
+        self.assertEqual(payload["returning_learner"]["study_brief"], "current")
+        self.assertEqual(payload["returning_learner"]["dashboard_study_brief"], "current")
+        self.assertEqual(payload["returning_learner"]["resume_state"], "ready")
+        self.assertEqual(payload["returning_learner"]["recommended_command"], "none")
 
     def test_lifecycle_canary_cli_json_writes_inspectable_artifact_bundle(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -92,11 +97,15 @@ class LifecycleCanaryTests(unittest.TestCase):
             self.assertEqual(Path(payload["artifact_bundle"]["project_path"]), project_path)
             self.assertTrue(report_path.exists())
             self.assertTrue((project_path / "08_evals" / "lifecycle_eval.md").exists())
+            self.assertTrue((project_path / "07_exports" / "briefs" / "study_brief.md").exists())
+            self.assertTrue((project_path / "07_exports" / "briefs" / "study_brief_manifest.json").exists())
 
             report = json.loads(report_path.read_text(encoding="utf-8"))
             self.assertEqual(report["quality_boundary"], "deterministic_mvp_lifecycle_canary")
             self.assertEqual(report["status"], "pass")
             self.assertTrue(report["temporary_project"]["cleaned"])
+            self.assertEqual(report["returning_learner"]["study_brief"], "current")
+            self.assertEqual(report["returning_learner"]["resume_state"], "ready")
 
     def test_lifecycle_canary_cli_rejects_nonempty_artifact_bundle_directory(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:

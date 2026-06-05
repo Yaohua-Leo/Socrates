@@ -2763,6 +2763,32 @@ non-empty output directory protection
 - 非空 artifact output directory 会以 exit code 2 clean-fail，避免覆盖用户文件。
 - 这仍不是 user-project runner、隐式 writer、live LLM、UI/plugin、OCR/PDF backend、proof assistant、自动教学执行或真实 learner validation；它只是显式选择的 canary evidence bundle。
 
+v0.58：returning-learner lifecycle canary evidence
+
+建议目标：
+
+让 MVP lifecycle canary 不只证明 workflow artifacts 能生成，也证明完成后的学习项目可以被已有 returning-learner surfaces 重新进入：study brief、dashboard 和 resume 必须在同一个 canary 中保持一致。
+
+必须完成：
+
+generated study brief inside canary project
+
+returning_learner JSON evidence
+
+dashboard study brief continuity
+
+resume ready state continuity
+
+artifact bundle includes brief and manifest
+
+当前状态（2026-06-05）：
+
+- `python -m socrates lifecycle canary --json` 已包含 `returning_learner` evidence。
+- Canary 会在 lifecycle audit 后生成 study brief，并从现有 dashboard/resume readers 读取 `study_brief: current`、`dashboard_study_brief: current`、`resume_state: ready` 和 `recommended_command: none`。
+- Artifact counts 已包含 generated study brief artifacts。
+- `python -m socrates lifecycle canary --artifacts <dir> --json` 会把 `study_brief.md` 与 `study_brief_manifest.json` 复制到 inspectable project bundle，并在 `canary_report.json` 中记录同一 returning-learner evidence。
+- 这仍不是 UI/plugin、自动教学执行、live LLM、proof assistant、真实 learner outcome validation 或 user-project mutation；它只是 deterministic temporary-project canary 中的 re-entry surface continuity evidence。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
