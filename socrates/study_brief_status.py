@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from json import JSONDecodeError
 from pathlib import Path
 
-from .context import load_project, read_json
+from .context import load_project, project_title, read_json
 from .learning_queue import QueueItem, collect_learning_queue, priority_queue_items
 
 
@@ -15,6 +15,7 @@ STUDY_BRIEF_MANIFEST_RELATIVE_PATH = (
     Path("07_exports") / "briefs" / "study_brief_manifest.json"
 )
 STUDY_BRIEF_QUALITY_BOUNDARY = "deterministic_study_brief"
+STUDY_BRIEF_STATUS_QUALITY_BOUNDARY = "deterministic_study_brief_status"
 
 
 @dataclass(frozen=True)
@@ -73,6 +74,23 @@ def summarize_study_brief(project_path: Path | str) -> StudyBriefStatus:
         recorded_next_action=recorded_next_action,
         current_next_action=current_next_action,
     )
+
+
+def build_study_brief_status_payload(project_path: Path | str) -> dict[str, object]:
+    """Build the machine-readable read-only study-brief status payload."""
+
+    context = load_project(project_path)
+    status = summarize_study_brief(context.root)
+    return {
+        "schema_version": 1,
+        "quality_boundary": STUDY_BRIEF_STATUS_QUALITY_BOUNDARY,
+        "project": project_title(context.project_file, fallback=context.root.name),
+        "root": str(context.root),
+        "study_brief": status.status,
+        "study_brief_path": status.path,
+        "recorded_next_action": status.recorded_next_action,
+        "current_next_action": status.current_next_action,
+    }
 
 
 def _manifest_status(

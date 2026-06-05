@@ -115,6 +115,26 @@ class StudyBriefTests(unittest.TestCase):
                 project_log.read_text(encoding="utf-8"),
             )
 
+    def test_brief_status_cli_json_reports_missing_brief_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            project_files_before = _project_file_snapshot(project)
+
+            result = self._run_socrates("brief", "status", "--project", str(project), "--json")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("Study brief:", result.stdout)
+            payload = json.loads(result.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_study_brief_status")
+            self.assertEqual(payload["project"], "Group Theory")
+            self.assertEqual(payload["root"], str(project))
+            self.assertEqual(payload["study_brief"], "not_run")
+            self.assertEqual(payload["study_brief_path"], "07_exports/briefs/study_brief.md")
+            self.assertEqual(payload["recorded_next_action"], "none")
+            self.assertEqual(payload["current_next_action"], "none")
+            self.assertEqual(_project_file_snapshot(project), project_files_before)
+
     def test_brief_generate_cli_writes_then_status_reports_current(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
@@ -132,6 +152,31 @@ class StudyBriefTests(unittest.TestCase):
             self.assertIn("Study brief path: 07_exports/briefs/study_brief.md", status.stdout)
             self.assertIn(f"Study brief recorded next action: {next_action}", status.stdout)
             self.assertIn(f"Study brief current next action: {next_action}", status.stdout)
+
+    def test_brief_status_cli_json_reports_current_brief_without_writes(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            project = create_project(ProjectSpec(topic="Group Theory", path=Path(temp_dir) / "p"))
+            draft = project / "04_atomic_notes" / "drafts" / "normal_subgroup.md"
+            draft.write_text("# Normal Subgroup\n\nDraft note.\n", encoding="utf-8", newline="\n")
+            next_action = "notes:normal_subgroup | 04_atomic_notes/drafts/normal_subgroup.md"
+
+            generated = self._run_socrates("brief", "generate", "--project", str(project))
+            project_files_before = _project_file_snapshot(project)
+            status = self._run_socrates("brief", "status", "--project", str(project), "--json")
+
+            self.assertEqual(generated.returncode, 0, generated.stderr)
+            self.assertEqual(status.returncode, 0, status.stderr)
+            self.assertNotIn("Study brief:", status.stdout)
+            payload = json.loads(status.stdout)
+            self.assertEqual(payload["schema_version"], 1)
+            self.assertEqual(payload["quality_boundary"], "deterministic_study_brief_status")
+            self.assertEqual(payload["project"], "Group Theory")
+            self.assertEqual(payload["root"], str(project))
+            self.assertEqual(payload["study_brief"], "current")
+            self.assertEqual(payload["study_brief_path"], "07_exports/briefs/study_brief.md")
+            self.assertEqual(payload["recorded_next_action"], next_action)
+            self.assertEqual(payload["current_next_action"], next_action)
+            self.assertEqual(_project_file_snapshot(project), project_files_before)
 
     def test_brief_status_cli_marks_corrupt_manifest_invalid(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -254,6 +299,14 @@ class StudyBriefTests(unittest.TestCase):
             capture_output=True,
             check=False,
         )
+
+
+def _project_file_snapshot(root: Path) -> dict[str, bytes]:
+    return {
+        path.relative_to(root).as_posix(): path.read_bytes()
+        for path in sorted(root.rglob("*"))
+        if path.is_file()
+    }
 
 
 if __name__ == "__main__":

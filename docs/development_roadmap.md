@@ -2657,6 +2657,32 @@ project file-tree no-write proof
 - JSON mode 保持只读，不写 project logs、reports、briefs、learning state、queue artifacts 或任何 project file。
 - 这不是 writer、command runner、repair runner、readiness gate、report refresh、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic learning queue evidence 的 structured reader output mode。
 
+v0.54：brief status JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 saved study brief freshness，而不用解析 `brief status` prose。
+
+必须完成：
+
+`brief status --json`
+
+structured freshness payload
+
+manifest-backed status semantics
+
+missing/current/stale/invalid status fields
+
+project file-tree no-write proof
+
+当前状态（2026-06-05）：
+
+- `python -m socrates brief status --project <project> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_study_brief_status`、`project`、`root`、`study_brief`、`study_brief_path`、`recorded_next_action` 和 `current_next_action`。
+- JSON mode 复用 `summarize_study_brief(...)`，因此 missing、current、stale、invalid 语义与 prose `brief status` 保持一致。
+- JSON mode 保持只读，不写 `study_brief.md`、`study_brief_manifest.json`、project logs、learning state、queue artifacts 或任何 project file。
+- 这不是 generator、writer、readiness gate、report refresh、repair runner、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic study brief freshness evidence 的 structured reader output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

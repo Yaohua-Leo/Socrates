@@ -6,14 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.53-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.54-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
 long-term report-surface refresh, structured learning-queue JSON, structured
-study-dashboard JSON,
+study-dashboard JSON, structured study-brief-status JSON,
 dry-run-previewable structured misconception
 resolver writer,
 dry-run-previewable structured
@@ -120,6 +120,7 @@ python -m socrates projects refresh-briefs --root ".\projects" --project-id grou
 python -m socrates projects refresh-briefs --root ".\projects" --dry-run --limit 1 --json
 python -m socrates brief generate --project ".\projects\group_theory"
 python -m socrates brief status --project ".\projects\group_theory"
+python -m socrates brief status --project ".\projects\group_theory" --json
 python -m socrates status --project ".\projects\group_theory"
 python -m socrates lifecycle audit --project ".\projects\group_theory"
 ```
@@ -285,6 +286,8 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   health rows.
 - v0.53 `queue --json` emits the read-only learning queue as structured JSON,
   including action summary and section-filtered item rows.
+- v0.54 `brief status --json` emits manifest-backed study-brief freshness as
+  structured JSON without generating or refreshing the saved brief.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -419,6 +422,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - `brief status` is a read-only inspection command over that status reader. It
   does not generate briefs, append project-log entries, refresh reports, call an
   LLM, repair artifacts, score learning, tutor, or mutate learning-state truth.
+- `brief status --json` is the same read-only freshness check as structured
+  output for wrappers, UI prototypes, and plugins. It does not generate briefs,
+  append project-log entries, refresh reports, call an LLM, repair artifacts,
+  score learning, tutor, or mutate project state.
 - `resume` is a read-only returning-learner view. It can recommend
   `brief generate` when the saved brief is missing, stale, or invalid, but it
   does not run that command or mutate project state.

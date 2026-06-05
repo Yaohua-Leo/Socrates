@@ -141,7 +141,7 @@ from .state import (
     update_learning_state,
 )
 from .study_brief import generate_study_brief
-from .study_brief_status import summarize_study_brief
+from .study_brief_status import build_study_brief_status_payload, summarize_study_brief
 from .tool_verification import (
     check_tool_verification_records,
     check_lean_file,
@@ -442,6 +442,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--project",
         required=True,
         help="Socrates project directory.",
+    )
+    brief_status_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Print study brief status as deterministic JSON.",
     )
     brief_status_parser.set_defaults(func=_handle_brief_status)
     brief_parser.set_defaults(func=_handle_brief)
@@ -1763,6 +1768,15 @@ def _handle_brief(args: argparse.Namespace) -> int:
 
 
 def _handle_brief_status(args: argparse.Namespace) -> int:
+    if args.json:
+        print(
+            json.dumps(
+                build_study_brief_status_payload(args.project),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     study_brief_status = summarize_study_brief(args.project)
     print(f"Study brief: {study_brief_status.status}")
     print(f"Study brief path: {study_brief_status.path}")
