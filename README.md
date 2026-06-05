@@ -6,8 +6,9 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.59-alpha prototype. Its strongest surfaces are the
-deterministic CLI, repo-level product readiness audit, file contracts,
+The current codebase is a v0.60 validation-ready prototype. Its strongest
+surfaces are the real-use validation runbook, deterministic CLI, repo-level
+product readiness audit, file contracts,
 provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
@@ -40,7 +41,18 @@ opt-in LLM provider layer for
 reviewable draft suggestions, including
 review-only session judge drafts. It is not yet a full AI tutor: autonomous LLM
 tutoring, OCR/PDF extraction backends, trusted LLM judges, and product UI layers
-remain future work.
+remain future work. v0.60 intentionally pauses feature development until a real
+learner/operator validation run produces feedback.
+
+## v0.60 Real-Use Validation
+
+Before selecting the next build lane, run the validation checklist in
+`docs/superpowers/plans/2026-06-05-v60-real-use-validation-runbook.md`.
+
+The runbook asks Leo to use one real math topic and one small source, then
+capture where the current CLI flow succeeds, fails, or feels awkward. It is the
+current development pause point: do not treat it as authorization to build OCR,
+autonomous tutoring, UI/plugin work, or additional workflow features.
 
 ## Quick Start
 
@@ -314,6 +326,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
 - v0.59 `product readiness` renders a deterministic repo-level v1.0
   capability/gap audit, including implemented evidence, remaining gaps, and the
   next major product-lane decision point.
+- v0.60 real-use validation runbook selects the `real_long_term_validation`
+  lane and pauses new feature development until Leo returns feedback from one
+  real learner/operator run.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -399,6 +414,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   does not inspect or mutate learner projects, prove v1.0 completion, run OCR,
   call an LLM, generate reports, validate real learner outcomes, or choose the
   next major product lane.
+- v0.60 real-use validation is a human-run product validation pass over the
+  existing v0.59 prototype. It is not a new product feature, automated learner
+  outcome proof, OCR/PDF backend, autonomous LLM tutor, UI/plugin layer, or
+  permission to continue feature work before Leo returns feedback.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

@@ -2815,6 +2815,36 @@ next major product lane decision point
 - JSON 明确列出下一条大产品路线的待决选项：`ocr_pdf_backend`、`autonomous_llm_tutoring`、`ui_plugin_surface`、`real_long_term_validation`。
 - 这不是 v1.0 completion proof、learner-project inspection、project mutation、live LLM call、OCR/PDF backend、UI/plugin 或真实 learner validation；它只是选择下一条产品分支前的 deterministic capability/gap map。
 
+v0.60：real-use validation runbook
+
+建议目标：
+
+在继续实现新功能前，让 Leo 用一个真实学习主题和一份小资料跑一轮当前 Socrates CLI workflow，收集真实摩擦点，再决定 v0.61 路线。
+
+必须完成：
+
+`docs/superpowers/plans/2026-06-05-v60-real-use-validation-runbook.md`
+
+real-use setup variables
+
+core learning-flow command sequence
+
+optional review / closeout / regression sequence
+
+artifact checklist
+
+feedback template
+
+development pause contract
+
+当前状态（2026-06-05）：
+
+- 已选择 v0.59 decision point 中的 `real_long_term_validation` lane。
+- v0.60 runbook 已覆盖 init/import/source-id discovery/curate/KB/plan/teach/status/dashboard/queue/brief/resume 以及可选 review/closeout/regression/report 流程。
+- 真实 validation cycle 由 Leo 运行；Codex 不代跑这个用户体验验证，因为要观察真实使用摩擦。
+- 开发暂停在 v0.60：在 Leo 返回反馈前，不继续实现 OCR/PDF backend、autonomous LLM tutoring、UI/plugin surface 或新增 workflow feature。
+- 这不是新产品能力、v1.0 completion proof、自动 learner validation、OCR/PDF backend、UI/plugin 或 autonomous tutor；它是进入 v0.61 前的人工真实使用验证门。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
