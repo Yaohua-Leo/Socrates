@@ -114,10 +114,12 @@ bash scripts/check.sh
 
 Result: all verification commands passed. Full unittest discovery and both check scripts reported 479 tests OK with 1 skipped; Bash emitted the existing WSL localhost/NAT notice and Git CRLF warning for `scripts/check.ps1`.
 
-- [ ] **Step 3: Commit and publish to the existing draft PR**
+- [x] **Step 3: Commit and publish to the existing draft PR**
 
 Commit the v0.59 repo changes with a why-first Lore message and `Co-authored-by: OmX <omx@oh-my-codex.dev>`, then push to `codex/v02-closure` so draft PR `https://github.com/Yaohua-Leo/Socrates/pull/5` includes product readiness audit evidence.
 
-- [ ] **Step 4: Update llmwiki**
+- [x] **Step 4: Update llmwiki**
 
 Update the Socrates wiki page, wiki index, and wiki log with the v0.59 commit id, verification evidence, audit boundary, and the reusable lesson that long product goals need explicit capability-gap maps before irreversible branch choices.
+
+Result: llmwiki was updated for v0.59 commit `275b74c`, and `powershell -ExecutionPolicy Bypass -File .\tools\lint.ps1` passed in `D:\llmwiki` with 21 pages and 0 findings.
