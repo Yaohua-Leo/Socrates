@@ -49,6 +49,7 @@ from .learning_queue import (
     collect_learning_queue,
     format_learning_queue,
 )
+from .lifecycle_canary import format_mvp_lifecycle_canary, run_mvp_lifecycle_canary
 from .llm import LlmMessage, LlmProviderError, LlmRequest
 from .llm_artifacts import list_llm_suggestions
 from .llm_config import load_llm_config
@@ -496,6 +497,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="Socrates project directory.",
     )
     lifecycle_regression_parser.set_defaults(func=_handle_lifecycle_regression)
+    lifecycle_canary_parser = lifecycle_subparsers.add_parser(
+        "canary",
+        help="Run the deterministic temporary-project MVP lifecycle canary.",
+    )
+    lifecycle_canary_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit structured canary evidence as JSON.",
+    )
+    lifecycle_canary_parser.set_defaults(func=_handle_lifecycle_canary)
 
     projects_parser = subparsers.add_parser(
         "projects",
@@ -2045,6 +2056,15 @@ def _handle_lifecycle_regression(args: argparse.Namespace) -> int:
     print(f"Regression report: {result.report_path}")
     print(f"Regression manifest: {result.manifest_path}")
     print(f"Project summary: {result.project_summary_path}")
+    return 0 if result.status == "pass" else 1
+
+
+def _handle_lifecycle_canary(args: argparse.Namespace) -> int:
+    result = run_mvp_lifecycle_canary()
+    if args.json:
+        print(json.dumps(result.to_payload(), indent=2, sort_keys=True))
+    else:
+        print(format_mvp_lifecycle_canary(result))
     return 0 if result.status == "pass" else 1
 
 

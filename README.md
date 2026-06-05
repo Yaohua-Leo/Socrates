@@ -6,13 +6,14 @@ ingestion, curated reference knowledge-base indexing, deterministic tutoring
 sessions, atomic note review, Obsidian export, exercises, learning-state
 artifacts, reports, and quality checks.
 
-The current codebase is a v0.55-alpha prototype. Its strongest surfaces are the
+The current codebase is a v0.56-alpha prototype. Its strongest surfaces are the
 deterministic CLI, file contracts, provenance checks, Reference KB indexing,
 external conversion handoff for PDF/OCR workflows, Obsidian note workflow,
 exercise validation and bank manifests, deterministic session score reports,
 next-session handoff planning, deterministic session closeout workflow with
 status/lifecycle visibility, deterministic multi-session regression with
-long-term report-surface refresh, structured project-status JSON, structured
+long-term report-surface refresh, a deterministic temporary-project MVP
+lifecycle canary, structured project-status JSON, structured
 learning-queue JSON, structured study-dashboard JSON, structured
 study-brief-status JSON,
 dry-run-previewable structured misconception
@@ -94,6 +95,8 @@ python -m socrates session score --project ".\projects\group_theory" --session-i
 python -m socrates session plan-next --project ".\projects\group_theory" --session-id session_0002
 python -m socrates session closeout --project ".\projects\group_theory" --session-id session_0001 --next-session-id session_0002
 python -m socrates lifecycle regression --project ".\projects\group_theory"
+python -m socrates lifecycle canary
+python -m socrates lifecycle canary --json
 python -m socrates queue --project ".\projects\group_theory" --section summary
 python -m socrates queue --project ".\projects\group_theory" --section repairs
 python -m socrates queue --project ".\projects\group_theory" --section priority
@@ -294,6 +297,9 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   including current phase, counts, Reference KB status, report history, study
   brief freshness, queue summary, quality checks, workflow/session status,
   benchmark status, and misconception counts.
+- v0.56 `lifecycle canary` runs a deterministic temporary-project MVP learning
+  scenario and emits prose or JSON pass/fail evidence for the composed
+  lifecycle.
 - Opt-in DeepSeek-backed draft suggestions for reference correction patches,
   tutoring next questions, exercise feedback proposals, and review-only session
   judge observations, tracked through an LLM suggestion manifest.
@@ -365,6 +371,10 @@ python -m socrates llm smoke --root . --prompt "Return exactly: socrates-ok"
   deterministic evidence as prose `status`. It is not a writer, repair runner,
   report refresh, readiness-gate expansion, LLM call, score, tutor, prediction,
   approval, or project-state mutation.
+- `lifecycle canary` is a deterministic temporary-project MVP regression. It
+  initializes and cleans up its own project state and reports composed workflow
+  evidence; it is not a user-project writer, live LLM call, UI/plugin, OCR/PDF
+  backend, proof assistant, or real learner validation.
 - `review misconceptions --json` is a read-only structured view over persisted
   misconception rows. It is not a resolver, note generator, tutor, score,
   report refresh, LLM call, or learning-state mutation.

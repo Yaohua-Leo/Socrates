@@ -2709,6 +2709,34 @@ project file-tree no-write proof
 - JSON mode 保持只读，不写 project logs、reports、briefs、learning state、queue artifacts 或任何 project file。
 - 这不是 writer、repair runner、readiness-gate expansion、report refresh、LLM call、score、tutor、prediction、approval 或 project-state mutation；它只是现有 deterministic project status evidence 的 structured reader output mode。
 
+v0.56：MVP lifecycle canary
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以用一个确定性的临时项目 canary 检查最小 v1.0 学习项目场景是否仍能端到端组合，而不用把长期 workflow drift 藏在单个命令测试之后。
+
+必须完成：
+
+`lifecycle canary`
+
+`lifecycle canary --json`
+
+temporary-project MVP scenario evidence
+
+lifecycle audit and artifact counts
+
+temporary cleanup proof
+
+offline/no user-project writes boundary
+
+当前状态（2026-06-05）：
+
+- `python -m socrates lifecycle canary` 已输出 deterministic pass/fail summary。
+- `python -m socrates lifecycle canary --json` 已输出 `schema_version: 1`、`quality_boundary: deterministic_mvp_lifecycle_canary`、scenario、lifecycle counts、artifact counts、check rows、temporary project cleanup 和 status。
+- Canary scenario 会在临时项目中覆盖 init/reference/curation/KB/plan/two scripted sessions/notes/exercises/state/reports/session closeout/multi-session regression/benchmark/lifecycle audit。
+- Canary 默认只使用临时目录并在结束时清理，不接受 `--project`，不写用户学习项目。
+- 这不是 live LLM、UI/plugin、OCR/PDF backend、proof assistant、自动教学执行或真实 learner validation；它只是一个 deterministic workflow-composition readiness canary。
+
 v1.0：可长期使用的数学学习系统
 
 目标：
