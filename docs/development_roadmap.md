@@ -2545,6 +2545,32 @@ preview adjustment rows
 - 腐坏 `learning_state.json` 在 dry-run mode 下仍 clean fail，且不会重写 short-term plan。
 - 这不是 writer、scheduler、exercise generator、tutor、report refresh、LLM call、plan approval 或 learning-state mutation；它只是现有 short-term-plan adjustment writer evidence 的 no-write preview output mode。
 
+v0.50：review resolve JSON
+
+建议目标：
+
+让 operator/UI/plugin/wrapper 可以结构化读取 misconception resolver writer 的结果，而不用解析 `review resolve` prose。
+
+必须完成：
+
+`review resolve --json`
+
+resolved misconception rows
+
+pre-mutation row capture
+
+post-action resolved status
+
+当前状态（2026-06-04）：
+
+- `python -m socrates review resolve --project <project> --concept <concept> --json` 已输出 deterministic JSON。
+- Payload 包含 `schema_version`、`quality_boundary: deterministic_misconception_resolver`、`project`、`concept`、`resolved_count` 和 `resolved_misconceptions`。
+- JSON mode 仍会执行 misconception resolver writer，按现有规则更新 matching active misconceptions 并追加 mistake-bank resolution entry。
+- Affected rows 在 mutation 前捕获，但 JSON row status 以 post-action `resolved` 状态呈现。
+- No-match JSON mode 返回空 rows，且不会重写 `learning_state.json` 或追加 mistake bank。
+- 腐坏 `learning_state.json` 在 JSON mode 下仍 clean fail，且不会追加 mistake bank。
+- 这不是 dry-run、read-only ledger、note generator、tutor、score、report refresh、LLM call 或额外 learning-state truth；它只是现有 misconception resolver writer 的 structured result output mode。
+
 v1.0：可长期使用的数学学习系统
 
 目标：

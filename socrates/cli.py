@@ -131,6 +131,7 @@ from .state import (
     preview_review_schedule_repair,
     repair_review_schedule,
     resolve_active_misconceptions_for_concept,
+    coerce_occurrence_count,
     update_eval_report,
     update_learning_state,
 )
@@ -816,6 +817,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--concept",
         required=True,
         help="Concept whose misconceptions were repaired.",
+    )
+    review_resolve_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Emit deterministic JSON instead of prose.",
     )
     review_resolve_parser.set_defaults(func=_handle_review_resolve)
     review_misconceptions_parser = review_subparsers.add_parser(
@@ -2309,7 +2315,36 @@ def _handle_review_repair_schedule(args: argparse.Namespace) -> int:
 
 def _handle_review_resolve(args: argparse.Namespace) -> int:
     context = load_project(args.project)
-    resolved_count = resolve_active_misconceptions_for_concept(context, args.concept)
+    try:
+        rows = (
+            _active_misconception_records_for_concept(
+                context.learning_state,
+                args.concept,
+            )
+            if args.json
+            else []
+        )
+        resolved_count = resolve_active_misconceptions_for_concept(context, args.concept)
+    except json.JSONDecodeError:
+        print(
+            "error: invalid learning_state.json; repair the JSON before resolving misconceptions",
+            file=sys.stderr,
+        )
+        return 1
+    if args.json:
+        print(
+            json.dumps(
+                _review_resolve_payload(
+                    context,
+                    concept=args.concept,
+                    resolved_count=resolved_count,
+                    rows=rows,
+                ),
+                indent=2,
+                sort_keys=True,
+            )
+        )
+        return 0
     noun = "misconception" if resolved_count == 1 else "misconceptions"
     print(f"Resolved {resolved_count} active {noun} for {args.concept}")
     return 0
@@ -3927,6 +3962,68 @@ def _review_adjustment_row_text(row: dict[str, str]) -> str:
     if repair:
         line = f"{line} | repair: {repair}"
     return line
+
+
+def _review_resolve_payload(
+    context: ProjectContext,
+    *,
+    concept: str,
+    resolved_count: int,
+    rows: list[dict[str, object]],
+) -> dict[str, object]:
+    return {
+        "schema_version": 1,
+        "quality_boundary": "deterministic_misconception_resolver",
+        "project": str(context.root),
+        "concept": concept,
+        "resolved_count": resolved_count,
+        "resolved_misconceptions": rows,
+    }
+
+
+def _active_misconception_records_for_concept(
+    learning_state: Path,
+    concept: str,
+) -> list[dict[str, object]]:
+    if not learning_state.exists():
+        return []
+    loaded = json.loads(learning_state.read_text(encoding="utf-8"))
+    if not isinstance(loaded, dict):
+        return []
+    misconceptions = loaded.get("misconceptions", {})
+    if not isinstance(misconceptions, dict):
+        return []
+
+    target_concept = slugify_topic(concept)
+    rows: list[dict[str, object]] = []
+    for misconception_id, value in sorted(misconceptions.items()):
+        if not isinstance(value, dict):
+            continue
+        stored_concept = str(value.get("concept", ""))
+        if stored_concept != concept and slugify_topic(stored_concept) != target_concept:
+            continue
+        status = value.get("status", "active")
+        if status != "active":
+            continue
+        follow_up_exercises = value.get("follow_up_exercises", [])
+        rows.append(
+            {
+                "misconception_id": str(misconception_id),
+                "concept": stored_concept,
+                "previous_status": str(status),
+                "status": "resolved",
+                "count": coerce_occurrence_count(value.get("count", 1)),
+                "last_session_id": str(value.get("last_session_id", "")),
+                "analysis": str(value.get("analysis", "")),
+                "repair_suggestion": str(value.get("repair_suggestion", "")),
+                "follow_up_exercises": (
+                    [str(item) for item in follow_up_exercises]
+                    if isinstance(follow_up_exercises, list)
+                    else []
+                ),
+            }
+        )
+    return rows
 
 
 def _review_schedule_repair_payload(
